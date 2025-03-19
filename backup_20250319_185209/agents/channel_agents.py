@@ -14,8 +14,8 @@ from src.core.cache.agent_cache import RedisAgentCache
 from langchain.tools import BaseTool
 
 from src.core.memory import MemorySystem
-from src.agents.core.data_proxy_agent import DataProxyAgent
-from src.api.chatwoot.client import ChatwootClient
+from src.agents.data_proxy_agent import DataProxyAgent
+from src.api.chatwoot_client import ChatwootClient
 from src.tools.vector_tools import QdrantVectorSearchTool
 from src.tools.database_tools import PGSearchTool
 from src.tools.cache_tools import CacheTool

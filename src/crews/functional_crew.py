@@ -14,7 +14,7 @@ from src.core.cache.agent_cache import RedisAgentCache
 
 from src.core.memory import MemorySystem
 from src.services.data.data_service_hub import DataServiceHub
-from src.agents.data_proxy_agent import DataProxyAgent
+from src.agents.core.data_proxy_agent import DataProxyAgent
 from src.agents.functional_agents import FunctionalAgent
 from src.agents.adaptable.sales_agent import SalesAgent
 from src.agents.adaptable.support_agent import SupportAgent

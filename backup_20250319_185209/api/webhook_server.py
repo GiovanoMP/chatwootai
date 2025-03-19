@@ -35,7 +35,7 @@ from src.api.multi_instance_handler import MultiInstanceManager
 instance_manager = MultiInstanceManager()
 
 # Importa os componentes necessários
-from src.api.chatwoot.client import ChatwootWebhookHandler, ChatwootClient
+from src.api.chatwoot_client import ChatwootWebhookHandler, ChatwootClient
 from src.core.hub import HubCrew  # Importa HubCrew do core.hub em vez de crews.hub_crew
 from src.crews.whatsapp_crew import WhatsAppChannelCrew
 from src.core.crew_registry import CrewRegistry

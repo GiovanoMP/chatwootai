@@ -15,7 +15,7 @@ from src.core.cache.agent_cache import RedisAgentCache
 from src.agents.channel_agents import ChannelCrew
 from src.utils.text_processor import normalize_text, extract_keywords
 from src.core.memory import MemorySystem
-from src.agents.data_proxy_agent import DataProxyAgent
+from src.agents.core.data_proxy_agent import DataProxyAgent
 from src.services.data.data_service_hub import DataServiceHub
 from src.core.hub import HubCrew
 from src.crews.sales_crew import SalesCrew
@@ -75,7 +75,7 @@ class WhatsAppChannelCrew(ChannelCrew):
         
         # Inicializa a classe base com todos os parâmetros necessários
         # Criar um cliente Chatwoot para uso no ChannelCrew
-        from src.api.chatwoot_client import ChatwootClient
+        from src.api.chatwoot.client import ChatwootClient
         # Obter as configurações do Chatwoot da primeira instância
         instance_manager = get_instance_manager()
         first_instance = list(instance_manager.instances.values())[0] if instance_manager.instances else None

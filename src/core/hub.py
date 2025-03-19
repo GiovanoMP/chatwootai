@@ -25,7 +25,7 @@ from crewai.tools.base_tool import BaseTool
 from src.core.memory import MemorySystem
 # Removidos imports não utilizados após a refatoração
 # As ferramentas de dados são agora acessadas através do DataServiceHub
-from src.agents.data_proxy_agent import DataProxyAgent
+from src.agents.core.data_proxy_agent import DataProxyAgent
 from src.services.data.data_service_hub import DataServiceHub
 
 logger = logging.getLogger(__name__)

@@ -35,7 +35,7 @@ logger = logging.getLogger("webhook_server")
 
 # Importa o handler de webhook
 try:
-    from src.webhook.handler import ChatwootWebhookHandler
+    from src.webhook.webhook_handler import ChatwootWebhookHandler
     logger.info("Handler de webhook importado com sucesso")
 except Exception as e:
     logger.error(f"Erro ao importar handler de webhook: {str(e)}")

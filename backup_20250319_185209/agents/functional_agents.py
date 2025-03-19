@@ -14,7 +14,7 @@ from src.core.cache.agent_cache import RedisAgentCache
 from langchain.tools import BaseTool
 
 from src.core.memory import MemorySystem
-from src.agents.core.data_proxy_agent import DataProxyAgent
+from src.agents.data_proxy_agent import DataProxyAgent
 
 logger = logging.getLogger(__name__)
 

@@ -162,7 +162,7 @@ class DataServiceHub:
         Returns:
             DataProxyAgent: Uma instância configurada do DataProxyAgent.
         """
-        from src.agents.data_proxy_agent import DataProxyAgent
+        from src.agents.core.data_proxy_agent import DataProxyAgent
         from src.tools.vector_tools import QdrantVectorSearchTool
         from src.tools.database_tools import PGSearchTool
         from src.tools.cache_tools import TwoLevelCache

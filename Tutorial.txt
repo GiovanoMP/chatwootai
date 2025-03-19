@@ -1,0 +1,48 @@
+Instalação Docker
+
+sudo apt-get update ; apt-get install -y apparmor-utils
+
+hostnamectl set-hostname manager1
+
+Altera localhost para
+
+nano /etc/hosts
+
+curl -fsSL https://get.docker.com | bash
+
+
+docker swarm init
+
+
+docker network create --driver=overlay network_public
+
+nano traefik.yaml
+
+docker stack deploy --prune --resolve-image always -c traefik.yaml traefik
+
+
+Instalação portainer
+
+nano portainer.yaml
+
+docker stack deploy --prune --resolve-image always -c portainer.yaml portainer
+
+
+
+Criar banco de dados postgree
+
+psql -U postgres
+
+create database n8ndb; create database chatwoot;
+
+Mfcd62!!Mfcd62!!
+
+
+
+Tema Criador de Empresa:
+
+Nome Usuario Administrador: RaphaelPopiolek
+Nome da Empresa: AstraOnline
+Email: machineteste24@gmail.com
+Senha: Mfcd62!!
+

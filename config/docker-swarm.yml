@@ -1,0 +1,89 @@
+version: '3.8'
+
+networks:
+  chatwoot_network:
+    driver: overlay
+    attachable: true
+
+services:
+  # Serviços existentes do Chatwoot (exemplo simplificado)
+  chatwoot_web:
+    image: chatwoot/chatwoot:latest
+    networks:
+      - chatwoot_network
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+    environment:
+      - RAILS_ENV=production
+      # Outras variáveis de ambiente do Chatwoot
+    volumes:
+      - chatwoot_data:/app/storage
+    depends_on:
+      - postgres
+      - redis
+    # Outras configurações do Chatwoot
+
+  # Banco de dados PostgreSQL para o Chatwoot
+  postgres:
+    image: postgres:12
+    networks:
+      - chatwoot_network
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_DB=chatwoot
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres_password
+
+  # Redis para o Chatwoot
+  redis:
+    image: redis:alpine
+    networks:
+      - chatwoot_network
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+    volumes:
+      - redis_data:/data
+
+  # Servidor Webhook (nosso serviço)
+  webhook_server:
+    image: ${DOCKER_IMAGE:-chatwootai:latest}
+    networks:
+      - chatwoot_network
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 512M
+    command: python -m src.api.webhook_server
+    environment:
+      - CHATWOOT_API_KEY=${CHATWOOT_API_KEY}
+      - CHATWOOT_BASE_URL=http://chatwoot_web/api/v1  # URL interna do Docker
+      - CHATWOOT_ACCOUNT_ID=${CHATWOOT_ACCOUNT_ID:-1}
+      - WEBHOOK_PORT=8001
+      - WEBHOOK_DOMAIN=${WEBHOOK_DOMAIN:-localhost}
+      - WEBHOOK_USE_HTTPS=${WEBHOOK_USE_HTTPS:-false}
+      - WEBHOOK_AUTH_TOKEN=${WEBHOOK_AUTH_TOKEN:-efetivia_webhook_secret_token_2025}
+      - POSTGRES_DB=${POSTGRES_DB:-chatwootai}
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres_password}
+      - POSTGRES_HOST=postgres
+      - REDIS_HOST=redis
+    ports:
+      - "8001:8001"  # Expor a porta do webhook
+
+volumes:
+  chatwoot_data:
+  postgres_data:
+  redis_data:

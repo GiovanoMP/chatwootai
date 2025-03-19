@@ -1,0 +1,144 @@
+## Configuração do domínio de Saúde para o ChatwootAI
+## Este arquivo define regras de negócio, configurações e plugins específicos para o domínio de saúde
+
+name: Saúde
+description: Domínio de negócio para clínicas, hospitais e fornecedores de saúde
+version: 1.0.0
+active: false
+
+# Plugins específicos deste domínio
+plugins:
+  - business_rules
+  - appointment_scheduler
+  - health_records
+
+# Regras de negócio aplicáveis a este domínio
+business_rules:
+  # Regras de Agendamento
+  - id: 1
+    type: scheduling
+    title: Política de Agendamento de Consultas
+    content: >
+      As consultas podem ser agendadas com no mínimo 24 horas de antecedência.
+      Reagendamentos devem ser solicitados com pelo menos 12 horas de antecedência.
+      Em caso de não comparecimento sem aviso prévio, será cobrada uma taxa administrativa.
+      
+      Especialidades específicas podem ter regras diferenciadas de agendamento.
+      Consulte a clínica para informações sobre cada especialidade.
+    keywords: ["agendamento", "consulta", "reagendamento", "não comparecimento"]
+    active: true
+    
+  - id: 2
+    type: scheduling
+    title: Documentos Necessários para Primeira Consulta
+    content: >
+      Para a primeira consulta, o paciente deve apresentar:
+      1. Documento de identidade com foto
+      2. Cartão do convênio (se aplicável)
+      3. Encaminhamento médico (se necessário para a especialidade)
+      4. Exames anteriores relevantes (se houver)
+      
+      Menores de idade devem estar acompanhados por um responsável legal.
+    keywords: ["documentos", "primeira consulta", "identidade", "convênio", "encaminhamento"]
+    active: true
+  
+  # Regras de Convênios
+  - id: 3
+    type: insurance
+    title: Convênios Aceitos
+    content: >
+      Nossa clínica aceita os seguintes convênios médicos:
+      - Amil
+      - Bradesco Saúde
+      - Unimed
+      - SulAmérica
+      - Hapvida
+      
+      Para verificar cobertura específica para especialidades ou procedimentos,
+      consulte a central de atendimento do seu convênio antes da consulta.
+    keywords: ["convênio", "plano de saúde", "cobertura", "autorização"]
+    active: true
+    
+  - id: 4
+    type: insurance
+    title: Reembolso de Consultas Particulares
+    content: >
+      Pacientes com planos de saúde que não possuem convênio direto com nossa clínica
+      podem solicitar reembolso junto ao seu convênio. Para isso, fornecemos:
+      
+      1. Recibo detalhado com CNPJ da clínica
+      2. Relatório médico com CID (se necessário)
+      3. Declaração de atendimento
+      
+      O valor e prazo de reembolso dependem exclusivamente da política do seu convênio.
+    keywords: ["reembolso", "particular", "recibo", "CID", "declaração"]
+    active: true
+    
+  # FAQs e Suporte
+  - id: 5
+    type: support
+    title: Prazos para Resultados de Exames
+    content: >
+      Os prazos médios para liberação de resultados são:
+      
+      - Exames laboratoriais básicos: 1-2 dias úteis
+      - Exames de imagem simples (raio-X, ultrassom): 1-3 dias úteis
+      - Tomografia e Ressonância: 3-5 dias úteis
+      - Biópsias e exames patológicos: 7-15 dias úteis
+      
+      Os resultados podem ser acessados pelo portal do paciente ou retirados presencialmente.
+      Em casos de urgência, informe no momento da realização do exame.
+    keywords: ["exames", "resultados", "prazos", "portal", "laboratório"]
+    active: true
+
+  - id: 6
+    type: support
+    title: Acompanhamento Pós-Consulta
+    content: >
+      Caso tenha dúvidas após sua consulta:
+      
+      1. Utilize o portal do paciente para enviar mensagens ao médico
+      2. Para casos não urgentes, o médico responderá em até 48 horas úteis
+      3. Para urgências, não utilize o portal, procure atendimento presencial
+      4. Dúvidas sobre medicamentos também podem ser esclarecidas com nossos farmacêuticos
+      
+      O acompanhamento por mensagens é um serviço complementar e não substitui consultas presenciais.
+    keywords: ["pós-consulta", "dúvidas", "portal", "retorno", "acompanhamento"]
+    active: true
+
+  - id: 7
+    type: support
+    title: Preparação para Exames Comuns
+    content: >
+      Para exames de sangue em jejum:
+      - Jejum de 8-12 horas
+      - Pode beber água
+      - Evitar atividade física antes do exame
+      
+      Para ultrassonografia abdominal:
+      - Jejum de 6 horas
+      - Beber 4-6 copos de água 1 hora antes e não urinar
+      
+      Para raio-X:
+      - Remover objetos metálicos
+      - Informar se existe possibilidade de gravidez
+      
+      Instruções específicas serão fornecidas ao agendar cada exame.
+    keywords: ["preparação", "exames", "jejum", "ultrassom", "raio-x"]
+    active: true
+
+# Configurações de integração com Odoo
+odoo_integration:
+  enabled: true
+  module_name: chatwoot_ai_saude
+  sync_interval: 1800  # Sincronização a cada 30 minutos
+  
+# Configurações para integração com sistemas de prontuário
+health_records:
+  enabled: true
+  access_level: restricted
+  patient_portal: true
+  data_retention: 
+    active_patients: 730  # dias
+    inactive_patients: 3650  # dias
+  encryption: true

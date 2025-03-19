@@ -58,9 +58,7 @@ class SalesCrew(FunctionalCrew):
                 produtos ideais para suas necessidades e facilitar o processo de compra."""
             },
             memory_system=self.memory_system,
-            vector_tool=self.vector_tool,
-            db_tool=self.db_tool,
-            cache_tool=self.cache_tool,
+            data_proxy_agent=self.data_service_hub.get_data_proxy_agent(),
             domain_manager=self.domain_manager,
             plugin_manager=self.plugin_manager
         )
@@ -72,7 +70,7 @@ class SalesCrew(FunctionalCrew):
             backstory="""Você é especializado em entender as necessidades dos clientes
             e recomendar os produtos mais adequados. Você conhece profundamente o catálogo
             de produtos e suas características.""",
-            tools=[self.vector_tool, self.db_tool, self.cache_tool],
+            tools=[self.data_service_hub.get_data_proxy_agent()],
             verbose=True
         )
         
@@ -83,7 +81,7 @@ class SalesCrew(FunctionalCrew):
             backstory="""Você conhece todas as promoções e ofertas especiais disponíveis.
             Seu objetivo é garantir que os clientes aproveitem as melhores oportunidades
             de economia em suas compras.""",
-            tools=[self.db_tool, self.cache_tool],
+            tools=[self.data_service_hub.get_data_proxy_agent()],
             verbose=True
         )
         

@@ -29,7 +29,7 @@ class QdrantVectorSearchTool(BaseTool):
     qdrant_api_key: Optional[str] = None
     collection_name: str = "default"
     openai_api_key: Optional[str] = None
-    embedding_model: str = "text-embedding-ada-002"
+    embedding_model: str = "text-embedding-3-small"  # Modelo mais econômico da OpenAI
     top_k: int = 5
     
     # Campos adicionais que serão inicializados no __init__
@@ -42,7 +42,7 @@ class QdrantVectorSearchTool(BaseTool):
                  qdrant_api_key: Optional[str] = None,
                  collection_name: str = "default",
                  openai_api_key: Optional[str] = None,
-                 embedding_model: str = "text-embedding-ada-002",
+                 embedding_model: str = "text-embedding-3-small",  # Modelo mais econômico da OpenAI
                  top_k: int = 5):
         """
         Initialize the Qdrant vector search tool.
@@ -90,7 +90,7 @@ class QdrantVectorSearchTool(BaseTool):
         except Exception as e:
             logger.error(f"Error generating embedding: {e}")
             # Return empty embedding in case of error
-            return [0.0] * 1536  # Ada 2 embeddings are 1536-dimensional
+            return [0.0] * 1536  # text-embedding-3-small também usa 1536 dimensões
     
     def _run(self, query: str, filter_conditions: Optional[Dict[str, Any]] = None, top_k: Optional[int] = None) -> str:
         """
@@ -243,7 +243,8 @@ class QdrantVectorSearchTool(BaseTool):
         Create the collection if it doesn't exist.
         
         Args:
-            vector_size: Size of the embedding vectors
+            vector_size: Size of the embedding vectors. O valor padrão 1536 é o tamanho 
+                         utilizado pelo modelo text-embedding-3-small da OpenAI.
             
         Returns:
             True if successful, False otherwise

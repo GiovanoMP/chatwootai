@@ -23,9 +23,10 @@ from src.core.cache.agent_cache import RedisAgentCache
 from crewai.tools.base_tool import BaseTool
 
 from src.core.memory import MemorySystem
-from src.tools.vector_tools import QdrantVectorSearchTool
-from src.tools.database_tools import PGSearchTool
-from src.tools.cache_tools import TwoLevelCache
+# Removidos imports não utilizados após a refatoração
+# As ferramentas de dados são agora acessadas através do DataServiceHub
+from src.agents.data_proxy_agent import DataProxyAgent
+from src.services.data.data_service_hub import DataServiceHub
 
 logger = logging.getLogger(__name__)
 
@@ -47,9 +48,7 @@ class OrchestratorAgent(Agent):
     
     def __init__(self, 
                  memory_system: Optional[MemorySystem] = None,
-                 vector_tool: Optional[QdrantVectorSearchTool] = None,
-                 db_tool: Optional[PGSearchTool] = None,
-                 cache_tool: Optional[TwoLevelCache] = None,
+                 data_proxy_agent: Optional[DataProxyAgent] = None,
                  additional_tools: Optional[List[BaseTool]] = None,
                  crew_registry: Optional[Dict[str, Any]] = None,
                  **kwargs):
@@ -58,22 +57,18 @@ class OrchestratorAgent(Agent):
         
         Args:
             memory_system: Shared memory system (optional)
-            vector_tool: Tool for vector search (optional)
-            db_tool: Tool for database search (optional)
-            cache_tool: Tool for caching (optional)
+            data_proxy_agent: Agent for data access (optional)
             additional_tools: Additional tools for the agent (optional)
             crew_registry: Dictionary mapping crew names to crew instances (optional)
             **kwargs: Additional arguments for the Agent class
         """
         tools = []
         
-        # Adicionar ferramentas apenas se fornecidas
-        if vector_tool:
-            tools.append(vector_tool)
-        if db_tool:
-            tools.append(db_tool)
-        if cache_tool:
-            tools.append(cache_tool)
+        # Adicionar data_proxy_agent como ferramenta se fornecido
+        if data_proxy_agent:
+            # Não adicionamos o data_proxy_agent diretamente às ferramentas,
+            # mas o mantemos como um atributo para chamadas de método
+            pass
         
         if additional_tools:
             tools.extend(additional_tools)
@@ -99,9 +94,7 @@ class OrchestratorAgent(Agent):
         # Armazenar atributos necessários para os testes
         # Estes não são usados pelo Pydantic, então não causarão problemas
         self.__dict__["_memory_system"] = memory_system
-        self.__dict__["_vector_tool"] = vector_tool
-        self.__dict__["_db_tool"] = db_tool
-        self.__dict__["_cache_tool"] = cache_tool
+        self.__dict__["_data_proxy_agent"] = data_proxy_agent
         self.__dict__["_crew_registry"] = crew_registry or {}
         self.__dict__["agent_cache"] = None  # Inicializado como None, será definido nos testes
     
@@ -110,16 +103,8 @@ class OrchestratorAgent(Agent):
         return self.__dict__["_memory_system"]
     
     @property
-    def vector_tool(self):
-        return self.__dict__["_vector_tool"]
-    
-    @property
-    def db_tool(self):
-        return self.__dict__["_db_tool"]
-    
-    @property
-    def cache_tool(self):
-        return self.__dict__["_cache_tool"]
+    def data_proxy_agent(self):
+        return self.__dict__["_data_proxy_agent"]
     
     @property
     def crew_registry(self):
@@ -192,13 +177,17 @@ class OrchestratorAgent(Agent):
         if customer_id and self.memory_system:
             customer_history = self.memory_system.retrieve_customer_data(customer_id)
         
-        # Use vector search to find similar past interactions if available
+        # Use DataProxyAgent para encontrar interações similares, se disponível
         similar_interactions = []
-        if self.vector_tool and message_content:
-            similar_interactions = self.vector_tool.search(
-                query=message_content,
-                limit=3
-            )
+        if self.data_proxy_agent and message_content:
+            # Usar o data_proxy_agent para buscar interações similares
+            query_params = {
+                "query": message_content,
+                "limit": 3
+            }
+            result = self.data_proxy_agent.fetch_data("similar_interactions", query_params)
+            if result and not isinstance(result, dict) and not result.get("error", False):
+                similar_interactions = result
         
         # Determine which crew should handle this message
         # This is a simplified routing logic - in a real system, this would be more complex
@@ -265,9 +254,7 @@ class ContextManagerAgent(Agent):
     
     def __init__(self, 
                  memory_system: Optional[MemorySystem] = None,
-                 vector_tool: Optional[QdrantVectorSearchTool] = None,
-                 db_tool: Optional[PGSearchTool] = None,
-                 cache_tool: Optional[TwoLevelCache] = None,
+                 data_proxy_agent: Optional[DataProxyAgent] = None,
                  additional_tools: Optional[List[BaseTool]] = None,
                  **kwargs):
         """
@@ -275,21 +262,17 @@ class ContextManagerAgent(Agent):
         
         Args:
             memory_system: Shared memory system (optional)
-            vector_tool: Tool for vector search (optional)
-            db_tool: Tool for database search (optional)
-            cache_tool: Tool for caching (optional)
+            data_proxy_agent: Agent for data access (optional)
             additional_tools: Additional tools for the agent (optional)
             **kwargs: Additional arguments for the Agent class
         """
         tools = []
         
-        # Adicionar ferramentas apenas se fornecidas
-        if vector_tool:
-            tools.append(vector_tool)
-        if db_tool:
-            tools.append(db_tool)
-        if cache_tool:
-            tools.append(cache_tool)
+        # Adicionar data_proxy_agent como ferramenta se fornecido
+        if data_proxy_agent:
+            # Não adicionamos o data_proxy_agent diretamente às ferramentas,
+            # mas o mantemos como um atributo para chamadas de método
+            pass
         
         if additional_tools:
             tools.extend(additional_tools)
@@ -314,25 +297,15 @@ class ContextManagerAgent(Agent):
         
         # Armazenar atributos necessários
         self.__dict__["_memory_system"] = memory_system
-        self.__dict__["_vector_tool"] = vector_tool
-        self.__dict__["_db_tool"] = db_tool
-        self.__dict__["_cache_tool"] = cache_tool
+        self.__dict__["_data_proxy_agent"] = data_proxy_agent
     
     @property
     def memory_system(self):
         return self.__dict__["_memory_system"]
     
     @property
-    def vector_tool(self):
-        return self.__dict__["_vector_tool"]
-    
-    @property
-    def db_tool(self):
-        return self.__dict__["_db_tool"]
-    
-    @property
-    def cache_tool(self):
-        return self.__dict__["_cache_tool"]
+    def data_proxy_agent(self):
+        return self.__dict__["_data_proxy_agent"]
     
     def update_context(self, 
                       conversation_id: str, 
@@ -418,9 +391,7 @@ class IntegrationAgent(Agent):
     
     def __init__(self, 
                  memory_system: Optional[MemorySystem] = None,
-                 vector_tool: Optional[QdrantVectorSearchTool] = None,
-                 db_tool: Optional[PGSearchTool] = None,
-                 cache_tool: Optional[TwoLevelCache] = None,
+                 data_proxy_agent: Optional[DataProxyAgent] = None,
                  additional_tools: Optional[List[BaseTool]] = None,
                  **kwargs):
         """
@@ -428,21 +399,11 @@ class IntegrationAgent(Agent):
         
         Args:
             memory_system: Shared memory system (optional)
-            vector_tool: Tool for vector search (optional)
-            db_tool: Tool for database search (optional)
-            cache_tool: Tool for caching (optional)
+            data_proxy_agent: Agent for data access across different services (optional)
             additional_tools: Additional tools for the agent (optional)
             **kwargs: Additional arguments for the Agent class
         """
         tools = []
-        
-        # Adicionar ferramentas apenas se fornecidas
-        if vector_tool:
-            tools.append(vector_tool)
-        if db_tool:
-            tools.append(db_tool)
-        if cache_tool:
-            tools.append(cache_tool)
         
         if additional_tools:
             tools.extend(additional_tools)
@@ -467,25 +428,15 @@ class IntegrationAgent(Agent):
         
         # Armazenar atributos necessários
         self.__dict__["_memory_system"] = memory_system
-        self.__dict__["_vector_tool"] = vector_tool
-        self.__dict__["_db_tool"] = db_tool
-        self.__dict__["_cache_tool"] = cache_tool
+        self.__dict__["_data_proxy_agent"] = data_proxy_agent
     
     @property
     def memory_system(self):
         return self.__dict__["_memory_system"]
     
     @property
-    def vector_tool(self):
-        return self.__dict__["_vector_tool"]
-    
-    @property
-    def db_tool(self):
-        return self.__dict__["_db_tool"]
-    
-    @property
-    def cache_tool(self):
-        return self.__dict__["_cache_tool"]
+    def data_proxy_agent(self):
+        return self.__dict__["_data_proxy_agent"]
     
     def fetch_customer_data(self, customer_id: str) -> Dict[str, Any]:
         """
@@ -497,20 +448,25 @@ class IntegrationAgent(Agent):
         Returns:
             Customer data
         """
-        # Check cache first for performance optimization if cache_tool is available
-        cached_data = None
-        if self.cache_tool:
-            cache_key = f"customer:{customer_id}"
-            cached_data = self.cache_tool.get(cache_key)
+        # Usar o DataProxyAgent para buscar dados do cliente
+        if self.data_proxy_agent:
+            # Preparar os parâmetros da consulta
+            query_params = {
+                "customer_id": customer_id
+            }
+            
+            # Buscar os dados usando o DataProxyAgent
+            result = self.data_proxy_agent.fetch_data("customer", query_params)
+            
+            # Verificar se o resultado é válido
+            if result and not isinstance(result, dict) or not result.get("error", False):
+                logger.info(f"Retrieved customer data for {customer_id} via DataProxyAgent")
+                return result
         
-        if cached_data:
-            logger.info(f"Using cached customer data for {customer_id}")
-            return cached_data
+        # Caso o DataProxyAgent não esteja disponível ou falhe, usar implementação de fallback
+        logger.warning(f"Using fallback method to fetch customer data for {customer_id}")
         
-        # This is a simplified implementation - in a real system, this would
-        # make an API call to the external system
-        
-        # Simulate fetching customer data
+        # Simulate fetching customer data (implementação simplificada como fallback)
         customer_data = {
             "id": customer_id,
             "name": f"Customer {customer_id}",
@@ -527,11 +483,6 @@ class IntegrationAgent(Agent):
             }
         }
         
-        # Cache the result for future use if cache_tool is available
-        if self.cache_tool:
-            cache_key = f"customer:{customer_id}"
-            self.cache_tool.set(cache_key, customer_data, ttl=3600)  # Cache for 1 hour
-        
         return customer_data
     
     def fetch_product_data(self, product_id: str) -> Dict[str, Any]:
@@ -544,20 +495,25 @@ class IntegrationAgent(Agent):
         Returns:
             Product data
         """
-        # Check cache first for performance optimization if cache_tool is available
-        cached_data = None
-        if self.cache_tool:
-            cache_key = f"product:{product_id}"
-            cached_data = self.cache_tool.get(cache_key)
+        # Usar o DataProxyAgent para buscar dados do produto
+        if self.data_proxy_agent:
+            # Preparar os parâmetros da consulta
+            query_params = {
+                "product_id": product_id
+            }
+            
+            # Buscar os dados usando o DataProxyAgent
+            result = self.data_proxy_agent.fetch_data("product", query_params)
+            
+            # Verificar se o resultado é válido
+            if result and not isinstance(result, dict) or not result.get("error", False):
+                logger.info(f"Retrieved product data for {product_id} via DataProxyAgent")
+                return result
         
-        if cached_data:
-            logger.info(f"Using cached product data for {product_id}")
-            return cached_data
+        # Caso o DataProxyAgent não esteja disponível ou falhe, usar implementação de fallback
+        logger.warning(f"Using fallback method to fetch product data for {product_id}")
         
-        # This is a simplified implementation - in a real system, this would
-        # make an API call to the external system
-        
-        # Simulate fetching product data
+        # Simulate fetching product data (implementação simplificada como fallback)
         product_data = {
             "id": product_id,
             "name": f"Product {product_id}",
@@ -578,11 +534,6 @@ class IntegrationAgent(Agent):
             }
         }
         
-        # Cache the result for future use if cache_tool is available
-        if self.cache_tool:
-            cache_key = f"product:{product_id}"
-            self.cache_tool.set(cache_key, product_data, ttl=3600)  # Cache for 1 hour
-        
         return product_data
     
     def fetch_business_rules(self, category: Optional[str] = None) -> List[Dict[str, Any]]:
@@ -595,20 +546,25 @@ class IntegrationAgent(Agent):
         Returns:
             List of business rules
         """
-        # Check cache first for performance optimization if cache_tool is available
-        cached_data = None
-        if self.cache_tool:
-            cache_key = f"rules:{category or 'all'}"
-            cached_data = self.cache_tool.get(cache_key)
+        # Usar o DataProxyAgent para buscar regras de negócio
+        if self.data_proxy_agent:
+            # Preparar os parâmetros da consulta
+            query_params = {}
+            if category:
+                query_params["category"] = category
+            
+            # Buscar os dados usando o DataProxyAgent
+            result = self.data_proxy_agent.fetch_data("business_rule", query_params)
+            
+            # Verificar se o resultado é válido
+            if result and not isinstance(result, dict) or not result.get("error", False):
+                logger.info(f"Retrieved business rules for {category or 'all'} via DataProxyAgent")
+                return result
         
-        if cached_data:
-            logger.info(f"Using cached business rules for {category or 'all'}")
-            return cached_data
+        # Caso o DataProxyAgent não esteja disponível ou falhe, usar implementação de fallback
+        logger.warning(f"Using fallback method to fetch business rules for {category or 'all'}")
         
-        # This is a simplified implementation - in a real system, this would
-        # make an API call to the external system
-        
-        # Simulate fetching business rules
+        # Simulate fetching business rules (implementação simplificada como fallback)
         all_rules = [
             {
                 "id": "rule1",
@@ -644,12 +600,7 @@ class IntegrationAgent(Agent):
             filtered_rules = [rule for rule in all_rules if rule["category"] == category]
         else:
             filtered_rules = all_rules
-        
-        # Cache the result for future use if cache_tool is available
-        if self.cache_tool:
-            cache_key = f"rules:{category or 'all'}"
-            self.cache_tool.set(cache_key, filtered_rules, ttl=3600)  # Cache for 1 hour
-        
+            
         return filtered_rules
 
 
@@ -673,9 +624,7 @@ class HubCrew(Crew):
     
     def __init__(self, 
                  memory_system: MemorySystem,
-                 vector_tool: Optional[QdrantVectorSearchTool] = None,
-                 db_tool: Optional[PGSearchTool] = None,
-                 cache_tool: Optional[TwoLevelCache] = None,
+                 data_service_hub: Optional['DataServiceHub'] = None,
                  additional_tools: Optional[Dict[str, List[BaseTool]]] = None,
                  agent_cache: Optional[RedisAgentCache] = None,
                  **kwargs):
@@ -684,9 +633,7 @@ class HubCrew(Crew):
         
         Args:
             memory_system: Shared memory system
-            vector_tool: Tool for vector search (optional)
-            db_tool: Tool for database search (optional)
-            cache_tool: Tool for caching (optional)
+            data_service_hub: Central hub for all data services
             additional_tools: Additional tools for the agents (optional)
             agent_cache: Cache for agent responses (optional)
             **kwargs: Additional arguments for the Crew class
@@ -695,32 +642,42 @@ class HubCrew(Crew):
         orchestrator_tools = additional_tools.get("orchestrator", []) if additional_tools else []
         context_manager_tools = additional_tools.get("context_manager", []) if additional_tools else []
         integration_tools = additional_tools.get("integration", []) if additional_tools else []
+        data_proxy_tools = additional_tools.get("data_proxy", []) if additional_tools else []
         
+        # Se não for fornecido um DataServiceHub, criar um novo
+        if not data_service_hub:
+            # Em um cenário real, seria melhor exigir este parâmetro
+            logger.warning("DataServiceHub não fornecido à HubCrew. Criando um novo.")
+            from src.services.data.data_service_hub import DataServiceHub
+            data_service_hub = DataServiceHub()
+        
+        # Primeiro criamos o DataProxyAgent que será usado pelos outros agentes
+        data_proxy = DataProxyAgent(
+            data_service_hub=data_service_hub,
+            memory_system=memory_system,
+            additional_tools=data_proxy_tools
+        )
+        
+        # Agora criamos os outros agentes, passando o DataProxyAgent
         orchestrator = OrchestratorAgent(
             memory_system=memory_system,
-            vector_tool=vector_tool,
-            db_tool=db_tool,
-            cache_tool=cache_tool,
+            data_proxy_agent=data_proxy,
             additional_tools=orchestrator_tools
         )
         
         context_manager = ContextManagerAgent(
             memory_system=memory_system,
-            vector_tool=vector_tool,
-            db_tool=db_tool,
-            cache_tool=cache_tool,
+            data_proxy_agent=data_proxy,
             additional_tools=context_manager_tools
         )
         
         integration_agent = IntegrationAgent(
             memory_system=memory_system,
-            vector_tool=vector_tool,
-            db_tool=db_tool,
-            cache_tool=cache_tool,
+            data_proxy_agent=data_proxy,
             additional_tools=integration_tools
         )
         
-        agents = [orchestrator, context_manager, integration_agent]
+        agents = [orchestrator, context_manager, integration_agent, data_proxy]
         
         # Default configuration for the hub crew
         default_config = {
@@ -738,29 +695,21 @@ class HubCrew(Crew):
         
         # Armazenar atributos necessários
         self.__dict__["_memory_system"] = memory_system
-        self.__dict__["_vector_tool"] = vector_tool
-        self.__dict__["_db_tool"] = db_tool
-        self.__dict__["_cache_tool"] = cache_tool
+        self.__dict__["_data_proxy_agent"] = data_proxy_agent
         self.__dict__["_agent_cache"] = agent_cache
         self.__dict__["_orchestrator"] = orchestrator
         self.__dict__["_context_manager"] = context_manager
         self.__dict__["_integration_agent"] = integration_agent
+        self.__dict__["_data_proxy"] = data_proxy
+        self.__dict__["_data_service_hub"] = data_service_hub
     
     @property
     def memory_system(self):
         return self.__dict__["_memory_system"]
     
     @property
-    def vector_tool(self):
-        return self.__dict__["_vector_tool"]
-    
-    @property
-    def db_tool(self):
-        return self.__dict__["_db_tool"]
-    
-    @property
-    def cache_tool(self):
-        return self.__dict__["_cache_tool"]
+    def data_proxy_agent(self):
+        return self.__dict__["_data_proxy_agent"]
     
     @property
     def orchestrator(self):
@@ -773,6 +722,14 @@ class HubCrew(Crew):
     @property
     def integration_agent(self):
         return self.__dict__["_integration_agent"]
+    
+    @property
+    def data_proxy(self):
+        return self.__dict__["_data_proxy"]
+    
+    @property
+    def data_service_hub(self):
+        return self.__dict__["_data_service_hub"]
     
     def process_message(self, 
                        message: Dict[str, Any],

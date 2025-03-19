@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 
 # Configurações
 WEBHOOK_PORT = int(os.getenv("WEBHOOK_PORT", "8002"))
-FORWARD_URL = "https://226e-2804-2610-6721-6300-5711-32d8-fa30-3587.ngrok-free.app/webhook"
+FORWARD_URL = "https://0872-2804-2610-6721-6300-febe-2e7b-538-ea76.ngrok-free.app/webhook"
 
 app = FastAPI()
 

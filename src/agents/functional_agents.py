@@ -14,9 +14,7 @@ from src.core.cache.agent_cache import RedisAgentCache
 from langchain.tools import BaseTool
 
 from src.core.memory import MemorySystem
-from src.tools.vector_tools import QdrantVectorSearchTool
-from src.tools.database_tools import PGSearchTool
-from src.tools.cache_tools import CacheTool
+from src.agents.data_proxy_agent import DataProxyAgent
 
 logger = logging.getLogger(__name__)
 
@@ -34,16 +32,12 @@ class FunctionalAgent(Agent):
     # Definindo os campos do modelo Pydantic
     function_type: str
     memory_system: MemorySystem
-    vector_tool: QdrantVectorSearchTool
-    db_tool: PGSearchTool
-    cache_tool: CacheTool
+    data_proxy_agent: DataProxyAgent
     
     def __init__(self, 
                  function_type: str,
                  memory_system: MemorySystem,
-                 vector_tool: QdrantVectorSearchTool,
-                 db_tool: PGSearchTool,
-                 cache_tool: CacheTool,
+                 data_proxy_agent: DataProxyAgent,
                  additional_tools: Optional[List[BaseTool]] = None,
                  **kwargs):
         """
@@ -52,13 +46,11 @@ class FunctionalAgent(Agent):
         Args:
             function_type: Type of business function
             memory_system: Shared memory system
-            vector_tool: Tool for vector search
-            db_tool: Tool for database search
-            cache_tool: Tool for caching
+            data_proxy_agent: Agent that provides access to data services
             additional_tools: Additional tools for the agent
             **kwargs: Additional arguments for the Agent class
         """
-        tools = [vector_tool, db_tool, cache_tool]
+        tools = [data_proxy_agent]
         
         if additional_tools:
             tools.extend(additional_tools)
@@ -83,9 +75,7 @@ class FunctionalAgent(Agent):
         model_data = {
             "function_type": function_type,
             "memory_system": memory_system,
-            "vector_tool": vector_tool,
-            "db_tool": db_tool,
-            "cache_tool": cache_tool,
+            "data_proxy_agent": data_proxy_agent,
             **config
         }
         

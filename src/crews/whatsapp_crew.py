@@ -15,9 +15,8 @@ from src.core.cache.agent_cache import RedisAgentCache
 from src.agents.channel_agents import ChannelCrew
 from src.utils.text_processor import normalize_text, extract_keywords
 from src.core.memory import MemorySystem
-from src.tools.vector_tools import QdrantVectorSearchTool
-from src.tools.database_tools import PGSearchTool
-from src.tools.cache_tools import CacheTool
+from src.agents.data_proxy_agent import DataProxyAgent
+from src.services.data.data_service_hub import DataServiceHub
 from src.core.hub import HubCrew
 from src.crews.sales_crew import SalesCrew
 from src.crews.support_crew import SupportCrew
@@ -45,10 +44,8 @@ class WhatsAppChannelCrew(ChannelCrew):
     
     def __init__(self, 
                  memory_system: Optional[MemorySystem] = None,
-                 vector_tool: Optional[QdrantVectorSearchTool] = None,
-                 db_tool: Optional[PGSearchTool] = None,
-                 cache_tool: Optional[CacheTool] = None,
-                 agent_cache: Optional[RedisAgentCache] = None,  # Adicionado o parâmetro agent_cache
+                 data_service_hub: Optional[DataServiceHub] = None,
+                 agent_cache: Optional[RedisAgentCache] = None,
                  domain_manager: Optional[DomainManager] = None,
                  plugin_manager: Optional[PluginManager] = None,
                  additional_tools: Optional[List[Any]] = None,
@@ -70,9 +67,7 @@ class WhatsAppChannelCrew(ChannelCrew):
         # Inicializa ferramentas e sistemas
         # Não atribuir diretamente devido ao modelo Pydantic
         memory_system = memory_system or MemorySystem()
-        vector_tool = vector_tool or QdrantVectorSearchTool()
-        db_tool = db_tool or PGSearchTool()
-        cache_tool = cache_tool or CacheTool()
+        data_service_hub = data_service_hub or DataServiceHub()
         domain_manager = domain_manager or DomainManager()
         # Inicializa o plugin_manager com uma configuração vazia se não for fornecido
         plugin_manager = plugin_manager or PluginManager(config={})
@@ -113,9 +108,7 @@ class WhatsAppChannelCrew(ChannelCrew):
         super().__init__(
             channel_type="WhatsApp", 
             memory_system=memory_system,
-            vector_tool=vector_tool,
-            db_tool=db_tool,
-            cache_tool=cache_tool,
+            data_proxy_agent=data_service_hub.get_data_proxy_agent(),
             chatwoot_client=chatwoot_client,
             additional_tools={"processor": additional_tools, "monitor": additional_tools},
             agent_cache=agent_cache,
@@ -127,6 +120,7 @@ class WhatsAppChannelCrew(ChannelCrew):
         self.__dict__["_domain_manager"] = domain_manager
         self.__dict__["_plugin_manager"] = plugin_manager
         self.__dict__["_additional_tools"] = additional_tools
+        self.__dict__["_data_service_hub"] = data_service_hub
         
         # Inicializar o atributo _agents para acessá-lo posteriormente via dict
         # Usamos self.agents que existe na classe base para inicializar
@@ -150,6 +144,11 @@ class WhatsAppChannelCrew(ChannelCrew):
     def plugin_manager(self):
         return self.__dict__["_plugin_manager"]
         
+    @property
+    def data_service_hub(self):
+        """Retorna o DataServiceHub."""
+        return self.__dict__["_data_service_hub"]
+    
     @property
     def additional_tools(self):
         """Retorna as ferramentas adicionais."""
@@ -309,9 +308,7 @@ class WhatsAppChannelCrew(ChannelCrew):
         # Inicializa o Hub Crew com os parâmetros corretos
         hub_crew = HubCrew(
             memory_system=self.memory_system,
-            vector_tool=self.vector_tool,
-            db_tool=self.db_tool,
-            cache_tool=self.cache_tool,
+            data_service_hub=self.data_service_hub,
             additional_tools=self.additional_tools,
             agent_cache=self.agent_cache
         )
@@ -323,40 +320,32 @@ class WhatsAppChannelCrew(ChannelCrew):
         functional_crews = {
             "sales": SalesCrew(
                 memory_system=self.memory_system,
-                vector_tool=self.vector_tool,
-                db_tool=self.db_tool,
-                cache_tool=self.cache_tool,
-                agent_cache=self.agent_cache,  # Passa o agent_cache
+                data_service_hub=self.data_service_hub,
+                agent_cache=self.agent_cache,
                 domain_manager=self.domain_manager,
                 plugin_manager=self.plugin_manager,
                 additional_tools=self.additional_tools
             ),
             "support": SupportCrew(
                 memory_system=self.memory_system,
-                vector_tool=self.vector_tool,
-                db_tool=self.db_tool,
-                cache_tool=self.cache_tool,
-                agent_cache=self.agent_cache,  # Passa o agent_cache
+                data_service_hub=self.data_service_hub,
+                agent_cache=self.agent_cache,
                 domain_manager=self.domain_manager,
                 plugin_manager=self.plugin_manager,
                 additional_tools=self.additional_tools
             ),
             "info": InfoCrew(
                 memory_system=self.memory_system,
-                vector_tool=self.vector_tool,
-                db_tool=self.db_tool,
-                cache_tool=self.cache_tool,
-                agent_cache=self.agent_cache,  # Passa o agent_cache
+                data_service_hub=self.data_service_hub,
+                agent_cache=self.agent_cache,
                 domain_manager=self.domain_manager,
                 plugin_manager=self.plugin_manager,
                 additional_tools=self.additional_tools
             ),
             "scheduling": SchedulingCrew(
                 memory_system=self.memory_system,
-                vector_tool=self.vector_tool,
-                db_tool=self.db_tool,
-                cache_tool=self.cache_tool,
-                agent_cache=self.agent_cache,  # Passa o agent_cache
+                data_service_hub=self.data_service_hub,
+                agent_cache=self.agent_cache,
                 domain_manager=self.domain_manager,
                 plugin_manager=self.plugin_manager,
                 additional_tools=self.additional_tools

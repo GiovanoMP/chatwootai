@@ -25,15 +25,14 @@ class AdaptableAgent(FunctionalAgent, ABC):
     # Campos adicionais para o modelo Pydantic
     domain_manager: Optional[DomainManager] = None
     plugin_manager: Optional[PluginManager] = None
+    data_proxy_agent: Optional[Any] = None
     domain_config: Optional[Dict[str, Any]] = None
     domain_plugins: Optional[List[Any]] = None
     
     def __init__(self, 
                  agent_config: Dict[str, Any], 
                  memory_system=None, 
-                 vector_tool=None, 
-                 db_tool=None, 
-                 cache_tool=None, 
+                 data_proxy_agent=None, 
                  domain_manager: DomainManager = None, 
                  plugin_manager: PluginManager = None):
         """
@@ -42,9 +41,7 @@ class AdaptableAgent(FunctionalAgent, ABC):
         Args:
             agent_config: Configuração do agente
             memory_system: Sistema de memória compartilhada
-            vector_tool: Ferramenta para busca vetorial
-            db_tool: Ferramenta para busca no banco de dados
-            cache_tool: Ferramenta para cache
+            data_proxy_agent: Agente proxy para acesso a dados
             domain_manager: Gerenciador de domínios de negócio
             plugin_manager: Gerenciador de plugins
         """
@@ -55,9 +52,7 @@ class AdaptableAgent(FunctionalAgent, ABC):
         model_data = {
             "function_type": function_type,
             "memory_system": memory_system,
-            "vector_tool": vector_tool,
-            "db_tool": db_tool,
-            "cache_tool": cache_tool,
+            "data_proxy_agent": data_proxy_agent,
             "domain_manager": domain_manager or DomainManager(),
             "plugin_manager": plugin_manager or PluginManager(config={})
         }

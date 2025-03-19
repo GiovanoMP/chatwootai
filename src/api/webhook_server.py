@@ -8,19 +8,22 @@ Este servidor recebe notificações do Chatwoot quando eventos ocorrem
 import os
 import sys
 import logging
+import json
 import uvicorn
 from fastapi import FastAPI, Request, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
-from typing import Dict, Any
+from typing import Dict, Any, List, Optional
 from datetime import datetime
 
-# Configuração de logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
+# Adiciona o diretório raiz ao path para importar os módulos
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+
+# Importa o sistema de debug_logger
+from src.utils.debug_logger import DebugLogger, get_logger, log_function_call, TRACE
+
+# Configura o logger com nível mais detalhado para depuração
+logger = get_logger('webhook_server', level=logging.DEBUG)
 
 # Carrega variáveis de ambiente
 load_dotenv()
@@ -143,21 +146,26 @@ def initialize_crews():
         prefix='agent_cache:'
     )
     
+    # Inicializa o DataServiceHub para obter o data_proxy_agent
+    from src.services.data.data_service_hub import DataServiceHub
+    data_service_hub = DataServiceHub()
+    data_proxy_agent = data_service_hub.get_data_proxy_agent()
+    
     # Inicializa a hub crew com os parâmetros corretos
     hub_crew = HubCrew(
         memory_system=memory_system,
+        data_proxy_agent=data_proxy_agent,  # Adicionado data_proxy_agent
         vector_tool=vector_tool,
         db_tool=db_tool,
         cache_tool=cache_tool,
-        agent_cache=agent_cache
+        agent_cache=agent_cache,
+        data_service_hub=data_service_hub  # Adicionado data_service_hub
     )
     
     # Inicializa a crew do WhatsApp
     whatsapp_crew = WhatsAppChannelCrew(
         memory_system=memory_system,
-        vector_tool=vector_tool,
-        db_tool=db_tool,
-        cache_tool=cache_tool,
+        data_service_hub=data_service_hub,  # Passa o data_service_hub
         agent_cache=agent_cache  # Passa o agent_cache
     )
     
@@ -233,6 +241,7 @@ async def health_check():
     }
 
 @app.post("/webhook")
+@log_function_call(level=TRACE)
 async def webhook(request: Request, handler: ChatwootWebhookHandler = Depends(get_webhook_handler)):
     """
     Endpoint para receber webhooks do Chatwoot.
@@ -263,8 +272,9 @@ async def webhook(request: Request, handler: ChatwootWebhookHandler = Depends(ge
         auth_header = request.headers.get('Authorization')
         expected_token = os.getenv('WEBHOOK_AUTH_TOKEN')
         
-        # Registrar informações básicas da requisição para debug
+        # Registrar informações detalhadas da requisição para debug
         logger.info(f"Requisição recebida de {request.client.host}")
+        logger.debug(f"Headers recebidos: {dict(request.headers)}")
         
         # Verificar se estamos em modo de desenvolvimento
         dev_mode = os.getenv('ENVIRONMENT', 'development').lower() == 'development'
@@ -309,9 +319,17 @@ async def webhook(request: Request, handler: ChatwootWebhookHandler = Depends(ge
         # Obtém os dados do webhook (formato JSON)
         data = await request.json()
         
-        # Registra o recebimento do webhook no log
+        # Registra o recebimento do webhook no log com detalhes
         event_type = data.get('event')
-        logger.info(f"Webhook recebido: {event_type} de {request.client.host}")
+        timestamp_received = datetime.now().isoformat()
+        logger.info(f"Webhook recebido: {event_type} de {request.client.host} em {timestamp_received}")
+        
+        # Log detalhado do payload para depuração
+        try:
+            # Usa a função log_dict do DebugLogger para formatar o JSON
+            logger.log_dict(logging.DEBUG, "Payload do webhook", data)
+        except Exception as log_err:
+            logger.warning(f"Erro ao logar payload completo: {log_err}")
         
         # Exemplo de estrutura de dados para evento 'message_created':
         # {
@@ -326,10 +344,21 @@ async def webhook(request: Request, handler: ChatwootWebhookHandler = Depends(ge
         #   }
         # }
         
+        # Marca o início do processamento para medir performance
+        start_time = datetime.now()
+        
         # Processa o webhook usando o handler apropriado
         # O handler.handle_webhook irá direcionar para o método específico
         # com base no tipo de evento (ex: _handle_message_created)
         response = handler.handle_webhook(data)
+        
+        # Calcula e registra o tempo de processamento
+        processing_time = (datetime.now() - start_time).total_seconds()
+        logger.info(f"Tempo de processamento do webhook {event_type}: {processing_time:.3f}s")
+        
+        # Adiciona o tempo de processamento à resposta
+        if isinstance(response, dict):
+            response["processing_time"] = f"{processing_time:.3f}s"
         
         return response
     
@@ -337,9 +366,17 @@ async def webhook(request: Request, handler: ChatwootWebhookHandler = Depends(ge
         # Re-lança exceções HTTP para manter o código de status correto
         raise
     
+    except json.JSONDecodeError as e:
+        # Log detalhado para erro de JSON inválido
+        logger.error(f"Erro de JSON inválido no webhook: {e}")
+        body = await request.body()
+        logger.error(f"Corpo da requisição: {body.decode('utf-8', errors='replace')}")
+        raise HTTPException(status_code=400, detail=f"JSON inválido: {str(e)}")
+    
     except Exception as e:
-        # Registra o erro no log para facilitar o debugging
-        logger.error(f"Erro ao processar webhook: {e}")
+        # Registra o erro de forma detalhada usando o logger avançado
+        logger.error(f"Erro ao processar webhook: {type(e).__name__}: {str(e)}")
+        logger.log_exception(e, context="processamento do webhook")
         # Retorna um erro HTTP 500 com a mensagem de erro
         raise HTTPException(status_code=500, detail=str(e))
 

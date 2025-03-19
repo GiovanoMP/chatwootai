@@ -14,10 +14,11 @@ from src.core.cache.agent_cache import RedisAgentCache
 from langchain.tools import BaseTool
 
 from src.core.memory import MemorySystem
+from src.agents.data_proxy_agent import DataProxyAgent
+from src.api.chatwoot_client import ChatwootClient
 from src.tools.vector_tools import QdrantVectorSearchTool
 from src.tools.database_tools import PGSearchTool
 from src.tools.cache_tools import CacheTool
-from src.api.chatwoot_client import ChatwootClient
 
 logger = logging.getLogger(__name__)
 
@@ -33,9 +34,7 @@ class MessageProcessorAgent(Agent):
     def __init__(self, 
                  channel_type: str,
                  memory_system: MemorySystem,
-                 vector_tool: QdrantVectorSearchTool,
-                 db_tool: PGSearchTool,
-                 cache_tool: CacheTool,
+                 data_proxy_agent: DataProxyAgent,
                  chatwoot_client: ChatwootClient,
                  additional_tools: Optional[List[BaseTool]] = None,
                  **kwargs):
@@ -52,7 +51,7 @@ class MessageProcessorAgent(Agent):
             additional_tools: Additional tools for the agent
             **kwargs: Additional arguments for the Agent class
         """
-        tools = [vector_tool, db_tool, cache_tool]
+        tools = [data_proxy_agent]
         
         if additional_tools:
             tools.extend(additional_tools)
@@ -78,9 +77,7 @@ class MessageProcessorAgent(Agent):
         # Armazenar os atributos como dicionário privado para evitar conflitos com Pydantic
         self.__dict__["_channel_type"] = channel_type
         self.__dict__["_memory_system"] = memory_system
-        self.__dict__["_vector_tool"] = vector_tool
-        self.__dict__["_db_tool"] = db_tool
-        self.__dict__["_cache_tool"] = cache_tool
+        self.__dict__["_data_proxy_agent"] = data_proxy_agent
         self.__dict__["_chatwoot_client"] = chatwoot_client
     
     @property
@@ -92,16 +89,8 @@ class MessageProcessorAgent(Agent):
         return self.__dict__["_memory_system"]
     
     @property
-    def vector_tool(self):
-        return self.__dict__["_vector_tool"]
-    
-    @property
-    def db_tool(self):
-        return self.__dict__["_db_tool"]
-    
-    @property
-    def cache_tool(self):
-        return self.__dict__["_cache_tool"]
+    def data_proxy_agent(self):
+        return self.__dict__["_data_proxy_agent"]
     
     @property
     def chatwoot_client(self):
@@ -301,9 +290,7 @@ class ChannelMonitorAgent(Agent):
     def __init__(self, 
                  channel_type: str,
                  memory_system: MemorySystem,
-                 vector_tool: QdrantVectorSearchTool,
-                 db_tool: PGSearchTool,
-                 cache_tool: CacheTool,
+                 data_proxy_agent: DataProxyAgent,
                  chatwoot_client: ChatwootClient,
                  additional_tools: Optional[List[BaseTool]] = None,
                  **kwargs):
@@ -320,7 +307,7 @@ class ChannelMonitorAgent(Agent):
             additional_tools: Additional tools for the agent
             **kwargs: Additional arguments for the Agent class
         """
-        tools = [vector_tool, db_tool, cache_tool]
+        tools = [data_proxy_agent]
         
         if additional_tools:
             tools.extend(additional_tools)
@@ -346,9 +333,7 @@ class ChannelMonitorAgent(Agent):
         # Armazenar os atributos como dicionário privado para evitar conflitos com Pydantic
         self.__dict__["_channel_type"] = channel_type
         self.__dict__["_memory_system"] = memory_system
-        self.__dict__["_vector_tool"] = vector_tool
-        self.__dict__["_db_tool"] = db_tool
-        self.__dict__["_cache_tool"] = cache_tool
+        self.__dict__["_data_proxy_agent"] = data_proxy_agent
         self.__dict__["_chatwoot_client"] = chatwoot_client
     
     @property
@@ -360,16 +345,8 @@ class ChannelMonitorAgent(Agent):
         return self.__dict__["_memory_system"]
     
     @property
-    def vector_tool(self):
-        return self.__dict__["_vector_tool"]
-    
-    @property
-    def db_tool(self):
-        return self.__dict__["_db_tool"]
-    
-    @property
-    def cache_tool(self):
-        return self.__dict__["_cache_tool"]
+    def data_proxy_agent(self):
+        return self.__dict__["_data_proxy_agent"]
     
     @property
     def chatwoot_client(self):
@@ -587,9 +564,7 @@ class ChannelCrew(Crew):
         # Armazenar os atributos como dicionário privado para evitar conflitos com Pydantic
         self.__dict__["_channel_type"] = channel_type
         self.__dict__["_memory_system"] = memory_system
-        self.__dict__["_vector_tool"] = vector_tool
-        self.__dict__["_db_tool"] = db_tool
-        self.__dict__["_cache_tool"] = cache_tool
+        self.__dict__["_data_proxy_agent"] = data_proxy_agent
         self.__dict__["_chatwoot_client"] = chatwoot_client
         self.__dict__["_processor"] = processor
         self.__dict__["_monitor"] = monitor
@@ -604,16 +579,8 @@ class ChannelCrew(Crew):
         return self.__dict__["_memory_system"]
     
     @property
-    def vector_tool(self):
-        return self.__dict__["_vector_tool"]
-    
-    @property
-    def db_tool(self):
-        return self.__dict__["_db_tool"]
-    
-    @property
-    def cache_tool(self):
-        return self.__dict__["_cache_tool"]
+    def data_proxy_agent(self):
+        return self.__dict__["_data_proxy_agent"]
     
     @property
     def chatwoot_client(self):

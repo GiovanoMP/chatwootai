@@ -53,7 +53,7 @@ class InfoCrew(FunctionalCrew):
             backstory="""Você é um especialista em informações com conhecimento abrangente 
             sobre a empresa, seus produtos, serviços, políticas e procedimentos. Seu objetivo 
             é fornecer informações precisas e úteis para os clientes.""",
-            tools=[self.vector_tool, self.db_tool, self.cache_tool] + self.additional_tools,
+            tools=[self.data_service_hub.get_data_proxy_agent()] + self.additional_tools,
             verbose=True
         )
         
@@ -64,7 +64,7 @@ class InfoCrew(FunctionalCrew):
             backstory="""Você conhece todas as perguntas frequentes e suas respostas.
             Seu objetivo é fornecer respostas rápidas e precisas para as dúvidas mais comuns
             dos clientes.""",
-            tools=[self.vector_tool, self.cache_tool],
+            tools=[self.data_service_hub.get_data_proxy_agent()],
             verbose=True
         )
         
@@ -75,7 +75,7 @@ class InfoCrew(FunctionalCrew):
             backstory="""Você é especializado em pesquisar e encontrar informações relevantes
             em diversas fontes de conteúdo, como site, blog, redes sociais e materiais promocionais
             da empresa.""",
-            tools=[self.vector_tool, self.db_tool, self.cache_tool],
+            tools=[self.data_service_hub.get_data_proxy_agent()],
             verbose=True
         )
         

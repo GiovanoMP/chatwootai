@@ -6,10 +6,19 @@ allowing the system to fetch conversations and send messages.
 """
 
 import logging
+import json
 import requests
+import time
+from datetime import datetime
 from typing import Dict, List, Any, Optional, Union
 
-logger = logging.getLogger(__name__)
+# Verifica se o módulo debug_logger está disponível
+try:
+    from src.utils.debug_logger import get_logger, log_function_call, TRACE
+    logger = get_logger('chatwoot_client', level=logging.DEBUG)
+except ImportError:
+    # Fallback para logging padrão
+    logger = logging.getLogger(__name__)
 
 
 class ChatwootClient:
@@ -385,25 +394,55 @@ class ChatwootWebhookHandler:
         Returns:
             Response data
         """
+        start_time = time.time()
         try:
             event_type = data.get('event')
+            logger.info(f"Processando webhook do tipo: {event_type}")
             
+            # Registra timestamp para análise de latência
+            processing_timestamp = datetime.now().isoformat()
+            
+            result = None
             if event_type == 'message_created':
-                return self._handle_message_created(data)
+                logger.debug(f"Encaminhando para handler de message_created")
+                result = self._handle_message_created(data)
             
             elif event_type == 'conversation_created':
-                return self._handle_conversation_created(data)
+                logger.debug(f"Encaminhando para handler de conversation_created")
+                result = self._handle_conversation_created(data)
             
             elif event_type == 'conversation_status_changed':
-                return self._handle_conversation_status_changed(data)
+                logger.debug(f"Encaminhando para handler de conversation_status_changed")
+                result = self._handle_conversation_status_changed(data)
             
             else:
-                logger.info(f"Unhandled webhook event: {event_type}")
-                return {"status": "ignored", "event": event_type}
+                logger.info(f"Tipo de evento não tratado: {event_type}")
+                result = {"status": "ignored", "event": event_type}
+            
+            # Calcula e registra o tempo de processamento
+            processing_time = time.time() - start_time
+            logger.info(f"Webhook {event_type} processado em {processing_time:.3f}s")
+            
+            # Adiciona informações de performance à resposta
+            if isinstance(result, dict):
+                result["processing_time"] = f"{processing_time:.3f}s"
+                result["timestamp"] = processing_timestamp
+            
+            return result
         
         except Exception as e:
-            logger.error(f"Error handling webhook: {e}")
-            return {"error": str(e)}
+            processing_time = time.time() - start_time
+            logger.error(f"Erro ao processar webhook: {str(e)}")
+            
+            # Log mais detalhado do erro
+            import traceback
+            logger.error(f"Traceback: {traceback.format_exc()}")
+            
+            return {
+                "error": str(e),
+                "error_type": type(e).__name__,
+                "processing_time": f"{processing_time:.3f}s"
+            }
     
     def _handle_message_created(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -415,19 +454,30 @@ class ChatwootWebhookHandler:
         Returns:
             Response data
         """
+        start_time = time.time()
         try:
+            # Log detalhado dos dados da mensagem
+            logger.debug(f"Dados completos do webhook message_created: {json.dumps(data, indent=2, ensure_ascii=False)}")
+            
             message = data.get('message', {})
             conversation = data.get('conversation', {})
             
+            # Verifica o tipo de mensagem
+            message_type = message.get('message_type')
+            logger.debug(f"Tipo de mensagem recebida: {message_type}")
+            
             # Only process incoming messages from contacts
-            if message.get('message_type') != 'incoming':
-                return {"status": "ignored", "reason": "not an incoming message"}
+            if message_type != 'incoming':
+                logger.info(f"Ignorando mensagem do tipo {message_type} (apenas mensagens 'incoming' são processadas)")
+                return {"status": "ignored", "reason": f"not an incoming message (type: {message_type})"}
             
             # Extract relevant data
             account_id = data.get('account', {}).get('id')
             conversation_id = str(conversation.get('id', ''))
             contact = data.get('contact', {})
-            inbox = data.get('inbox', {})
+            inbox = data.get('inbox', {})            
+            
+            logger.debug(f"Processando mensagem da conta {account_id}, conversa {conversation_id}")
             
             # Determine the channel type
             channel_type = inbox.get('channel_type', 'api')

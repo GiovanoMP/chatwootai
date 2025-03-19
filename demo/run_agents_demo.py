@@ -19,9 +19,8 @@ from src.core.memory import MemorySystem, SharedMemory
 from src.core.cache.agent_cache import RedisAgentCache
 from src.core.hub import HubCrew
 from src.crews.functional_crew import FunctionalCrew
-from src.tools.vector_tools import QdrantVectorSearchTool
-from src.tools.database_tools import PGSearchTool
-from src.tools.cache_tools import CacheTool
+from src.services.data.data_service_hub import DataServiceHub
+from src.agents.data_proxy_agent import DataProxyAgent
 
 # Configuração de logging
 logging.basicConfig(
@@ -33,18 +32,14 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def create_mock_tools():
-    """Cria versões mock das ferramentas para demonstração."""
-    # Mock da ferramenta de busca vetorial
-    vector_tool = QdrantVectorSearchTool(collection_name="demo")
+def create_data_service_hub():
+    """Cria um DataServiceHub para a demonstração."""
+    # Criar um DataServiceHub configurado para o ambiente de demonstração
+    data_service_hub = DataServiceHub()
     
-    # Mock da ferramenta de banco de dados
-    db_tool = PGSearchTool()
+    # Aqui podemos registrar serviços adicionais ou configurar mock services se necessário
     
-    # Mock da ferramenta de cache
-    cache_tool = CacheTool()
-    
-    return vector_tool, db_tool, cache_tool
+    return data_service_hub
 
 
 def create_memory_system():
@@ -62,43 +57,35 @@ def create_agent_cache():
     return RedisAgentCache(prefix="demo_cache:", ttl=3600)
 
 
-def create_hub_crew(memory_system, tools, agent_cache):
+def create_hub_crew(memory_system, data_service_hub, agent_cache):
     """Cria e configura a crew do hub."""
-    vector_tool, db_tool, cache_tool = tools
     
-    # Cria a crew do hub
+    # Cria a crew do hub usando o DataServiceHub
     hub_crew = HubCrew(
         memory_system=memory_system,
-        vector_tool=vector_tool,
-        db_tool=db_tool,
-        cache_tool=cache_tool,
+        data_service_hub=data_service_hub,
         agent_cache=agent_cache
     )
     
     return hub_crew
 
 
-def create_functional_crews(memory_system, tools, agent_cache):
+def create_functional_crews(memory_system, data_service_hub, agent_cache):
     """Cria e configura as crews funcionais."""
-    vector_tool, db_tool, cache_tool = tools
     
-    # Cria a crew de vendas
+    # Cria a crew de vendas usando o DataServiceHub
     sales_crew = FunctionalCrew(
         crew_type="sales",
         memory_system=memory_system,
-        vector_tool=vector_tool,
-        db_tool=db_tool,
-        cache_tool=cache_tool,
+        data_service_hub=data_service_hub,
         agent_cache=agent_cache
     )
     
-    # Cria a crew de suporte
+    # Cria a crew de suporte usando o DataServiceHub
     support_crew = FunctionalCrew(
         crew_type="support",
         memory_system=memory_system,
-        vector_tool=vector_tool,
-        db_tool=db_tool,
-        cache_tool=cache_tool,
+        data_service_hub=data_service_hub,
         agent_cache=agent_cache
     )
     
@@ -139,11 +126,11 @@ def run_demo():
     # Cria os componentes necessários
     memory_system = create_memory_system()
     agent_cache = create_agent_cache()
-    tools = create_mock_tools()
+    data_service_hub = create_data_service_hub()
     
     # Cria as crews
-    hub_crew = create_hub_crew(memory_system, tools, agent_cache)
-    functional_crews = create_functional_crews(memory_system, tools, agent_cache)
+    hub_crew = create_hub_crew(memory_system, data_service_hub, agent_cache)
+    functional_crews = create_functional_crews(memory_system, data_service_hub, agent_cache)
     
     # Configura o contexto inicial
     context = {

@@ -1949,6 +1949,157 @@ Este conteúdo gerado automaticamente será apresentado ao usuário para revisã
 
 Esta estrutura de interface garante que as Crews funcionais possam acessar eficientemente os dados necessários para sua operação, mantendo um alto grau de desacoplamento e flexibilidade.
 
+## Adaptação dos DataServices para Diferentes Modelos de Negócio
+
+Um desafio importante no desenvolvimento do ChatwootAI é garantir que o sistema possa se adaptar facilmente a diferentes domínios de negócio (cosméticos, saúde, varejo, etc.) sem exigir alterações significativas no código. Esta seção detalha como os DataServices foram projetados para superar esse desafio.
+
+### 1. Abordagem de Abstração em Camadas
+
+O design dos DataServices segue um modelo de abstração em camadas que separa claramente:
+
+```
++-----------------------+
+| Interface do Serviço   | <- Consistente entre domínios
++-----------------------+
+| Adaptadores de Domínio | <- Específicos para cada domínio
++-----------------------+
+| Acesso a Dados         | <- Genérico para todos os domínios
++-----------------------+
+```
+
+#### 1.1 Interface do Serviço
+
+A camada superior fornece uma API consistente para todos os agentes, independente do domínio atual. Por exemplo, todos os domínios terão métodos como `get_product_by_id()`, `search_products()`, mesmo que a implementação subjacente seja diferente.
+
+#### 1.2 Adaptadores de Domínio
+
+Esta camada intermediária é responsável por adaptar as solicitações genéricas para o esquema específico do domínio. Cada domínio registra seus adaptadores através do sistema de plugins, que são carregados dinamicamente quando o domínio é ativado.
+
+```python
+# Exemplo de adaptador para o domínio de cosméticos
+class CosmeticsProductAdapter(BaseProductAdapter):
+    def map_search_query(self, query_params):
+        # Mapeia parâmetros genéricos para o esquema específico de cosméticos
+        mapped_params = {}
+        if 'skin_type' in query_params:
+            mapped_params['propriedades.tipo_pele'] = query_params['skin_type']
+        return mapped_params
+```
+
+#### 1.3 Acesso a Dados
+
+A camada inferior lida com o acesso real aos dados (SQL, NoSQL, APIs), usando os parâmetros mapeados pelos adaptadores.
+
+### 2. Configuração Declarativa de Domínios
+
+Em vez de codificar as diferenças entre domínios, o sistema utiliza configurações declarativas em arquivos YAML:
+
+```yaml
+# domains/cosmeticos.yaml
+name: Cosméticos
+description: Domínio de produtos de beleza e cuidados pessoais
+
+tables:
+  products: produtos_cosmeticos
+  categories: categorias_cosmeticos
+  
+field_mappings:
+  product:
+    name: nome_produto
+    price: valor
+    brand: marca
+    attributes: propriedades
+```
+
+Esta abordagem permite adicionar novos domínios sem modificar o código dos serviços.
+
+### 3. Plugins Específicos de Domínio
+
+Para funcionalidades totalmente específicas de um domínio, o sistema permite a criação de plugins dedicados:
+
+```
+src/plugins/
+  ├── base/
+  │   └── base_plugin.py
+  ├── cosmetics/
+  │   ├── skin_analyzer_plugin.py
+  │   └── routine_builder_plugin.py
+  └── health/
+      ├── symptom_checker_plugin.py
+      └── medication_advisor_plugin.py
+```
+
+Estes plugins são carregados dinamicamente apenas quando o domínio correspondente está ativo.
+
+### 4. DataProxyAgent: Facilitando o Acesso aos Dados
+
+Para simplificar ainda mais a interação entre agentes e dados específicos de domínio, o sistema utiliza o DataProxyAgent como intermediário. Este agente especializado:
+
+1. **Traduz solicitações**: Converte pedidos em linguagem natural em chamadas estruturadas para os DataServices
+2. **Aplica a lógica de domínio**: Incorpora regras específicas do domínio atual nas consultas
+3. **Otimiza o acesso**: Gerencia cache e combina consultas relacionadas para maior eficiência
+
+#### 4.1 Integração do DataProxyAgent no Fluxo de Trabalho
+
+```
++----------------+    +-----------------+    +--------------------+
+| Agente de      |    |                 |    | Adaptador de       |
+| Vendas/Suporte | -> | DataProxyAgent  | -> | Domínio Específico | -> DB
++----------------+    +-----------------+    +--------------------+
+```
+
+#### 4.2 Implementação do DataProxyAgent
+
+O DataProxyAgent deve ser implementado como parte da HubCrew, ao lado do OrchestratorAgent e ContextManagerAgent. Seu papel é fundamental para desacoplar os agentes funcionais da complexidade de lidar com diferentes esquemas de dados.
+
+Implementação sugerida:
+
+```python
+from crewai import Agent
+import logging
+import time
+
+class DataProxyAgent(Agent):
+    """
+    Agente responsável por intermediar o acesso a dados para outros agentes.
+    Atua como um proxy que roteia solicitações para os serviços de dados apropriados.
+    """
+    
+    def __init__(self, data_service_hub, **kwargs):
+        self.data_service_hub = data_service_hub
+        super().__init__(
+            role="Data Proxy Agent",
+            goal="Fornecer acesso eficiente e seguro a todos os dados do sistema",
+            backstory="Sou o intermediário entre os agentes e os dados, garantindo acesso rápido e consistente a todas as informações.",
+            **kwargs
+        )
+    
+    def execute_task(self, task):
+        """Processa uma tarefa relacionada a dados."""
+        instruction = task.description
+        if "produto" in instruction.lower():
+            return self._handle_product_request(instruction)
+        elif "cliente" in instruction.lower():
+            return self._handle_customer_request(instruction)
+        # Outras categorias...
+    
+    def _handle_product_request(self, instruction):
+        """Processa solicitações relacionadas a produtos."""
+        # Usar NLP para extrair parâmetros relevantes
+        # Chamar o serviço apropriado
+        return "Dados de produtos processados"
+```
+
+### 5. Status Atual e Próximos Passos
+
+1. **Status Atual**: O DataServiceHub e os serviços básicos estão implementados, mas o DataProxyAgent está definido apenas na arquitetura e não foi implementado.
+
+2. **Próximos Passos**:
+   - Implementar o DataProxyAgent como parte da HubCrew
+   - Desenvolver adaptadores para todos os domínios atuais
+   - Criar ferramentas de auto-geração de adaptadores para novos domínios
+   - Expandir a suite de testes para verificar a adaptabilidade entre domínios
+
 ## Considerações Futuras e Próximos Passos
 
 1. **Escalonamento Horizontal**: A arquitetura foi projetada para permitir escalonamento horizontal dos serviços, facilitando o crescimento da plataforma.

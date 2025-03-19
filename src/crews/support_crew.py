@@ -61,9 +61,7 @@ class SupportCrew(FunctionalCrew):
         support_agent = SupportAgent(
             agent_config=agent_config,
             memory_system=self.memory_system,
-            vector_tool=self.vector_tool,
-            db_tool=self.db_tool,
-            cache_tool=self.cache_tool,
+            data_proxy_agent=self.data_service_hub.get_data_proxy_agent(),
             domain_manager=self.domain_manager,
             plugin_manager=self.plugin_manager
         )
@@ -75,7 +73,7 @@ class SupportCrew(FunctionalCrew):
             backstory="""Você é especializado em analisar problemas relatados pelos clientes
             e identificar suas causas raiz. Você conhece profundamente os produtos da empresa
             e os problemas mais comuns que podem ocorrer.""",
-            tools=[self.vector_tool, self.db_tool, self.cache_tool],
+            tools=[self.data_service_hub.get_data_proxy_agent()],
             verbose=True
         )
         
@@ -86,7 +84,7 @@ class SupportCrew(FunctionalCrew):
             backstory="""Você tem acesso à base de conhecimento completa da empresa.
             Seu objetivo é fornecer informações precisas e detalhadas para ajudar
             a resolver problemas e responder a dúvidas técnicas.""",
-            tools=[self.vector_tool, self.cache_tool],
+            tools=[self.data_service_hub.get_data_proxy_agent()],
             verbose=True
         )
         

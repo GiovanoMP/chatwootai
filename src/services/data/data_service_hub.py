@@ -49,6 +49,7 @@ class DataServiceHub:
     - Gerenciar conexões com bancos de dados (PostgreSQL, Redis, etc.)
     - Implementar sistema de cache em dois níveis
     - Fornecer interface unificada para todos os serviços de dados
+    - Criar e gerenciar o DataProxyAgent para acesso unificado a dados
     - Facilitar comunicação entre diferentes serviços
     """
     
@@ -148,9 +149,58 @@ class DataServiceHub:
             return conn
         except Exception as e:
             logger.error(f"Erro ao conectar ao PostgreSQL: {str(e)}")
-            # Em produção, você pode querer retentar ou implementar um fallback
-            # Por enquanto, apenas registramos o erro e retornamos None
             return None
+            
+    def get_data_proxy_agent(self):
+        """
+        Cria ou retorna uma instância do DataProxyAgent.
+        
+        Este método inicializa e configura um DataProxyAgent com as ferramentas
+        necessárias para acesso aos dados, incluindo busca vetorial, banco de dados
+        e sistema de cache.
+        
+        Returns:
+            DataProxyAgent: Uma instância configurada do DataProxyAgent.
+        """
+        from src.agents.data_proxy_agent import DataProxyAgent
+        from src.tools.vector_tools import QdrantVectorSearchTool
+        from src.tools.database_tools import PGSearchTool
+        from src.tools.cache_tools import TwoLevelCache
+        from src.core.memory import MemorySystem
+        
+        # Obter configurações do ambiente
+        qdrant_url = os.environ.get('QDRANT_URL', 'http://localhost:6333')
+        qdrant_api_key = os.environ.get('QDRANT_API_KEY', None)
+        openai_api_key = os.environ.get('OPENAI_API_KEY', None)
+        
+        # Log das configurações
+        logger.info(f"Inicializando ferramentas com: Qdrant URL={qdrant_url}")
+        
+        # Inicializa ferramentas para o agente
+        vector_tool = QdrantVectorSearchTool(
+            qdrant_url=qdrant_url,
+            qdrant_api_key=qdrant_api_key,
+            collection_name="chatwootai",
+            openai_api_key=openai_api_key
+        )
+        db_tool = PGSearchTool()
+        cache_tool = TwoLevelCache()
+        memory_system = MemorySystem()
+        
+        # Inicializa o DataProxyAgent com as ferramentas necessárias
+        data_proxy_agent = DataProxyAgent(
+            role="Data Proxy",
+            goal="Fornecer acesso otimizado e consistente aos dados para outros agentes",
+            backstory="Sou um agente especializado em busca e transformação de dados, "
+                     "utilizando diversas fontes como bancos relacionais, vetoriais, e sistemas de cache.",
+            verbose=True,
+            allow_delegation=False,
+            memory=memory_system.memory,
+            tools=[vector_tool, db_tool, cache_tool]
+        )
+        
+        logger.info("DataProxyAgent inicializado com sucesso.")
+        return data_proxy_agent
     
     def _init_redis_connection(self):
         """

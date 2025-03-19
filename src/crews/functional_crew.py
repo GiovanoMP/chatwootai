@@ -13,9 +13,8 @@ from crewai import Crew, Agent, Task
 from src.core.cache.agent_cache import RedisAgentCache
 
 from src.core.memory import MemorySystem
-from src.tools.vector_tools import QdrantVectorSearchTool
-from src.tools.database_tools import PGSearchTool
-from src.tools.cache_tools import CacheTool
+from src.services.data.data_service_hub import DataServiceHub
+from src.agents.data_proxy_agent import DataProxyAgent
 from src.agents.functional_agents import FunctionalAgent
 from src.agents.adaptable.sales_agent import SalesAgent
 from src.agents.adaptable.support_agent import SupportAgent
@@ -35,9 +34,7 @@ class FunctionalCrew:
     def __init__(self, 
                  crew_type: str,
                  memory_system: MemorySystem,
-                 vector_tool: QdrantVectorSearchTool,
-                 db_tool: PGSearchTool,
-                 cache_tool: CacheTool,
+                 data_service_hub: DataServiceHub,
                  agent_cache: Optional[RedisAgentCache] = None,
                  additional_tools: Optional[List[Any]] = None):
         """
@@ -46,17 +43,13 @@ class FunctionalCrew:
         Args:
             crew_type: Tipo da crew (sales, support, info, scheduling)
             memory_system: Sistema de memória compartilhada
-            vector_tool: Ferramenta para busca vetorial
-            db_tool: Ferramenta para busca no banco de dados
-            cache_tool: Ferramenta para cache
+            data_service_hub: Hub central para todos os serviços de dados
             agent_cache: Cache para resultados de agentes
             additional_tools: Ferramentas adicionais para os agentes
         """
         self.crew_type = crew_type
         self.memory_system = memory_system
-        self.vector_tool = vector_tool
-        self.db_tool = db_tool
-        self.cache_tool = cache_tool
+        self.data_service_hub = data_service_hub
         self.agent_cache = agent_cache
         self.additional_tools = additional_tools or []
         

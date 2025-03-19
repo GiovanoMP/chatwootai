@@ -61,9 +61,7 @@ class SchedulingCrew(FunctionalCrew):
         scheduling_agent = SchedulingAgent(
             agent_config=agent_config,
             memory_system=self.memory_system,
-            vector_tool=self.vector_tool,
-            db_tool=self.db_tool,
-            cache_tool=self.cache_tool,
+            data_proxy_agent=self.data_service_hub.get_data_proxy_agent(),
             domain_manager=self.domain_manager,
             plugin_manager=self.plugin_manager
         )
@@ -75,7 +73,7 @@ class SchedulingCrew(FunctionalCrew):
             backstory="""Você é especializado em verificar a disponibilidade de horários,
             profissionais e recursos. Seu objetivo é encontrar os melhores horários
             disponíveis que atendam às necessidades dos clientes.""",
-            tools=[self.db_tool, self.cache_tool],
+            tools=[self.data_service_hub.get_data_proxy_agent()],
             verbose=True
         )
         
@@ -86,7 +84,7 @@ class SchedulingCrew(FunctionalCrew):
             backstory="""Você é responsável por gerenciar confirmações, cancelamentos
             e lembretes de agendamentos. Seu objetivo é garantir que os clientes
             estejam cientes de seus compromissos e possam gerenciá-los facilmente.""",
-            tools=[self.db_tool, self.cache_tool],
+            tools=[self.data_service_hub.get_data_proxy_agent()],
             verbose=True
         )
         

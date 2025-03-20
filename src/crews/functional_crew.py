@@ -13,12 +13,12 @@ from crewai import Crew, Agent, Task
 from src.core.cache.agent_cache import RedisAgentCache
 
 from src.core.memory import MemorySystem
-from src.services.data.data_service_hub import DataServiceHub
-from src.agents.core.data_proxy_agent import DataProxyAgent
-from src.agents.functional_agents import FunctionalAgent
-from src.agents.adaptable.sales_agent import SalesAgent
-from src.agents.adaptable.support_agent import SupportAgent
-from src.agents.adaptable.scheduling_agent import SchedulingAgent
+from src.core.data_service_hub import DataServiceHub
+from src.core.data_proxy_agent import DataProxyAgent
+from src.agents.base.functional_agent import FunctionalAgent
+from src.agents.specialized.sales_agent import SalesAgent
+from src.agents.specialized.support_agent import SupportAgent
+from src.agents.specialized.scheduling_agent import SchedulingAgent
 
 logger = logging.getLogger(__name__)
 

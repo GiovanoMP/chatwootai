@@ -91,6 +91,8 @@ services:
     restart: unless-stopped
     volumes:
       - redis_data:/data
+    ports:
+      - "6379:6379"  # Mapeando a porta 6379 para acesso externo
     command: redis-server --appendonly yes
     networks:
       - network_internal

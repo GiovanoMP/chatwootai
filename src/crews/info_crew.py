@@ -12,7 +12,7 @@ from crewai import Agent, Task
 
 from src.crews.functional_crew import FunctionalCrew
 from src.core.domain import DomainManager
-from src.plugins.plugin_manager import PluginManager
+from src.plugins.core.plugin_manager import PluginManager
 
 logger = logging.getLogger(__name__)
 

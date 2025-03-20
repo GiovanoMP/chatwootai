@@ -6,7 +6,7 @@ facilitando o acesso consistente a diferentes fontes de dados e
 implementando um sistema de cache em dois níveis.
 """
 
-from .data_service_hub import DataServiceHub
+from src.core.data_service_hub import DataServiceHub
 from .base_data_service import BaseDataService
 
 __all__ = ['DataServiceHub', 'BaseDataService']

@@ -52,8 +52,8 @@ class DomainRulesService(BaseDataService):
         self.active_domain = None
         self.rule_cache = {}
         
-        # Diretório de domínios (padrão: src/config/domains)
-        self.domains_dir = self.config.get("domains_dir", os.path.join("src", "config", "domains"))
+        # Diretório de domínios (movido para src/business_domain)
+        self.domains_dir = self.config.get("domains_dir", os.path.join("src", "business_domain"))
         
         # Inicializar sistema de plugins
         self.plugin_manager = self._initialize_plugin_manager()
@@ -85,7 +85,7 @@ class DomainRulesService(BaseDataService):
         
         # Se não existir, importar e criar uma nova instância
         try:
-            from ...plugins.plugin_manager import PluginManager
+            from ...plugins.core.plugin_manager import PluginManager
             config = self.config.get("plugin_config", {})
             return PluginManager(config)
         except ImportError:

@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Teste básico de conexão com Redis
 
@@ -8,16 +9,30 @@ e executa operações básicas para verificar o funcionamento.
 import os
 import sys
 import logging
-import redis
 import unittest
 import time
+import socket
+from pathlib import Path
 
 # Configurar logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 logger = logging.getLogger(__name__)
 
 # Adicionar caminho raiz ao path
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+project_root = Path(__file__).resolve().parent.parent
+sys.path.append(str(project_root))
+
+# Carregar variáveis de ambiente
+try:
+    from dotenv import load_dotenv
+    env_path = project_root / '.env'
+    load_dotenv(env_path)
+    logger.info(f"Variáveis de ambiente carregadas de: {env_path}")
+except ImportError:
+    logger.warning("python-dotenv não encontrado. Usando variáveis de ambiente do sistema.")
 
 
 class TestRedisConnection(unittest.TestCase):
@@ -26,21 +41,20 @@ class TestRedisConnection(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         """Configuração inicial para os testes"""
-        # Forçar uso de localhost para testes, ignorando variáveis de ambiente que podem apontar para IPs internos do Docker
+        # Configurações do Redis - priorizando localhost para os testes
         cls.redis_config = {
-            'host': 'localhost',  # Forçar localhost
-            'port': 6379,          # Porta padrão
-            'db': 0,
-            'password': None       # Sem senha para teste local
+            'host': os.environ.get('REDIS_HOST', 'localhost'),
+            'port': int(os.environ.get('REDIS_PORT', '6379')),
+            'db': int(os.environ.get('REDIS_DB', '0')),
+            'password': os.environ.get('REDIS_PASSWORD', None)
         }
         
+        cls.redis_url = os.environ.get('REDIS_URL', f"redis://{cls.redis_config['host']}:{cls.redis_config['port']}/{cls.redis_config['db']}")
+        
         logger.info(f"Configuração Redis: {cls.redis_config}")
+        logger.info(f"Redis URL: {cls.redis_url}")
         
         # Verificar se o serviço Redis está acessível (socket check)
-        import socket
-        import time
-        
-        # Função para verificar se a porta está aberta
         def check_port(host, port, timeout=1):
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             sock.settimeout(timeout)
@@ -63,6 +77,7 @@ class TestRedisConnection(unittest.TestCase):
         
         # Testar conexão com Redis
         try:
+            import redis
             # Conectar usando parâmetros básicos
             cls.client = redis.Redis(
                 host=cls.redis_config['host'],
@@ -77,6 +92,9 @@ class TestRedisConnection(unittest.TestCase):
             cls.client.ping()
             logger.info(f"Conexão com Redis estabelecida: {cls.redis_config['host']}:{cls.redis_config['port']}")
             
+        except ImportError:
+            logger.error("Módulo redis não está instalado")
+            cls.client = None
         except Exception as e:
             logger.error(f"Erro ao conectar ao Redis: {str(e)}")
             cls.client = None
@@ -137,6 +155,35 @@ class TestRedisConnection(unittest.TestCase):
         finally:
             # Limpar a chave de teste
             self.client.delete(hash_key)
+    
+    def test_expiration(self):
+        """Teste de expiração de chave no Redis"""
+        if not self.client:
+            self.skipTest("Conexão com Redis não disponível")
+        
+        # Definir uma chave para o teste
+        test_key = "test_expiration_" + str(int(time.time()))
+        test_value = "Temporary Value"
+        
+        try:
+            # Definir um valor com expiração de 1 segundo
+            self.client.set(test_key, test_value, ex=1)
+            
+            # Verificar se o valor existe
+            result = self.client.get(test_key)
+            self.assertEqual(result, test_value, "O valor inicial não foi armazenado corretamente")
+            
+            # Esperar pela expiração
+            time.sleep(1.5)
+            
+            # Verificar se o valor expirou
+            result = self.client.get(test_key)
+            self.assertIsNone(result, "A chave não expirou como esperado")
+            
+            logger.info(f"Teste de expiração bem-sucedido para a chave: {test_key}")
+        finally:
+            # Garantir que a chave seja removida
+            self.client.delete(test_key)
 
 
 if __name__ == "__main__":

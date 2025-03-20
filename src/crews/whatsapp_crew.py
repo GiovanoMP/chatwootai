@@ -12,19 +12,19 @@ import json
 from crewai import Agent, Task, Crew, Process
 from src.core.cache.agent_cache import RedisAgentCache
 
-from src.agents.channel_agents import ChannelCrew
+from src.agents.channel.channel_agents import ChannelCrew
 from src.utils.text_processor import normalize_text, extract_keywords
 from src.core.memory import MemorySystem
-from src.agents.core.data_proxy_agent import DataProxyAgent
-from src.services.data.data_service_hub import DataServiceHub
+from src.core.data_proxy_agent import DataProxyAgent
+from src.core.data_service_hub import DataServiceHub
 from src.core.hub import HubCrew
 from src.crews.sales_crew import SalesCrew
 from src.crews.support_crew import SupportCrew
 from src.crews.info_crew import InfoCrew
 from src.crews.scheduling_crew import SchedulingCrew
-from src.agents.channel_agents import MessageProcessorAgent, ChannelMonitorAgent
+from src.agents.channel.channel_agents import MessageProcessorAgent, ChannelMonitorAgent
 from src.core.domain import DomainManager
-from src.plugins.plugin_manager import PluginManager
+from src.plugins.core.plugin_manager import PluginManager
 from src.tasks.whatsapp_tasks import create_whatsapp_tasks
 from src.api.multi_instance_handler import get_instance_manager
 
@@ -106,15 +106,20 @@ class WhatsAppChannelCrew(ChannelCrew):
         )
             
         super().__init__(
-            channel_type="WhatsApp", 
+            channel_name="WhatsApp",
             memory_system=memory_system,
-            data_proxy_agent=data_service_hub.get_data_proxy_agent(),
-            chatwoot_client=chatwoot_client,
-            additional_tools={"processor": additional_tools, "monitor": additional_tools},
-            agent_cache=agent_cache,
-            agents=[dummy_agent, *agents],
-            tasks=[dummy_task]
+            data_proxy_agent=data_service_hub.get_data_proxy_agent()
         )
+        
+        # Atribuições adicionais que não estão no construtor original
+        self.__dict__["_chatwoot_client"] = chatwoot_client
+        self.__dict__["_additional_tools"] = additional_tools
+        self.__dict__["_agent_cache"] = agent_cache
+        # Exponha o agent_cache via propriedade para manter compatibilidade
+        # com o código existente
+        self.agent_cache = agent_cache
+        # tasks será usado pelo BaseCrew
+        self.tasks = [dummy_task]
         
         # Armazenar estes objetos como atributos privados
         self.__dict__["_domain_manager"] = domain_manager
@@ -293,17 +298,21 @@ class WhatsAppChannelCrew(ChannelCrew):
         import os
         
         # Usa o agent_cache fornecido no construtor, ou cria um novo se não fornecido
-        if self.agent_cache is None:
+        agent_cache = getattr(self, 'agent_cache', None) or self.__dict__.get('_agent_cache')
+        if agent_cache is None:
             # Obtém a URL do Redis da variável de ambiente ou usa o padrão
             redis_url = os.environ.get('REDIS_URL', 'redis://localhost:6379/0')
             redis_client = redis.from_url(redis_url)
             
             # Cria o cache de agentes
-            self.agent_cache = RedisAgentCache(
+            agent_cache = RedisAgentCache(
                 redis_client=redis_client,
                 ttl=3600,  # 1 hora de TTL para os resultados em cache
                 prefix='agent_cache:'
             )
+            # Armazena tanto no atributo direto quanto no privado para garantir compatibilidade
+            self.agent_cache = agent_cache
+            self.__dict__["_agent_cache"] = agent_cache
         
         # Inicializa o Hub Crew com os parâmetros corretos
         hub_crew = HubCrew(

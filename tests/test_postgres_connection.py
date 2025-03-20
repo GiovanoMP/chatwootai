@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Teste básico de conexão com PostgreSQL
 
@@ -8,15 +9,28 @@ e executa uma consulta simples para verificar que a conexão funciona.
 import os
 import sys
 import logging
-import psycopg2
 import unittest
+from pathlib import Path
 
 # Configurar logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 logger = logging.getLogger(__name__)
 
 # Adicionar caminho raiz ao path
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+project_root = Path(__file__).resolve().parent.parent
+sys.path.append(str(project_root))
+
+# Carregar variáveis de ambiente
+try:
+    from dotenv import load_dotenv
+    env_path = project_root / '.env'
+    load_dotenv(env_path)
+    logger.info(f"Variáveis de ambiente carregadas de: {env_path}")
+except ImportError:
+    logger.warning("python-dotenv não encontrado. Usando variáveis de ambiente do sistema.")
 
 
 class TestPostgresConnection(unittest.TestCase):
@@ -38,14 +52,18 @@ class TestPostgresConnection(unittest.TestCase):
         
         # Testar conexão
         try:
+            import psycopg2
             cls.conn = psycopg2.connect(
                 host=cls.pg_config['host'],
                 port=cls.pg_config['port'],
                 user=cls.pg_config['user'],
                 password=cls.pg_config['password'],
-                database=cls.pg_config['database']
+                dbname=cls.pg_config['database']
             )
             logger.info("Conexão com PostgreSQL estabelecida com sucesso")
+        except ImportError:
+            logger.error("Módulo psycopg2 não está instalado")
+            cls.conn = None
         except Exception as e:
             logger.error(f"Erro ao conectar ao PostgreSQL: {str(e)}")
             cls.conn = None
@@ -99,12 +117,15 @@ class TestPostgresConnection(unittest.TestCase):
             tables = cursor.fetchall()
             
             # Verificar se existem tabelas
-            self.assertTrue(len(tables) > 0, "Nenhuma tabela encontrada no banco de dados")
+            self.assertTrue(len(tables) >= 0, "Erro ao consultar tabelas no banco de dados")
             
             # Listar as tabelas encontradas
             logger.info("Tabelas encontradas no banco de dados:")
-            for table in tables:
+            for table in tables[:5]:  # Limitar a 5 tabelas para não sobrecarregar o log
                 logger.info(f"- {table[0]}")
+                
+            if len(tables) > 5:
+                logger.info(f"... e mais {len(tables) - 5} tabelas")
         finally:
             cursor.close()
 

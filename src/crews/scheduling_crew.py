@@ -11,9 +11,9 @@ from typing import Dict, List, Any, Optional
 from crewai import Agent, Task
 
 from src.crews.functional_crew import FunctionalCrew
-from src.agents.adaptable.scheduling_agent import SchedulingAgent
+from src.agents.specialized.scheduling_agent import SchedulingAgent
 from src.core.domain import DomainManager
-from src.plugins.plugin_manager import PluginManager
+from src.plugins.core.plugin_manager import PluginManager
 
 logger = logging.getLogger(__name__)
 

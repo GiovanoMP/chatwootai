@@ -23,10 +23,9 @@ from src.core.cache.agent_cache import RedisAgentCache
 from crewai.tools.base_tool import BaseTool
 
 from src.core.memory import MemorySystem
-# Removidos imports não utilizados após a refatoração
-# As ferramentas de dados são agora acessadas através do DataServiceHub
-from src.agents.core.data_proxy_agent import DataProxyAgent
-from src.services.data.data_service_hub import DataServiceHub
+# Nova estrutura com componentes centralizados em src/core
+from src.core.data_proxy_agent import DataProxyAgent
+from src.core.data_service_hub import DataServiceHub
 
 logger = logging.getLogger(__name__)
 
@@ -648,7 +647,7 @@ class HubCrew(Crew):
         if not data_service_hub:
             # Em um cenário real, seria melhor exigir este parâmetro
             logger.warning("DataServiceHub não fornecido à HubCrew. Criando um novo.")
-            from src.services.data.data_service_hub import DataServiceHub
+            # Usando a importação do novo local
             data_service_hub = DataServiceHub()
         
         # Primeiro criamos o DataProxyAgent que será usado pelos outros agentes
@@ -677,7 +676,12 @@ class HubCrew(Crew):
             additional_tools=integration_tools
         )
         
-        agents = [orchestrator, context_manager, integration_agent, data_proxy]
+        # Usar o agente interno do DataProxyAgent (agent ou _crew_agent) em vez do próprio DataProxyAgent
+        data_proxy_crew_agent = getattr(data_proxy, 'agent', None) or getattr(data_proxy, '_crew_agent', None)
+        if not data_proxy_crew_agent:
+            raise ValueError("DataProxyAgent deve ter um agente interno (agent ou _crew_agent)")
+            
+        agents = [orchestrator, context_manager, integration_agent, data_proxy_crew_agent]
         
         # Default configuration for the hub crew
         default_config = {
@@ -695,7 +699,8 @@ class HubCrew(Crew):
         
         # Armazenar atributos necessários
         self.__dict__["_memory_system"] = memory_system
-        self.__dict__["_data_proxy_agent"] = data_proxy_agent
+        # Corrigido: data_proxy_agent deve ser a variável data_proxy que criamos acima
+        self.__dict__["_data_proxy_agent"] = data_proxy  # A variável correta é data_proxy
         self.__dict__["_agent_cache"] = agent_cache
         self.__dict__["_orchestrator"] = orchestrator
         self.__dict__["_context_manager"] = context_manager

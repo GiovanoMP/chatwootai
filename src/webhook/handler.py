@@ -14,10 +14,10 @@ import traceback
 
 from src.core.hub import HubCrew
 from src.core.memory import MemorySystem
-from src.services.data.data_service_hub import DataServiceHub
+from src.core.data_service_hub import DataServiceHub
 from src.api.chatwoot.legacy_client import ChatwootClient
 from src.core.domain import DomainManager
-from src.plugins.plugin_manager import PluginManager
+from src.plugins.core.plugin_manager import PluginManager
 
 logger = logging.getLogger(__name__)
 

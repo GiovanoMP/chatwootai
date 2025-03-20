@@ -147,7 +147,7 @@ def initialize_crews():
     )
     
     # Inicializa o DataServiceHub para obter o data_proxy_agent
-    from src.services.data.data_service_hub import DataServiceHub
+    from src.core.data_service_hub import DataServiceHub
     data_service_hub = DataServiceHub()
     data_proxy_agent = data_service_hub.get_data_proxy_agent()
     

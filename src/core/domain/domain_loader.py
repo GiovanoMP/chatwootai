@@ -23,7 +23,7 @@ class DomainLoader:
         Args:
             domains_dir: Diretório contendo os arquivos YAML de domínios
         """
-        self.domains_dir = domains_dir or os.path.join("src", "config", "business_domains")
+        self.domains_dir = domains_dir or os.path.join("src", "business_domain")
         self.domains: Dict[str, Dict[str, Any]] = {}
     
     def load_domain(self, domain_name: str) -> Optional[Dict[str, Any]]:

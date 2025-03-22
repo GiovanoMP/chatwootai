@@ -37,7 +37,6 @@ instance_manager = MultiInstanceManager()
 # Importa os componentes necessários
 from src.api.chatwoot.client import ChatwootWebhookHandler, ChatwootClient
 from src.core.hub import HubCrew  # Importa HubCrew do core.hub em vez de crews.hub_crew
-from src.crews.whatsapp_crew import WhatsAppChannelCrew
 from src.core.crew_registry import CrewRegistry
 
 # Cria a aplicação FastAPI
@@ -162,16 +161,8 @@ def initialize_crews():
         data_service_hub=data_service_hub  # Adicionado data_service_hub
     )
     
-    # Inicializa a crew do WhatsApp
-    whatsapp_crew = WhatsAppChannelCrew(
-        memory_system=memory_system,
-        data_service_hub=data_service_hub,  # Passa o data_service_hub
-        agent_cache=agent_cache  # Passa o agent_cache
-    )
-    
     # Registra as crews
     crew_registry.register_crew("hub", hub_crew)
-    crew_registry.register_crew("whatsapp", whatsapp_crew)
     
     # Inicializa o handler de webhook com acesso ao registro de crews
     webhook_handler = ChatwootWebhookHandler(hub_crew, crew_registry)

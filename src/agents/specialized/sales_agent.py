@@ -3,30 +3,102 @@ Agente de vendas adaptável para diferentes domínios de negócio.
 """
 from typing import Dict, List, Any, Optional, Type, Union
 import logging
-from pydantic import Field, PrivateAttr
+from pydantic import Field, ConfigDict, validate_call
 
-from crewai import Agent, Task
+from crewai import Agent, Task, Crew
 from crewai.tools.base_tool import BaseTool
 from src.agents.base.adaptable_agent import AdaptableAgent
 from src.api.erp import OdooClient
 from src.core.data_proxy_agent import DataProxyAgent
+from src.core.memory import MemorySystem
+from src.core.domain.domain_manager import DomainManager
+from src.plugins.core.plugin_manager import PluginManager
 
 logger = logging.getLogger(__name__)
 
-
-"""
-Agente de vendas adaptável para diferentes domínios de negócio.
-
-Especializado em processar consultas relacionadas a vendas, produtos,
-preços e promoções, adaptando-se ao domínio de negócio ativo.
-"""
 class SalesAgent(AdaptableAgent):
-    # Atributos privados que não são parte do modelo Pydantic
-    _odoo_client: Optional[OdooClient] = PrivateAttr(default=None)
-    _crew_agent: Optional[Agent] = PrivateAttr(default=None)
+    """
+    Agente especializado em vendas, adaptando-se ao domínio de negócio ativo.
     
-    # Garantir que a configuração do modelo Pydantic seja herdada corretamente
-    model_config = {"arbitrary_types_allowed": True, "extra": "allow"}
+    Processa consultas relacionadas a vendas, produtos, preços e promoções.
+    """
+    # Configuração do modelo Pydantic
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+    
+    def __init__(self, agent_config: Dict[str, Any], 
+                 memory_system: Optional[MemorySystem] = None,
+                 data_proxy_agent: Optional[DataProxyAgent] = None,
+                 domain_manager: Optional[DomainManager] = None,
+                 plugin_manager: Optional[PluginManager] = None):
+        # Validar a configuração do agente usando um método separado
+        self._validate_agent_config(agent_config)
+        """
+        Inicializa o agente de vendas.
+        
+        Args:
+            agent_config: Configuração do agente
+            memory_system: Sistema de memória compartilhada
+            data_proxy_agent: Agente proxy para acesso a dados
+            domain_manager: Gerenciador de domínios de negócio
+            plugin_manager: Gerenciador de plugins
+        """
+        # Adiciona o tipo de função ao config se não estiver presente
+        if "function_type" not in agent_config:
+            agent_config["function_type"] = "sales"
+            
+        # Chama o construtor da classe pai
+        super().__init__(agent_config, memory_system, data_proxy_agent, domain_manager, plugin_manager)
+        
+        # Inicializa atributos adicionais usando o dicionário privado
+        # Isso evita problemas com a validação do Pydantic
+        self.__dict__["_odoo_client"] = None
+        self.__dict__["_crew_agent"] = None
+        self.__dict__["_tools"] = []
+        self.__dict__["_domain_config"] = {}
+        
+        # Valida a configuração e inicializa o agente
+        self._validate_config(agent_config)
+        self.initialize()
+
+    @validate_call
+    def _validate_agent_config(self, config: Dict[str, Any]):
+        """Valida a configuração do agente usando o decorator @validate_call do Pydantic.
+        
+        Esta abordagem permite validar apenas o parâmetro config, evitando problemas com
+        tipos complexos como MemorySystem, DataProxyAgent, etc.
+        
+        Args:
+            config: Dicionário de configuração do agente
+            
+        Raises:
+            ValueError: Se a configuração não contiver as chaves obrigatórias
+        """
+        # Chamamos o método original de validação
+        self._validate_config(config)
+    
+    def _validate_config(self, config: Dict[str, Any]):
+        """Valida a configuração do agente antes da inicialização."""
+        required_keys = ['role', 'goal', 'backstory']
+        for key in required_keys:
+            if key not in config:
+                raise ValueError(f"Configuração do agente deve conter '{key}'")
+    
+    def initialize(self):
+        """Inicializa o agente com ferramentas específicas para vendas."""
+        try:
+            # Inicializa o cliente Odoo
+            self.__dict__["_odoo_client"] = OdooClient()
+            
+            # Verifica se temos acesso ao DataProxyAgent
+            if not self.data_proxy_agent:
+                logger.warning("DataProxyAgent não disponível para o SalesAgent. Algumas funcionalidades estarão limitadas.")
+            else:
+                # Obtém as ferramentas do DataProxyAgent
+                self.__dict__["_tools"] = self.data_proxy_agent.get_tools()
+                logger.info(f"Obtidas {len(self.tools)} ferramentas do DataProxyAgent")
+        except Exception as e:
+            logger.error(f"Erro na inicialização do SalesAgent: {str(e)}")
+            raise
     
     def get_agent_type(self) -> str:
         """
@@ -37,16 +109,36 @@ class SalesAgent(AdaptableAgent):
         """
         return "sales"
     
-    def initialize(self):
-        """
-        Inicializa o agente com ferramentas específicas para vendas.
-        """
-        # Inicializa o cliente Odoo
-        self._odoo_client = OdooClient()
-        
-        # Verificar se temos acesso ao DataProxyAgent
-        if not self.data_proxy_agent:
-            logger.warning("DataProxyAgent não disponível para o SalesAgent. Algumas funcionalidades estarão limitadas.")
+    # Propriedades para acessar os atributos privados
+    @property
+    def odoo_client(self):
+        """Retorna o cliente Odoo."""
+        return self.__dict__.get("_odoo_client")
+    
+    @property
+    def crew_agent(self):
+        """Retorna o agente CrewAI."""
+        return self.__dict__.get("_crew_agent")
+    
+    @crew_agent.setter
+    def crew_agent(self, value):
+        """Define o agente CrewAI."""
+        self.__dict__["_crew_agent"] = value
+    
+    @property
+    def tools(self):
+        """Retorna as ferramentas do agente."""
+        return self.__dict__.get("_tools", [])
+    
+    @property
+    def domain_config(self):
+        """Retorna a configuração do domínio."""
+        return self.__dict__.get("_domain_config", {})
+    
+    @domain_config.setter
+    def domain_config(self, value):
+        """Define a configuração do domínio."""
+        self.__dict__["_domain_config"] = value
     
     def get_crew_agent(self):
         """
@@ -55,7 +147,10 @@ class SalesAgent(AdaptableAgent):
         Returns:
             Agent: Um agente CrewAI configurado para vendas
         """
-        
+        # Se já temos um agente criado, retorna-o
+        if self.crew_agent:
+            return self.crew_agent
+            
         # Garantir que temos data_proxy_agent
         if not self.data_proxy_agent:
             logger.warning("DataProxyAgent não disponível para o SalesAgent. O agente CrewAI não terá acesso às ferramentas de consulta de dados.")
@@ -67,7 +162,6 @@ class SalesAgent(AdaptableAgent):
         
         # Adaptar a configuração ao domínio ativo
         domain_name = self.domain_manager.get_active_domain() if self.domain_manager else "default"
-        domain_config = self.domain_config if hasattr(self, 'domain_config') else {}
         
         # Configuração padrão que será sobrescrita pela configuração do domínio se disponível
         role = f"Especialista em vendas para {domain_name}"
@@ -75,13 +169,13 @@ class SalesAgent(AdaptableAgent):
         backstory = f"Você é um especialista em produtos e serviços de {domain_name}, com amplo conhecimento sobre preços, promoções e características dos produtos."
         
         # Sobrescrever com valores do domínio se disponíveis
-        if domain_config:
-            role = domain_config.get('sales_agent_role', role)
-            goal = domain_config.get('sales_agent_goal', goal)
-            backstory = domain_config.get('sales_agent_backstory', backstory)
+        if self.domain_config:
+            role = self.domain_config.get('sales_agent_role', role)
+            goal = self.domain_config.get('sales_agent_goal', goal)
+            backstory = self.domain_config.get('sales_agent_backstory', backstory)
         
         # Criar um agente CrewAI
-        agent = Agent(
+        crew_agent = Agent(
             role=role,
             goal=goal,
             backstory=backstory,
@@ -89,7 +183,11 @@ class SalesAgent(AdaptableAgent):
             verbose=True
         )
         
-        return agent
+        # Armazenar o agente criado
+        self.crew_agent = crew_agent
+        
+        logger.info(f"Agente CrewAI criado para o domínio {domain_name}")
+        return crew_agent
     
     def process_message(self, message: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -308,3 +406,92 @@ class SalesAgent(AdaptableAgent):
                 logger.error(f"Erro ao consultar promoções: {e}")
         
         return []
+    
+    def adapt_prompt(self, prompt: str) -> str:
+        """
+        Adapta um prompt de acordo com o domínio de negócio.
+        
+        Args:
+            prompt: Prompt original
+            
+        Returns:
+            str: Prompt adaptado
+        """
+        # Obtemos o domínio ativo
+        domain_name = self.domain_manager.get_active_domain() if self.domain_manager else "default"
+        
+        # Substitui placeholders no prompt
+        adapted_prompt = prompt.replace("{domain_name}", domain_name)
+        
+        # Adiciona regras específicas do domínio se disponíveis
+        if self.domain_config and "description" in self.domain_config:
+            adapted_prompt = adapted_prompt.replace("{domain_description}", self.domain_config["description"])
+        else:
+            adapted_prompt = adapted_prompt.replace("{domain_description}", f"Domínio de vendas para {domain_name}")
+        
+        # Substitui outros placeholders com valores padrão se não estiverem no domínio
+        placeholders = {
+            "{sales_greeting_style}": "Cumprimente o cliente de forma cordial e profissional",
+            "{sales_response_format}": "Forneça informações claras e concisas sobre produtos e preços",
+            "{sales_closing_style}": "Encerre a mensagem convidando o cliente a fazer perguntas adicionais"
+        }
+        
+        for placeholder, default_value in placeholders.items():
+            if placeholder in adapted_prompt:
+                key = placeholder.strip("{}")
+                if self.domain_config and key in self.domain_config:
+                    adapted_prompt = adapted_prompt.replace(placeholder, self.domain_config[key])
+                else:
+                    adapted_prompt = adapted_prompt.replace(placeholder, default_value)
+        
+        return adapted_prompt
+    
+    def adapt_response(self, response: str) -> str:
+        """
+        Adapta uma resposta de acordo com o domínio de negócio.
+        
+        Args:
+            response: Resposta original
+            
+        Returns:
+            str: Resposta adaptada
+        """
+        # Personaliza a resposta com base no domínio
+        domain_name = self.domain_manager.get_active_domain() if self.domain_manager else "default"
+        
+        # Adiciona assinatura personalizada com base no domínio
+        if self.domain_config and "signature" in self.domain_config:
+            response += f"\n\n{self.domain_config['signature']}"
+        else:
+            response += f"\n\nEquipe de Vendas - {domain_name}"
+        
+        return response
+    
+    def execute_task(self, task: Task) -> str:
+        """
+        Executa uma tarefa usando o agente CrewAI.
+        
+        Args:
+            task: Tarefa a ser executada
+            
+        Returns:
+            str: Resultado da execução da tarefa
+        """
+        try:
+            # Obtém o agente CrewAI
+            crew_agent = self.get_crew_agent()
+            
+            # Cria uma crew com apenas este agente
+            crew = Crew(
+                agents=[crew_agent],
+                tasks=[task],
+                verbose=True
+            )
+            
+            # Executa a tarefa
+            result = crew.kickoff()
+            logger.info(f"Tarefa executada com sucesso: {task.description[:50]}...")
+            return result
+        except Exception as e:
+            logger.error(f"Erro ao executar tarefa: {str(e)}")
+            return f"Desculpe, não foi possível processar sua solicitação. Erro: {str(e)}"

@@ -13,6 +13,7 @@ like sales, support, scheduling, etc.
 import logging
 from typing import Dict, List, Any, Optional, Union
 import json
+from pydantic import ConfigDict
 from crewai import Agent, Task, Crew
 from src.core.cache.agent_cache import RedisAgentCache
 from langchain.tools import BaseTool
@@ -27,18 +28,13 @@ class FunctionalAgent(Agent):
     like sales, support, scheduling, etc.
     """
     # Configuração do modelo Pydantic para permitir tipos arbitrários
-    model_config = {"arbitrary_types_allowed": True}
-    
-    # Definindo os campos do modelo Pydantic
-    function_type: str
-    memory_system: MemorySystem
-    data_proxy_agent: DataProxyAgent
+    model_config = ConfigDict(arbitrary_types_allowed=True)
     
     def __init__(self, 
                  function_type: str,
-                 memory_system: MemorySystem,
-                 data_proxy_agent: DataProxyAgent,
-                 additional_tools: Optional[List[BaseTool]] = None,
+                 memory_system=None,
+                 data_proxy_agent=None,
+                 additional_tools=None,
                  **kwargs):
         """
         Initialize the functional agent.
@@ -50,12 +46,17 @@ class FunctionalAgent(Agent):
             additional_tools: Additional tools for the agent
             **kwargs: Additional arguments for the Agent class
         """
+        # Armazenar atributos no dicionário privado para evitar problemas com Pydantic
+        self.__dict__["_function_type"] = function_type
+        self.__dict__["_memory_system"] = memory_system
+        self.__dict__["_data_proxy_agent"] = data_proxy_agent
+        self.__dict__["_config"] = {}
+        
         # Preparar as ferramentas para o agente
-        # Cada ferramenta deve ter os atributos name, func e description
         tools = []
         
         # Adicionar as ferramentas do DataProxyAgent (se existirem)
-        if hasattr(data_proxy_agent, 'get_tools') and callable(data_proxy_agent.get_tools):
+        if data_proxy_agent and hasattr(data_proxy_agent, 'get_tools') and callable(getattr(data_proxy_agent, 'get_tools')):
             tools.extend(data_proxy_agent.get_tools())
         
         # Adicionar ferramentas adicionais
@@ -78,16 +79,32 @@ class FunctionalAgent(Agent):
         # Override defaults with any provided kwargs
         config = {**default_config, **kwargs}
         
-        # Inicializa os campos do modelo Pydantic
-        model_data = {
-            "function_type": function_type,
-            "memory_system": memory_system,
-            "data_proxy_agent": data_proxy_agent,
-            **config
-        }
+        # Armazenar a configuração no dicionário privado
+        self.__dict__["_config"] = config
         
         # Chama o construtor da classe pai com todos os dados
-        super().__init__(**model_data)
+        super().__init__(**config)
+    
+    # Propriedades para acessar os atributos privados
+    @property
+    def function_type(self):
+        """Retorna o tipo de função do agente."""
+        return self.__dict__.get("_function_type", "unknown")
+    
+    @property
+    def memory_system(self):
+        """Retorna o sistema de memória compartilhada."""
+        return self.__dict__.get("_memory_system")
+    
+    @property
+    def data_proxy_agent(self):
+        """Retorna o agente proxy para acesso a dados."""
+        return self.__dict__.get("_data_proxy_agent")
+    
+    @property
+    def config(self):
+        """Retorna a configuração do agente."""
+        return self.__dict__.get("_config", {})
     
     def generate_response(self, 
                          message: Dict[str, Any],
@@ -102,47 +119,62 @@ class FunctionalAgent(Agent):
             conversation_id: ID of the conversation
             
         Returns:
-            Generated response
+            str: The response
         """
-        # Check cache first
-        cache_key = f"response:{self.function_type}:{message.get('id', '')}"
-        cached_response = self.cache_tool.get(cache_key)
-        
-        if cached_response:
-            logger.info(f"Using cached response for message {message.get('id', '')}")
-            return cached_response
-        
-        # Prepare the task for the agent
-        task_description = f"""
-        Generate a response to the following message as a {self.function_type} specialist:
-        
-        Message: {message.get('content', '')}
-        Sender: {message.get('sender', {}).get('name', 'Unknown')}
-        Conversation ID: {conversation_id}
-        
-        Context:
-        {json.dumps(context)}
-        
-        Generate a helpful, informative, and professional response that addresses the message.
-        Focus on your expertise in {self.function_type}.
+        # Implementação básica que pode ser sobrescrita por subclasses
+        return f"Resposta padrão do agente {self.function_type}"
+    
+    def process_message(self, message: Dict[str, Any]) -> Dict[str, Any]:
         """
+        Process a message and generate a response.
         
-        # Execute the task
-        result = self.execute_task(Task(
-            description=task_description,
-            expected_output="Text response to the message"
-        ))
+        Args:
+            message: The message to process
+            
+        Returns:
+            Dict[str, Any]: The processed response
+        """
+        # Implementação básica que pode ser sobrescrita por subclasses
+        return {
+            "status": "success",
+            "response": f"Mensagem processada pelo agente {self.function_type}",
+            "context": {}
+        }
+    
+    def get_agent_type(self) -> str:
+        """
+        Get the type of the agent.
         
-        # Ensure the result is a string
-        if not isinstance(result, str):
-            result = str(result)
+        Returns:
+            str: The type of the agent
+        """
+        return self.function_type
+    
+    def get_memory(self, key: str) -> Any:
+        """
+        Get a value from the memory system.
         
-        # Cache the result
-        self.cache_tool.set(cache_key, result, ttl=3600)  # Cache for 1 hour
+        Args:
+            key: The key to get
+            
+        Returns:
+            Any: The value
+        """
+        if self.memory_system:
+            return self.memory_system.get(key)
+        return None
+    
+    def set_memory(self, key: str, value: Any) -> bool:
+        """
+        Set a value in the memory system.
         
-        return result
-
-if __name__ == '__main__':
-    # Exemplo de uso do agente FunctionalAgent
-    agent = FunctionalAgent()
-    print(f"Agente {agent.__class__.__name__} inicializado.")
+        Args:
+            key: The key to set
+            value: The value to set
+            
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        if self.memory_system:
+            return self.memory_system.set(key, value)
+        return False

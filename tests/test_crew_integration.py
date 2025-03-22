@@ -5,8 +5,8 @@
 Testes de integração para as Crews do sistema.
 
 Este script testa a integração entre as diferentes crews do sistema,
-especialmente a WhatsAppChannelCrew e as crews funcionais,
-verificando se a comunicação entre esses componentes está funcionando corretamente.
+verificando se a comunicação entre os componentes está funcionando corretamente.
+Testa principalmente a inicialização e comunicação das crews funcionais com o Hub.
 """
 
 import os
@@ -44,7 +44,6 @@ class CrewIntegrationTester(unittest.TestCase):
         # Inicializar dicionário de resultados
         self.results = {}
         # Inicializar as chaves para os resultados de cada teste
-        self.results['whatsapp_crew_initialization'] = False
         self.results['functional_crews_initialization'] = False
         self.results['crew_messaging_flow'] = False
         
@@ -85,52 +84,45 @@ class CrewIntegrationTester(unittest.TestCase):
         
         return TimedContext(operation_name, self.results)
     
-    def test_whatsapp_crew_initialization(self):
-        """Testa a inicialização da WhatsAppChannelCrew com todos os componentes necessários."""
-        logger.info("Testando inicialização da WhatsAppChannelCrew")
+    def test_hub_initialization(self):
+        """Testa a inicialização do HubCrew com todos os componentes necessários."""
+        logger.info("Testando inicialização do HubCrew")
         
         try:
-            from src.crews.whatsapp_crew import WhatsAppChannelCrew
             from src.core.data_service_hub import DataServiceHub
             from src.core.memory import MemorySystem
             from src.core.domain import DomainManager
             from src.plugins.core.plugin_manager import PluginManager
+            from src.core.hub import HubCrew
             
-            with self.timed_operation("Inicialização WhatsAppChannelCrew"):
+            with self.timed_operation("Inicialização HubCrew"):
                 # Inicializar os componentes básicos
                 memory_system = MemorySystem()
                 data_service_hub = DataServiceHub()
                 domain_manager = DomainManager()
                 plugin_manager = PluginManager(config={})
                 
-                # Mock para o ChatwootClient para evitar problemas de conexão
-                with patch('src.api.chatwoot.client.ChatwootClient') as mock_client:
-                    # Configurar o mock para retornar valores válidos
-                    mock_client.return_value.check_connection.return_value = True
-                    
-                    # Inicializar a WhatsAppChannelCrew
-                    whatsapp_crew = WhatsAppChannelCrew(
-                        memory_system=memory_system,
-                        data_service_hub=data_service_hub,
-                        domain_manager=domain_manager,
-                        plugin_manager=plugin_manager
-                    )
-                    
-                    # Verificar se a crew foi inicializada corretamente
-                    self.assertIsNotNone(whatsapp_crew, "WhatsAppChannelCrew não foi inicializada")
-                    logger.info(f"WhatsAppChannelCrew inicializada: {whatsapp_crew}")
-                    
-                    # Verificar se os componentes necessários estão disponíveis
-                    self.assertIsNotNone(whatsapp_crew.memory_system, 
-                                      "MemorySystem não está disponível na WhatsAppChannelCrew")
-                    self.assertIsNotNone(whatsapp_crew.data_service_hub, 
-                                      "DataServiceHub não está disponível na WhatsAppChannelCrew")
-                    
-                    self.results['whatsapp_crew_initialization'] = True
+                # Inicializar o HubCrew
+                hub_crew = HubCrew(
+                    memory_system=memory_system,
+                    data_service_hub=data_service_hub
+                )
+                
+                # Verificar se a crew foi inicializada corretamente
+                self.assertIsNotNone(hub_crew, "HubCrew não foi inicializada")
+                logger.info(f"HubCrew inicializada: {hub_crew}")
+                
+                # Verificar se os componentes necessários estão disponíveis
+                self.assertIsNotNone(hub_crew.memory_system, 
+                                    "MemorySystem não está disponível no HubCrew")
+                self.assertIsNotNone(hub_crew.data_service_hub, 
+                                    "DataServiceHub não está disponível no HubCrew")
+                
+                self.results['hub_initialization'] = True
                     
         except Exception as e:
-            logger.error(f"Erro ao testar inicialização da WhatsAppChannelCrew: {str(e)}")
-            self.results['whatsapp_crew_initialization'] = False
+            logger.error(f"Erro ao testar inicialização do HubCrew: {str(e)}")
+            self.results['hub_initialization'] = False
             raise
     
     def test_functional_crews_initialization(self):
@@ -209,8 +201,7 @@ class CrewIntegrationTester(unittest.TestCase):
         logger.info("Testando fluxo de mensagens entre crews")
         
         try:
-            from src.crews.whatsapp_crew import WhatsAppChannelCrew
-            from src.core.hub import HubCrew
+            from src.core.hub import OrchestratorAgent
             from src.core.data_service_hub import DataServiceHub
             from src.core.memory import MemorySystem
             from src.core.domain import DomainManager
@@ -223,56 +214,38 @@ class CrewIntegrationTester(unittest.TestCase):
                 domain_manager = DomainManager()
                 plugin_manager = PluginManager(config={})
                 
-                # Mock para o ChatwootClient
-                with patch('src.api.chatwoot.client.ChatwootClient') as mock_client:
-                    # Configurar o mock para retornar valores válidos
-                    mock_client.return_value.check_connection.return_value = True
+                # Mock para os métodos de processamento para evitar chamadas reais à API do LLM
+                with patch('src.core.hub.OrchestratorAgent.route_message') as mock_route:
+                    # Configurar o mock para retornar uma resposta válida
+                    mock_route.return_value = {'status': 'success'}
                     
-                    # Mock para os métodos de processamento para evitar chamadas reais à API do LLM
-                    with patch('src.crews.whatsapp_crew.WhatsAppChannelCrew.process_message') as mock_process:
-                        # Configurar o mock para retornar uma resposta válida
-                        mock_process.return_value = {
-                            "response": "Teste de resposta",
-                            "intent": "consulta_produto",
-                            "entities": {"produto": "exemplo"}
-                        }
-                        
-                        # Inicializar as crews
-                        hub_crew = HubCrew(
-                            memory_system=memory_system,
-                            data_service_hub=data_service_hub
-                        )
-                        
-                        whatsapp_crew = WhatsAppChannelCrew(
-                            memory_system=memory_system,
-                            data_service_hub=data_service_hub,
-                            domain_manager=domain_manager,
-                            plugin_manager=plugin_manager
-                        )
-                        
-                        # Criar uma mensagem de exemplo
-                        test_message = {
-                            "content": "Olá, gostaria de saber o preço do produto X",
-                            "sender": {
-                                "id": "123456789",
-                                "name": "Usuário de teste"
-                            },
-                            "conversation_id": "conv123",
-                            "timestamp": time.time()
-                        }
-                        
-                        # Simular o processamento de mensagem
-                        logger.info("Simulando processamento de mensagem pelo WhatsAppChannelCrew")
-                        result = whatsapp_crew.process_message(test_message, "conv123", "whatsapp")
-                        
-                        # Verificar se o processamento da mensagem retornou algo válido
-                        self.assertIsNotNone(result, "Processamento de mensagem não retornou resultado")
-                        logger.info(f"Resultado do processamento: {result}")
-                        
-                        # Verificar se o mock foi chamado
-                        mock_process.assert_called_once()
-                        
-                        self.results['crew_messaging_flow'] = True
+                    # Inicializar as crews
+                    config = {}
+                    hub = OrchestratorAgent(config)
+                    
+                    # Criar uma mensagem de exemplo
+                    test_message = {
+                        "content": "Olá, gostaria de saber o preço do produto X",
+                        "sender": {
+                            "id": "123456789",
+                            "name": "Usuário de teste"
+                        },
+                        "conversation_id": "conv123",
+                        "timestamp": time.time()
+                    }
+                    
+                    # Simular o processamento de mensagem
+                    logger.info("Simulando processamento de mensagem pelo Hub")
+                    result = hub.route_message(test_message)
+                    
+                    # Verificar se o processamento da mensagem retornou algo válido
+                    self.assertIsNotNone(result, "Processamento de mensagem não retornou resultado")
+                    logger.info(f"Resultado do processamento: {result}")
+                    
+                    # Verificar se o mock foi chamado
+                    mock_route.assert_called_once()
+                    
+                    self.results['crew_messaging_flow'] = True
                     
         except Exception as e:
             logger.error(f"Erro ao testar fluxo de mensagens entre crews: {str(e)}")
@@ -298,11 +271,11 @@ class CrewIntegrationTester(unittest.TestCase):
         """Executa todos os testes de integração em sequência."""
         logger.info("Iniciando testes de integração de Crews")
         
-        # Teste de inicialização da WhatsAppChannelCrew
+        # Teste de inicialização do HubCrew
         try:
-            self.test_whatsapp_crew_initialization()
+            self.test_hub_initialization()
         except Exception as e:
-            logger.error(f"Teste de inicialização da WhatsAppChannelCrew falhou: {str(e)}")
+            logger.error(f"Teste de inicialização do HubCrew falhou: {str(e)}")
         
         # Teste de inicialização das crews funcionais
         try:

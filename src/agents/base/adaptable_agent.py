@@ -4,7 +4,7 @@ Agente base adaptável para diferentes domínios de negócio.
 from typing import Dict, List, Any, Optional
 import logging
 from abc import ABC, abstractmethod
-from pydantic import PrivateAttr
+from pydantic import ConfigDict
 
 from src.agents.base.functional_agent import FunctionalAgent
 from src.core.domain import DomainManager
@@ -21,23 +21,14 @@ class AdaptableAgent(FunctionalAgent, ABC):
     adaptar o comportamento do agente de acordo com o domínio de negócio.
     """
     # Configuração do modelo Pydantic para permitir tipos arbitrários
-    model_config = {"arbitrary_types_allowed": True}
-    
-    # Campos adicionais para o modelo Pydantic
-    domain_manager: Optional[DomainManager] = None
-    plugin_manager: Optional[PluginManager] = None
-    
-    # Campos privados que não fazem parte do modelo Pydantic
-    _data_proxy_agent: Any = PrivateAttr(default=None)
-    _domain_config: Dict[str, Any] = PrivateAttr(default_factory=dict)
-    _domain_plugins: List[Any] = PrivateAttr(default_factory=list)
+    model_config = ConfigDict(arbitrary_types_allowed=True)
     
     def __init__(self, 
                  agent_config: Dict[str, Any], 
                  memory_system=None, 
                  data_proxy_agent=None, 
-                 domain_manager: DomainManager = None, 
-                 plugin_manager: PluginManager = None):
+                 domain_manager=None, 
+                 plugin_manager=None):
         """
         Inicializa o agente adaptável.
         
@@ -54,13 +45,15 @@ class AdaptableAgent(FunctionalAgent, ABC):
         # Prepara os dados para o modelo Pydantic
         model_data = {
             "function_type": function_type,
-            "memory_system": memory_system,
-            "domain_manager": domain_manager or DomainManager(),
-            "plugin_manager": plugin_manager or PluginManager(config={})
+            "memory_system": memory_system
         }
         
-        # Armazena o DataProxyAgent como atributo privado
-        self._data_proxy_agent = data_proxy_agent
+        # Armazena atributos no dicionário privado para evitar problemas com Pydantic
+        self.__dict__["_data_proxy_agent"] = data_proxy_agent
+        self.__dict__["_domain_manager"] = domain_manager or DomainManager()
+        self.__dict__["_plugin_manager"] = plugin_manager or PluginManager(config={})
+        self.__dict__["_domain_config"] = {}
+        self.__dict__["_domain_plugins"] = []
         
         # Chama o construtor da classe pai com os parâmetros necessários
         super().__init__(
@@ -69,10 +62,36 @@ class AdaptableAgent(FunctionalAgent, ABC):
         )
         
         # Carrega a configuração específica do domínio para este agente
-        self._domain_config = self._load_domain_config(agent_config)
+        self.__dict__["_domain_config"] = self._load_domain_config(agent_config)
         
         # Carrega os plugins específicos do domínio
-        self._domain_plugins = self._load_domain_plugins()
+        self.__dict__["_domain_plugins"] = self._load_domain_plugins()
+    
+    # Propriedades para acessar os atributos privados
+    @property
+    def data_proxy_agent(self):
+        """Retorna o agente proxy para acesso a dados."""
+        return self.__dict__.get("_data_proxy_agent")
+    
+    @property
+    def domain_manager(self):
+        """Retorna o gerenciador de domínios de negócio."""
+        return self.__dict__.get("_domain_manager")
+    
+    @property
+    def plugin_manager(self):
+        """Retorna o gerenciador de plugins."""
+        return self.__dict__.get("_plugin_manager")
+    
+    @property
+    def domain_config(self):
+        """Retorna a configuração específica do domínio."""
+        return self.__dict__.get("_domain_config", {})
+    
+    @property
+    def domain_plugins(self):
+        """Retorna os plugins específicos do domínio."""
+        return self.__dict__.get("_domain_plugins", [])
     
     def _load_domain_config(self, agent_config: Dict[str, Any] = None) -> Dict[str, Any]:
         """
@@ -85,89 +104,43 @@ class AdaptableAgent(FunctionalAgent, ABC):
             Dict[str, Any]: Configuração específica do domínio
         """
         agent_type = self.get_agent_type()
-        agent_name = agent_config.get("name", None) if agent_config else self._config.get("name", None)
+        agent_name = agent_config.get("name", None) if agent_config else None
         
-        return self.domain_manager.get_agent_config(agent_type, agent_name)
+        if self.domain_manager:
+            return self.domain_manager.get_agent_config(agent_type, agent_name)
+        return {}
     
-    def _load_domain_plugins(self) -> Dict[str, Any]:
+    def _load_domain_plugins(self) -> List[Any]:
         """
         Carrega os plugins específicos do domínio.
         
         Returns:
-            Dict[str, Any]: Plugins específicos do domínio
+            List[Any]: Plugins específicos do domínio
         """
+        if not self.domain_manager:
+            logger.warning("Nenhum gerenciador de domínio disponível. Retornando lista vazia de plugins.")
+            return []
+            
         domain_name = getattr(self.domain_manager, 'active_domain_name', None)
         if not domain_name:
             logger.warning("Nenhum domínio ativo encontrado. Retornando lista vazia de plugins.")
-            return {}
+            return []
             
-        return self.plugin_manager.get_plugins_for_domain(domain_name)
+        if not self.plugin_manager:
+            logger.warning("Nenhum gerenciador de plugins disponível. Retornando lista vazia de plugins.")
+            return []
+            
+        return self.plugin_manager.get_domain_plugins(domain_name, self.get_agent_type())
     
     @abstractmethod
     def get_agent_type(self) -> str:
         """
-        Obtém o tipo do agente (sales, support, scheduling).
+        Obtém o tipo do agente.
         
         Returns:
             str: Tipo do agente
         """
         pass
-    
-    @property
-    def data_proxy_agent(self):
-        """
-        Obter o agente proxy de dados.
-        
-        Returns:
-            Any: Agente proxy de dados
-        """
-        return self._data_proxy_agent
-    
-    @property
-    def domain_config(self):
-        """
-        Obter a configuração do domínio.
-        
-        Returns:
-            Dict[str, Any]: Configuração do domínio
-        """
-        return self._domain_config
-    
-    @property
-    def domain_plugins(self):
-        """
-        Obter os plugins do domínio.
-        
-        Returns:
-            Dict[str, Any]: Plugins do domínio
-        """
-        return self._domain_plugins
-    
-    def get_business_rules(self, category: str = None) -> Dict[str, Any]:
-        """
-        Obtém as regras de negócio do domínio ativo.
-        
-        Args:
-            category: Categoria específica de regras (opcional)
-            
-        Returns:
-            Dict[str, Any]: Regras de negócio
-        """
-        return self.domain_manager.get_business_rules(category)
-    
-    def execute_plugin(self, plugin_name: str, action: str, **kwargs) -> Any:
-        """
-        Executa uma ação de um plugin.
-        
-        Args:
-            plugin_name: Nome do plugin
-            action: Ação a ser executada
-            **kwargs: Parâmetros específicos da ação
-            
-        Returns:
-            Any: Resultado da ação
-        """
-        return self.plugin_manager.execute_plugin(plugin_name, action, **kwargs)
     
     def adapt_prompt(self, prompt: str) -> str:
         """
@@ -179,25 +152,26 @@ class AdaptableAgent(FunctionalAgent, ABC):
         Returns:
             str: Prompt adaptado
         """
-        # Obtém informações do domínio
+        if not self.domain_manager:
+            return prompt
+            
         domain_info = self.domain_manager.get_active_domain()
-        
+        if not domain_info:
+            return prompt
+            
         # Substitui placeholders no prompt
-        adapted_prompt = prompt
+        adapted_prompt = prompt.replace("{domain_name}", domain_info.get("name", ""))
         
-        # Substitui o nome do domínio
-        if "name" in domain_info:
-            adapted_prompt = adapted_prompt.replace("{domain_name}", domain_info["name"])
+        # Adiciona regras específicas do domínio se disponíveis
+        if "rules" in domain_info:
+            rules_text = "\n".join([f"- {rule}" for rule in domain_info["rules"]])
+            adapted_prompt = adapted_prompt.replace("{domain_rules}", rules_text)
         
-        # Substitui a descrição do domínio
-        if "description" in domain_info:
-            adapted_prompt = adapted_prompt.replace("{domain_description}", domain_info["description"])
-        
-        # Substitui regras de negócio específicas
-        business_rules = self.get_business_rules()
-        for rule_key, rule_value in business_rules.items():
-            if isinstance(rule_value, str):
-                adapted_prompt = adapted_prompt.replace(f"{{{rule_key}}}", rule_value)
+        # Substitui outros placeholders com valores do domínio
+        for key, value in domain_info.items():
+            placeholder = "{" + key + "}"
+            if placeholder in adapted_prompt:
+                adapted_prompt = adapted_prompt.replace(placeholder, str(value))
         
         return adapted_prompt
     
@@ -211,21 +185,29 @@ class AdaptableAgent(FunctionalAgent, ABC):
         Returns:
             str: Resposta adaptada
         """
-        # Obtém informações do domínio
+        if not self.domain_manager:
+            return response
+            
         domain_info = self.domain_manager.get_active_domain()
+        if not domain_info:
+            return response
+            
+        # Adiciona assinatura personalizada com base no domínio
+        if "signature" in domain_info:
+            response += f"\n\n{domain_info['signature']}"
         
-        # Adapta a resposta com base nas regras do domínio
-        adapted_response = response
+        return response
+    
+    def execute_task(self, task: Any) -> str:
+        """
+        Executa uma tarefa usando o agente.
         
-        # Personaliza a resposta com base no domínio
-        if "tone" in domain_info.get("communication_style", {}):
-            tone = domain_info["communication_style"]["tone"]
-            # Implementar lógica para ajustar o tom da resposta
-            # ...
-        
-        # Adiciona informações específicas do domínio
-        if "signature" in domain_info.get("communication_style", {}):
-            signature = domain_info["communication_style"]["signature"]
-            adapted_response += f"\n\n{signature}"
-        
-        return adapted_response
+        Args:
+            task: Tarefa a ser executada
+            
+        Returns:
+            str: Resultado da execução da tarefa
+        """
+        # Implementação padrão que pode ser sobrescrita por subclasses
+        logger.warning("Método execute_task não implementado na classe base. Retornando mensagem padrão.")
+        return "Tarefa não implementada."

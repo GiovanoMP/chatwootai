@@ -1,7 +1,7 @@
 
 # Sistema de Webhook para Chatwoot
 
-Este diretório contém os componentes necessários para configurar e gerenciar a integração de webhooks entre o Chatwoot e o sistema local.
+Este diretório contém os componentes necessários para configurar e gerenciar a integração de webhooks entre o Chatwoot e o sistema local além de informações complementares sobre o webhook rodando na VPS
 
 ## Estrutura do Diretório
 

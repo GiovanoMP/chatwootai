@@ -30,6 +30,41 @@ from src.core.data_service_hub import DataServiceHub
 logger = logging.getLogger(__name__)
 
 
+def normalize_message(message: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Normaliza uma mensagem para um formato padrão.
+    
+    Args:
+        message: A mensagem a ser normalizada
+    
+    Returns:
+        A mensagem normalizada
+    """
+    # Implementação da normalização de mensagens
+    # Por exemplo, converter todos os campos para minúsculas
+    normalized_message = {key.lower(): value for key, value in message.items()}
+    return normalized_message
+
+
+def validate_message(message: Dict[str, Any]) -> bool:
+    """
+    Valida se uma mensagem está no formato correto.
+    
+    Args:
+        message: A mensagem a ser validada
+    
+    Returns:
+        True se a mensagem for válida, False caso contrário
+    """
+    # Implementação da validação de mensagens
+    # Por exemplo, verificar se a mensagem tem os campos obrigatórios
+    required_fields = ["id", "content", "sender_id"]
+    for field in required_fields:
+        if field not in message:
+            return False
+    return True
+
+
 class OrchestratorAgent(Agent):
     """
     Agent responsible for orchestrating the flow of information between crews.
@@ -123,24 +158,34 @@ class OrchestratorAgent(Agent):
         Returns:
             Routing decision with crew, reasoning, and confidence level
         """
+        logger.debug(f"Roteando mensagem: {message}")
+        # Normaliza a mensagem
+        normalized_message = normalize_message(message)
+        
+        # Valida a mensagem
+        if not validate_message(normalized_message):
+            raise ValueError('Mensagem inválida')
+        
         # Check cache first for performance optimization if agent_cache is available
-        message_id = message.get('id', '')
+        message_id = normalized_message.get('id', '')
         agent_id = f"orchestrator:{self.role}"
-        input_data = json.dumps({"message": message, "context": context})
+        input_data = json.dumps({"message": normalized_message, "context": context})
         cached_route = None
         
         if "agent_cache" in self.__dict__ and self.__dict__["agent_cache"]:
             cached_route = self.__dict__["agent_cache"].get(agent_id, input_data)
             # Não precisamos fazer json.loads aqui, pois o método get já retorna um dicionário
             if cached_route:
-                logger.debug(f"Cache hit para {agent_id}")
+                logger.info(f"Cache hit para {agent_id}")
         
         if cached_route:
-            logger.info(f"Using cached routing for message {message.get('id', '')}")
+            logger.info(f"Usando rota em cache para a mensagem {normalized_message.get('id', '')}")
             return cached_route
         
         # Se não há cache, use o método de roteamento com LLM
-        result = self._route_with_llm(message, context)
+        logger.debug(f"Iniciando roteamento com LLM para a mensagem: {message}")
+        result = self._route_with_llm(normalized_message, context)
+        logger.info(f"Roteamento concluído para a mensagem {message.get('id', '')}")
         
         # Cache the result for future use if agent_cache is available
         if "agent_cache" in self.__dict__ and self.__dict__["agent_cache"]:
@@ -240,6 +285,7 @@ class OrchestratorAgent(Agent):
             "reasoning": reasoning
         }
         
+        logger.info(f"Roteamento da mensagem {message.get('id', '')} para a crew funcional")
         return routing_result
 
 
@@ -702,9 +748,8 @@ class HubCrew(Crew):
         # Corrigido: data_proxy_agent deve ser a variável data_proxy que criamos acima
         self.__dict__["_data_proxy_agent"] = data_proxy  # A variável correta é data_proxy
         self.__dict__["_agent_cache"] = agent_cache
-        self.__dict__["_orchestrator"] = orchestrator
-        self.__dict__["_context_manager"] = context_manager
         self.__dict__["_integration_agent"] = integration_agent
+        self.__dict__["_context_manager"] = context_manager
         self.__dict__["_data_proxy"] = data_proxy
         self.__dict__["_data_service_hub"] = data_service_hub
     
@@ -715,10 +760,6 @@ class HubCrew(Crew):
     @property
     def data_proxy_agent(self):
         return self.__dict__["_data_proxy_agent"]
-    
-    @property
-    def orchestrator(self):
-        return self.__dict__["_orchestrator"]
     
     @property
     def context_manager(self):
@@ -735,6 +776,150 @@ class HubCrew(Crew):
     @property
     def data_service_hub(self):
         return self.__dict__["_data_service_hub"]
+    
+    def _route_message(self, message: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Route a message to the appropriate functional crew.
+        
+        This is the core routing function that determines which specialized crew
+        should handle a specific message based on content analysis and context.
+        
+        Args:
+            message: The message to route (contains content, sender info, etc.)
+            context: Additional context for routing (conversation history, channel type, etc.)
+            
+        Returns:
+            Routing decision with crew, reasoning, and confidence level
+        """
+        logger.debug(f"Roteando mensagem: {message}")
+        # Normaliza a mensagem
+        normalized_message = normalize_message(message)
+        
+        # Valida a mensagem
+        if not validate_message(normalized_message):
+            raise ValueError('Mensagem inválida')
+        
+        # Check cache first for performance optimization if agent_cache is available
+        message_id = normalized_message.get('id', '')
+        agent_id = f"hubcrew:{self.role}"
+        input_data = json.dumps({"message": normalized_message, "context": context})
+        cached_route = None
+        
+        if self.__dict__["_agent_cache"]:
+            cached_route = self.__dict__["_agent_cache"].get(agent_id, input_data)
+            # Não precisamos fazer json.loads aqui, pois o método get já retorna um dicionário
+            if cached_route:
+                logger.info(f"Cache hit para {agent_id}")
+        
+        if cached_route:
+            logger.info(f"Usando rota em cache para a mensagem {normalized_message.get('id', '')}")
+            return cached_route
+        
+        # Se não há cache, use o método de roteamento com LLM
+        logger.debug(f"Iniciando roteamento com LLM para a mensagem: {message}")
+        result = self._route_with_llm(normalized_message, context)
+        logger.info(f"Roteamento concluído para a mensagem {message.get('id', '')}")
+        
+        # Cache the result for future use if agent_cache is available
+        if self.__dict__["_agent_cache"]:
+            try:
+                self.__dict__["_agent_cache"].set(agent_id, input_data, result)
+            except Exception as e:
+                logger.error(f"Error caching route: {e}")
+        
+        return result
+    
+    def _route_with_llm(self, message: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Roteamento usando LLM quando não há cache disponível.
+        
+        Args:
+            message: A mensagem a ser roteada
+            context: Contexto adicional para roteamento
+            
+        Returns:
+            Decisão de roteamento com crew, raciocínio e nível de confiança
+        """
+        # Analyze message content and context to determine intent
+        # This is a simplified implementation - in a real system, this would use
+        # more sophisticated NLP techniques and potentially call an LLM
+        
+        # Extract key information from message and context
+        message_content = message.get("content", "").lower()
+        channel_type = context.get("channel_type", "unknown")
+        customer_id = context.get("customer_id")
+        
+        # Load customer history if available
+        customer_history = {}
+        if customer_id and self.memory_system:
+            customer_history = self.memory_system.retrieve_customer_data(customer_id)
+        
+        # Use DataProxyAgent para encontrar interações similares, se disponível
+        similar_interactions = []
+        if self.data_proxy_agent and message_content:
+            # Usar o data_proxy_agent para buscar interações similares
+            query_params = {
+                "query": message_content,
+                "limit": 3
+            }
+            result = self.data_proxy_agent.fetch_data("similar_interactions", query_params)
+            if result and not isinstance(result, dict) and not result.get("error", False):
+                similar_interactions = result
+        
+        # Determine which crew should handle this message
+        # This is a simplified routing logic - in a real system, this would be more complex
+        
+        # Default values
+        selected_crew = "general"
+        confidence = 0.5
+        reasoning = "Default routing to general crew"
+        
+        # Check for sales-related keywords
+        sales_keywords = ["buy", "price", "cost", "purchase", "order", "discount"]
+        if any(keyword in message_content for keyword in sales_keywords):
+            selected_crew = "sales"
+            confidence = 0.8
+            reasoning = "Message contains sales-related keywords"
+        
+        # Check for support-related keywords
+        support_keywords = ["help", "issue", "problem", "broken", "not working", "error"]
+        if any(keyword in message_content for keyword in support_keywords):
+            selected_crew = "support"
+            confidence = 0.8
+            reasoning = "Message contains support-related keywords"
+        
+        # Check for product-related keywords
+        product_keywords = ["product", "feature", "specification", "specs", "details"]
+        if any(keyword in message_content for keyword in product_keywords):
+            selected_crew = "product"
+            confidence = 0.7
+            reasoning = "Message contains product-related keywords"
+        
+        # Adjust based on customer history if available
+        if customer_history:
+            # If customer has recent support interactions, route to support
+            if customer_history.get("recent_support_tickets", 0) > 0:
+                if confidence < 0.9:  # Only override if not very confident
+                    selected_crew = "support"
+                    confidence = 0.6
+                    reasoning = "Customer has recent support tickets"
+            
+            # If customer has recent purchases, route to sales
+            if customer_history.get("recent_purchases", 0) > 0:
+                if confidence < 0.7:  # Only override if not confident
+                    selected_crew = "sales"
+                    confidence = 0.6
+                    reasoning = "Customer has recent purchases"
+        
+        # Create routing result
+        routing_result = {
+            "crew": selected_crew,
+            "confidence": confidence,
+            "reasoning": reasoning
+        }
+        
+        logger.info(f"Roteamento da mensagem {message.get('id', '')} para a crew funcional")
+        return routing_result
     
     def process_message(self, 
                        message: Dict[str, Any],
@@ -770,7 +955,7 @@ class HubCrew(Crew):
         )
         
         # Route the message to the appropriate functional crew
-        routing = self.orchestrator.route_message(
+        routing = self._route_message(
             message=message,
             context=updated_context
         )
@@ -832,12 +1017,12 @@ class HubCrew(Crew):
         Returns:
             Resultado do processamento pela crew funcional
         """
-        # Obtém a intenção da mensagem do contexto ou usa o orchestrator para detectá-la
+        # Obtém a intenção da mensagem do contexto ou usa o _route_message para detectá-la
         intent = context.get("preliminary_intent", None)
         if not intent:
-            # Se não houver intenção preliminar, usa o orchestrator para analisá-la
-            routing = self.orchestrator.route_message(message=message, context=context)
-            intent = routing.get("target_crew")
+            # Se não houver intenção preliminar, usa o _route_message para analisá-la
+            routing = self._route_message(message=message, context=context)
+            intent = routing.get("crew")
         
         # Mapeia intenções para tipos de crews funcionais
         intent_to_crew_map = {

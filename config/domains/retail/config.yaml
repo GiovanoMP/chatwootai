@@ -1,0 +1,103 @@
+## Configuração para o Domínio de Varejo
+## Este arquivo define todas as configurações específicas para o domínio de varejo
+
+version: "2.1"
+metadata:
+  domain: retail
+  description: "Domínio de vendas para produtos de varejo geral"
+  inherit: "_base"  # Herda configurações base
+
+# Configurações específicas dos agentes para o domínio de varejo
+agents:
+  retail_expert:
+    type: SalesAgent
+    config:
+      role: "Consultor de Varejo"
+      goal: "Auxiliar clientes na escolha de produtos diversos para o dia a dia"
+      backstory: |
+        Especialista em produtos de varejo com amplo conhecimento
+        de eletrodomésticos, eletrônicos, moda e itens para casa.
+        Você já trabalhou com as principais lojas de departamento e entende
+        as necessidades específicas para diferentes perfis de consumidores.
+    tools:
+      - product_catalog
+      - customer_profiler
+      - retail_recommender
+    plugins:
+      - name: retail_advisor
+        version: 1.0
+        config:
+          product_categories: ["eletrônicos", "eletrodomésticos", "moda", "casa"]
+          customer_profiles: ["família", "solteiro", "casal", "estudante"]
+
+  home_specialist:
+    type: ProductAgent
+    config:
+      role: "Especialista em Produtos para Casa"
+      goal: "Recomendar produtos ideais para diferentes ambientes domésticos"
+      backstory: |
+        Especialista em design de interiores e produtos para casa com anos de experiência
+        em decoração, organização e funcionalidade de ambientes.
+    tools:
+      - customer_profiler
+      - product_catalog
+      - home_planner
+    plugins:
+      - name: home_solutions
+        version: 1.0
+        config:
+          room_types: ["sala", "cozinha", "quarto", "banheiro"]
+          style_options: ["moderno", "clássico", "minimalista", "rústico"]
+
+# Configuração da crew para este domínio
+crew:
+  name: RetailSalesCrew
+  description: "Equipe especializada em vendas de produtos de varejo"
+  agents:
+    - retail_expert
+    - home_specialist
+  workflow:
+    - step: initial_contact
+      agent: retail_expert
+      tools: [product_catalog]
+    - step: customer_profiling
+      agent: retail_expert
+      tools: [customer_profiler]
+    - step: recommend_products
+      agent: retail_expert
+      tools: [retail_recommender, product_catalog]
+    - step: home_solutions
+      agent: home_specialist
+      tools: [home_planner]
+
+# Configurações de integração com serviços externos específicos para este domínio
+integrations:
+  odoo:
+    product_categories:
+      - eletrônicos
+      - eletrodomésticos
+      - moda
+      - casa_decoração
+    price_lists:
+      - varejo
+      - atacado
+      - promocional
+  
+  chatwoot:
+    default_labels:
+      - varejo
+      - casa
+      - eletrônicos
+    canned_responses:
+      - welcome_retail
+      - product_recommendation
+      - special_offers
+
+# Configurações de memória para este domínio
+memory:
+  ttl: 7200  # 2 horas em segundos
+  storage: redis
+  priority_contexts:
+    - "histórico de compras"
+    - "preferências de produtos"
+    - "perfil do cliente"

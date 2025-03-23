@@ -8,6 +8,7 @@ que são responsáveis por processar mensagens de acordo com suas especialidades
 import logging
 from typing import Dict, List, Any, Optional
 import json
+from datetime import datetime
 
 from crewai import Crew, Agent, Task
 from src.core.cache.agent_cache import RedisAgentCache
@@ -15,10 +16,13 @@ from src.core.cache.agent_cache import RedisAgentCache
 from src.core.memory import MemorySystem
 from src.core.data_service_hub import DataServiceHub
 from src.core.data_proxy_agent import DataProxyAgent
-from src.agents.base.functional_agent import FunctionalAgent
+from src.core.domain.domain_manager import DomainManager
+# Importações diretas dos agentes especializados sem dependência de base
 from src.agents.specialized.sales_agent import SalesAgent
-from src.agents.specialized.support_agent import SupportAgent
-from src.agents.specialized.scheduling_agent import SchedulingAgent
+# Removido importações de agentes obsoletos para focar apenas no SalesAgent
+
+# Configuração agora via YAML
+from src.config.crew_loader import CrewConfig
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +39,7 @@ class FunctionalCrew:
                  crew_type: str,
                  memory_system: MemorySystem,
                  data_service_hub: DataServiceHub,
+                 domain_manager: DomainManager,
                  agent_cache: Optional[RedisAgentCache] = None,
                  additional_tools: Optional[List[Any]] = None):
         """
@@ -44,12 +49,14 @@ class FunctionalCrew:
             crew_type: Tipo da crew (sales, support, info, scheduling)
             memory_system: Sistema de memória compartilhada
             data_service_hub: Hub central para todos os serviços de dados
+            domain_manager: Gerenciador de domínios para adaptação dinâmica
             agent_cache: Cache para resultados de agentes
             additional_tools: Ferramentas adicionais para os agentes
         """
         self.crew_type = crew_type
         self.memory_system = memory_system
         self.data_service_hub = data_service_hub
+        self.domain_manager = domain_manager
         self.agent_cache = agent_cache
         self.additional_tools = additional_tools or []
         
@@ -123,7 +130,7 @@ class FunctionalCrew:
         """
         # Verifica se há resultado em cache
         cache_key = f"process:{self.crew_type}:{message.get('id', '')}"
-        cached_result = self.cache_tool.get(cache_key)
+        cached_result = self.cache_tool.get(cache_key) if hasattr(self, 'cache_tool') else None
         
         if cached_result:
             logger.info(f"Usando resultado em cache para mensagem {message.get('id', '')}")
@@ -145,6 +152,52 @@ class FunctionalCrew:
                 result = {"response": result}
         
         # Armazena o resultado em cache
-        self.cache_tool.set(cache_key, result, ttl=3600)  # Cache por 1 hora
+        if hasattr(self, 'cache_tool'):
+            self.cache_tool.set(cache_key, result, ttl=3600)  # Cache por 1 hora
         
         return result
+        
+    def process(self, message: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Interface padrão para processamento de mensagens, usada pelo HubCrew.
+        Esta é a interface principal que todas as crews devem implementar.
+        
+        Args:
+            message: Mensagem a ser processada
+            context: Contexto da conversa
+            
+        Returns:
+            Dict[str, Any]: Resultado do processamento
+        """
+        logger.info(f"Crew {self.crew_type} processando mensagem: {message.get('id', 'sem_id')}")
+        
+        # Aplica adaptações específicas do domínio, se disponíveis
+        if 'domain' in context and hasattr(self, 'domain_adapter'):
+            message, context = self.domain_adapter.adapt(message, context, self.crew_type)
+            
+        # Delega para o método process_message para manter compatibilidade
+        result = self.process_message(message, context)
+        
+        # Registra métricas de processamento
+        self._log_processing_metrics(message, result)
+        
+        return result
+        
+    def _log_processing_metrics(self, message: Dict[str, Any], result: Dict[str, Any]) -> None:
+        """
+        Registra métricas de processamento para análise posterior.
+        
+        Args:
+            message: Mensagem processada
+            result: Resultado do processamento
+        """
+        # Implementação básica de logging de métricas
+        processing_time = datetime.now().isoformat()
+        log_entry = {
+            "timestamp": processing_time,
+            "crew_type": self.crew_type,
+            "message_id": message.get('id', 'sem_id'),
+            "success": 'response' in result
+        }
+        
+        logger.debug(f"Métricas de processamento: {json.dumps(log_entry)}")

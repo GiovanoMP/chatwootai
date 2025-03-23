@@ -18,3 +18,40 @@ A organização e não duplicação de arquivos é essencial para o avanço e se
 
 Todos os testes deverão ser incluíddos na pasta testes e o os scripts na pasta scripts
 Novos arquivos criados DEVEM serem inseridos em diretórios apropriados e em pastas ou subpastas que façam real sentido para a importancia e função do arquivo
+
+Fluxo de Processamento de Mensagens - Versão 2.0
+
+## Componentes Principais:
+1. **Hub Central (hub.py)**
+   - `HubCrew`: Orquestração principal
+   - `OrchestratorAgent`: Roteamento inteligente
+   - `ContextManagerAgent`: Gestão de contexto
+   - `IntegrationAgent`: Integrações externas
+   - `DataProxyAgent`: Único ponto de acesso a dados
+
+2. **Crews Especializadas**
+   - `SalesCrew`: Processamento de vendas
+   - `SupportCrew`: Suporte ao cliente
+   - `MarketingCrew`: Campanhas e promoções
+
+3. **Camada de Dados**
+   - `DataServiceHub`: Coordenação de serviços
+   - `ProductDataService`: Dados de produtos
+   - `CustomerDataService`: Dados de clientes
+
+4. **Domínios de Negócio**
+   - Configurações YAML por domínio (cosméticos, saúde, etc)
+   - Adaptação dinâmica via `DomainManager`
+
+## Fluxo para "Você tem creme para as mãos?":
+
+1. Chatwoot → Webhook → HubCrew
+2. HubCrew:
+   - OrchestratorAgent: Detecta intenção de venda
+   - ContextManager: Cria/Atualiza contexto
+   - Roteia para SalesCrew
+3. SalesCrew:
+   - SalesAgent formula consulta via DataProxyAgent
+   - DataProxy → DataServiceHub → ProductDataService
+   - Resposta adaptada ao domínio ativo
+4. Retorno: SalesCrew → HubCrew → Chatwoot → Cliente

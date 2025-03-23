@@ -1,0 +1,103 @@
+## Configuração para o Domínio de Saúde
+## Este arquivo define todas as configurações específicas para o domínio de saúde
+
+version: "2.1"
+metadata:
+  domain: health
+  description: "Domínio de vendas para produtos de saúde e bem-estar"
+  inherit: "_base"  # Herda configurações base
+
+# Configurações específicas dos agentes para o domínio de saúde
+agents:
+  health_expert:
+    type: SalesAgent
+    config:
+      role: "Consultor de Saúde"
+      goal: "Auxiliar clientes na escolha de produtos de saúde adequados"
+      backstory: |
+        Especialista em produtos de saúde com profundo conhecimento
+        de medicamentos, suplementos e equipamentos médicos.
+        Você já trabalhou com as principais marcas de produtos de saúde e entende
+        as necessidades específicas para diferentes condições médicas.
+    tools:
+      - product_catalog
+      - health_analyzer
+      - wellness_recommender
+    plugins:
+      - name: health_advisor
+        version: 1.0
+        config:
+          health_conditions: ["diabetes", "hipertensão", "colesterol", "alergias"]
+          wellness_areas: ["imunidade", "energia", "sono", "digestão"]
+
+  wellness_specialist:
+    type: ProductAgent
+    config:
+      role: "Especialista em Bem-Estar"
+      goal: "Recomendar produtos e rotinas para melhorar a qualidade de vida"
+      backstory: |
+        Especialista em bem-estar com anos de experiência
+        em nutrição, exercícios e saúde preventiva.
+    tools:
+      - health_analyzer
+      - product_catalog
+      - wellness_planner
+    plugins:
+      - name: wellness_diagnosis
+        version: 1.0
+        config:
+          diagnosis_depth: "detailed"
+          include_recommendations: true
+
+# Configuração da crew para este domínio
+crew:
+  name: HealthSalesCrew
+  description: "Equipe especializada em vendas de produtos de saúde"
+  agents:
+    - health_expert
+    - wellness_specialist
+  workflow:
+    - step: initial_contact
+      agent: health_expert
+      tools: [product_catalog]
+    - step: health_analysis
+      agent: wellness_specialist
+      tools: [health_analyzer]
+    - step: recommend_products
+      agent: health_expert
+      tools: [wellness_recommender, product_catalog]
+    - step: create_wellness_plan
+      agent: wellness_specialist
+      tools: [wellness_planner]
+
+# Configurações de integração com serviços externos específicos para este domínio
+integrations:
+  odoo:
+    product_categories:
+      - medicamentos
+      - suplementos
+      - equipamentos_medicos
+      - bem_estar
+    price_lists:
+      - varejo
+      - atacado
+      - promocional
+  
+  chatwoot:
+    default_labels:
+      - saúde
+      - bem-estar
+      - medicamentos
+    canned_responses:
+      - welcome_health
+      - wellness_plan
+      - product_recommendation
+
+# Configurações de memória para este domínio
+memory:
+  ttl: 7200  # 2 horas em segundos
+  storage: redis
+  priority_contexts:
+    - "histórico de saúde"
+    - "preferências de produtos"
+    - "condições médicas"

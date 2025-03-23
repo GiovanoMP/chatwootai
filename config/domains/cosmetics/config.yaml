@@ -1,0 +1,103 @@
+## Configuração para o Domínio de Cosméticos
+## Este arquivo define todas as configurações específicas para o domínio de cosméticos
+
+version: "2.1"
+metadata:
+  domain: cosmetics
+  description: "Domínio de vendas para produtos de beleza"
+  inherit: "_base"  # Herda configurações base
+
+# Configurações específicas dos agentes para o domínio de cosméticos
+agents:
+  sales_expert:
+    type: SalesAgent
+    config:
+      role: "Consultor de Beleza"
+      goal: "Auxiliar clientes na escolha de produtos cosméticos adequados"
+      backstory: |
+        Especialista em produtos de beleza com profundo conhecimento
+        de formulações cosméticas e preferências de clientes.
+        Você já trabalhou com as principais marcas de cosméticos e entende
+        as necessidades específicas para diferentes tipos de pele e estilos.
+    tools:
+      - product_catalog
+      - skin_analyzer
+      - beauty_recommender
+    plugins:
+      - name: cosmetics_advisor
+        version: 1.2
+        config:
+          skin_types: ["normal", "seca", "oleosa", "mista"]
+          concern_areas: ["acne", "rugas", "manchas", "hidratação"]
+
+  skincare_specialist:
+    type: ProductAgent
+    config:
+      role: "Especialista em Cuidados com a Pele"
+      goal: "Recomendar rotinas de cuidados específicas para cada tipo de pele"
+      backstory: |
+        Especialista em dermatologia cosmética com anos de experiência
+        em formulações e protocolos para diferentes condições de pele.
+    tools:
+      - skin_analyzer
+      - product_catalog
+      - routine_builder
+    plugins:
+      - name: skin_diagnosis
+        version: 1.1
+        config:
+          diagnosis_depth: "detailed"
+          include_ingredients: true
+
+# Configuração da crew para este domínio
+crew:
+  name: CosmeticsSalesCrew
+  description: "Equipe especializada em vendas de produtos cosméticos"
+  agents:
+    - sales_expert
+    - skincare_specialist
+  workflow:
+    - step: initial_contact
+      agent: sales_expert
+      tools: [product_catalog]
+    - step: skin_analysis
+      agent: skincare_specialist
+      tools: [skin_analyzer]
+    - step: recommend_products
+      agent: sales_expert
+      tools: [beauty_recommender, product_catalog]
+    - step: create_routine
+      agent: skincare_specialist
+      tools: [routine_builder]
+
+# Configurações de integração com serviços externos específicos para este domínio
+integrations:
+  odoo:
+    product_categories:
+      - cosméticos
+      - maquiagem
+      - perfumaria
+      - cuidados_pessoais
+    price_lists:
+      - varejo
+      - atacado
+      - promocional
+  
+  chatwoot:
+    default_labels:
+      - beleza
+      - cosméticos
+      - skincare
+    canned_responses:
+      - welcome_cosmetics
+      - skincare_routine
+      - product_recommendation
+
+# Configurações de memória para este domínio
+memory:
+  ttl: 7200  # 2 horas em segundos
+  storage: redis
+  priority_contexts:
+    - "histórico de compras"
+    - "preferências de produtos"
+    - "condições de pele"

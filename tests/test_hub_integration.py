@@ -160,7 +160,7 @@ class HubIntegrationTester(unittest.TestCase):
                     
                     # Se falhar, tentar criar manualmente
                     from src.core.data_proxy_agent import DataProxyAgent
-                    data_proxy = DataProxyAgent(data_service_hub=data_service_hub)
+                    data_proxy = DataProxyAgent(services={})
                 
                 self.assertIsNotNone(data_proxy, "DataProxyAgent não pôde ser obtido do DataServiceHub")
                 
@@ -213,7 +213,7 @@ class HubIntegrationTester(unittest.TestCase):
         try:
             from src.core.data_service_hub import DataServiceHub
             from src.core.memory import MemorySystem
-            from src.core.domain import DomainManager
+            from src.core.agent_manager import AgentManager
             from src.plugins.core.plugin_manager import PluginManager
             # Importar a classe base diretamente do módulo correto
             from src.plugins.base.base_plugin import BasePlugin
@@ -279,11 +279,11 @@ class HubIntegrationTester(unittest.TestCase):
                 
                 class TestAdaptableAgent:
                     def __init__(self, agent_config, memory_system=None, data_proxy_agent=None, 
-                                domain_manager=None, plugin_manager=None):
+                                agent_manager=None, plugin_manager=None):
                         self.agent_config = agent_config
                         self.memory_system = memory_system
                         self.data_proxy_agent = data_proxy_agent
-                        self.domain_manager = domain_manager
+                        self.agent_manager = agent_manager
                         self.plugin_manager = plugin_manager
                         
                         # Definir configuração de domínio para testes
@@ -320,7 +320,7 @@ class HubIntegrationTester(unittest.TestCase):
                 # Inicializar os componentes básicos
                 memory_system = MemorySystem()
                 data_service_hub = DataServiceHub()
-                domain_manager = DomainManager()
+                agent_manager = AgentManager()
                 plugin_manager = PluginManager(config={})
                 
                 # Obter ou criar o DataProxyAgent
@@ -332,7 +332,7 @@ class HubIntegrationTester(unittest.TestCase):
                     
                     # Se falhar, tentar criar manualmente
                     from src.core.data_proxy_agent import DataProxyAgent
-                    data_proxy = DataProxyAgent(data_service_hub=data_service_hub)
+                    data_proxy = DataProxyAgent(services={})
                 
                 # Configuração básica para o agente
                 agent_config = {
@@ -349,7 +349,7 @@ class HubIntegrationTester(unittest.TestCase):
                         agent_config=agent_config,
                         memory_system=memory_system,
                         data_proxy_agent=data_proxy,
-                        domain_manager=domain_manager,
+                        agent_manager=agent_manager,
                         plugin_manager=plugin_manager
                     )
                     

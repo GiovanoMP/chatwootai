@@ -52,8 +52,8 @@ class DomainRulesService(BaseDataService):
         self.active_domain = None
         self.rule_cache = {}
         
-        # Diretório de domínios (movido para src/business_domain)
-        self.domains_dir = self.config.get("domains_dir", os.path.join("src", "business_domain"))
+        # Diretório de domínios (movido para config/domains)
+        self.domains_dir = self.config.get("domains_dir", os.path.join("config", "domains"))
         
         # Inicializar sistema de plugins
         self.plugin_manager = self._initialize_plugin_manager()

@@ -15,7 +15,7 @@ import traceback
 from src.core.hub import HubCrew
 from src.core.memory import MemorySystem
 from src.core.data_service_hub import DataServiceHub
-from src.api.chatwoot.legacy_client import ChatwootClient
+from src.api.chatwoot.client import ChatwootClient
 from src.core.domain import DomainManager
 from src.plugins.core.plugin_manager import PluginManager
 
@@ -37,49 +37,28 @@ class ChatwootWebhookHandler:
     6. Retorna a resposta para o Chatwoot
     """
     
-    def __init__(self, config: Dict[str, Any] = None):
+    def __init__(self, hub_crew: HubCrew = None, config: Dict[str, Any] = None):
         """
         Inicializa o handler de webhook.
         
         Args:
+            hub_crew: Instância do HubCrew para processamento das mensagens (obrigatório)
             config: Configuração do handler
         """
         self.config = config or {}
         
-        # Inicializa o cliente do Chatwoot
+        # Valida que o HubCrew foi fornecido (elemento central da arquitetura hub-and-spoke)
+        if hub_crew is None:
+            raise ValueError("hub_crew é obrigatório para o ChatwootWebhookHandler")
+            
+        # Define o HubCrew que será responsável pelo processamento das mensagens
+        self.hub_crew = hub_crew
+        
+        # Inicializa o cliente do Chatwoot para envio de respostas
         self.chatwoot_client = ChatwootClient(
-            api_key=self.config.get("chatwoot_api_key", ""),
             base_url=self.config.get("chatwoot_base_url", ""),
-            account_id=self.config.get("chatwoot_account_id", 1)
+            api_token=self.config.get("chatwoot_api_key", "")
         )
-        
-        # Inicializa o sistema de memória
-        self.memory_system = MemorySystem()
-        
-        # Inicializa o gerenciador de domínios
-        self.domain_manager = DomainManager()
-        
-        # Determina o domínio ativo
-        active_domain = self.config.get("active_domain", "cosmetics")
-        self.domain_manager.set_active_domain(active_domain)
-        
-        # Inicializa o gerenciador de plugins
-        self.plugin_manager = PluginManager(config={"active_domain": active_domain})
-        
-        # Inicializa o hub de serviços de dados
-        self.data_service_hub = DataServiceHub.get_instance()
-        
-        # Inicializa o HubCrew
-        self.hub_crew = HubCrew(
-            memory_system=self.memory_system,
-            data_service_hub=self.data_service_hub
-        )
-        
-        # Dicionário para armazenar crews funcionais
-        self.functional_crews = self._initialize_functional_crews()
-        
-        # Registra as crews funcionais no HubCrew
-        self._register_crews()
         
         # Estatísticas de processamento
         self.stats = {
@@ -89,69 +68,9 @@ class ChatwootWebhookHandler:
             "errors": 0
         }
     
-    def _initialize_functional_crews(self) -> Dict[str, Any]:
-        """
-        Inicializa as crews funcionais.
-        
-        Returns:
-            Dict[str, Any]: Dicionário com as crews funcionais
-        """
-        from src.crews.sales_crew import SalesCrew
-        from src.crews.support_crew import SupportCrew
-        from src.crews.info_crew import InfoCrew
-        
-        crews = {}
-        
-        # Inicializa as crews funcionais
-        try:
-            # Crew de vendas
-            crews["sales"] = SalesCrew(
-                memory_system=self.memory_system,
-                data_service_hub=self.data_service_hub,
-                domain_manager=self.domain_manager,
-                plugin_manager=self.plugin_manager
-            )
-            
-            # Crew de suporte
-            crews["support"] = SupportCrew(
-                memory_system=self.memory_system,
-                data_service_hub=self.data_service_hub,
-                domain_manager=self.domain_manager,
-                plugin_manager=self.plugin_manager
-            )
-            
-            # Crew de informações
-            crews["info"] = InfoCrew(
-                memory_system=self.memory_system,
-                data_service_hub=self.data_service_hub,
-                domain_manager=self.domain_manager,
-                plugin_manager=self.plugin_manager
-            )
-            
-            logger.info("Crews funcionais inicializadas com sucesso")
-        except Exception as e:
-            logger.error(f"Erro ao inicializar crews funcionais: {str(e)}")
-            logger.error(traceback.format_exc())
-        
-        return crews
-    
-    def _register_crews(self):
-        """
-        Registra as crews funcionais no HubCrew.
-        """
-        try:
-            # Registra todas as crews funcionais no HubCrew
-            for crew_type, crew in self.functional_crews.items():
-                # Precisamos acessar o atributo protegido _crew_registry diretamente
-                # Isso é normalmente não recomendado, mas necessário neste caso específico
-                if hasattr(self.hub_crew.orchestrator, '_crew_registry'):
-                    self.hub_crew.orchestrator.__dict__["_crew_registry"][crew_type] = crew
-                    logger.info(f"Crew {crew_type} registrada com sucesso")
-                else:
-                    logger.warning(f"Não foi possível registrar crew {crew_type}: atributo _crew_registry não encontrado")
-        except Exception as e:
-            logger.error(f"Erro ao registrar crews: {str(e)}")
-            logger.error(traceback.format_exc())
+    # Removidos os métodos _initialize_functional_crews e _register_crews
+    # Na nova arquitetura hub-and-spoke, o HubCrew é responsável pela gestão das crews
+    # O webhook handler apenas encaminha mensagens para o HubCrew
     
     async def process_webhook(self, webhook_data: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -274,20 +193,37 @@ class ChatwootWebhookHandler:
         
         # Processa a mensagem com o HubCrew
         try:
-            # Processar a mensagem pelo HubCrew
-            hub_result = self.hub_crew.process_message(
+            logger.info("Encaminhando mensagem para processamento pelo HubCrew")
+            
+            # Verificar se o HubCrew já tem crews funcionais configuradas
+            functional_crews = getattr(self.hub_crew, "_functional_crews", None)
+            
+            # Se não tiver, log de erro e retorno
+            if not functional_crews:
+                logger.error("HubCrew não tem crews funcionais configuradas")
+                return {
+                    "status": "error",
+                    "error": "HubCrew não tem crews funcionais configuradas",
+                    "conversation_id": conversation_id,
+                    "has_response": True
+                }
+            
+            # Processar a mensagem pelo HubCrew central (hub-and-spoke model)
+            # Passando o dicionário de crews funcionais para processamento direto
+            hub_result = await self.hub_crew.process_message(
                 message=normalized_message,
                 conversation_id=conversation_id,
-                channel_type=channel_type
+                channel_type=channel_type,
+                functional_crews=functional_crews  # Passamos as crews funcionais disponíveis
             )
             
+            logger.info(f"Mensagem processada pelo HubCrew: {hub_result}")
+            
             # Extrair informações relevantes do resultado
-            processed_message = hub_result.get("message", {})
-            routing_info = hub_result.get("routing", {})
-            context = hub_result.get("context", {})
+            routing = hub_result.get("routing", {})
             
             # Se temos uma resposta gerada pela crew funcional
-            if "response" in hub_result:
+            if hub_result.get("response"):
                 response = hub_result["response"]
                 
                 # Enviar a resposta para o Chatwoot
@@ -302,8 +238,8 @@ class ChatwootWebhookHandler:
                 
                 return {
                     "status": "processed",
-                    "crew": routing_info.get("selected_crew", "unknown"),
-                    "confidence": routing_info.get("confidence", 0),
+                    "crew": routing.get("crew", "unknown"),
+                    "confidence": routing.get("confidence", 0),
                     "conversation_id": conversation_id,
                     "has_response": True
                 }
@@ -311,8 +247,8 @@ class ChatwootWebhookHandler:
                 logger.warning("Nenhuma resposta gerada pela crew funcional")
                 return {
                     "status": "processed_no_response",
-                    "crew": routing_info.get("selected_crew", "unknown"),
-                    "confidence": routing_info.get("confidence", 0),
+                    "crew": routing.get("crew", "unknown"),
+                    "confidence": routing.get("confidence", 0),
                     "conversation_id": conversation_id,
                     "has_response": False
                 }
@@ -356,16 +292,17 @@ class ChatwootWebhookHandler:
         
         logger.info(f"Nova conversa criada: {conversation_id}, Contato: {contact_id}")
         
-        # Registra a nova conversa no sistema de memória
-        if self.memory_system:
-            try:
-                self.memory_system.initialize_conversation(
-                    conversation_id=conversation_id,
-                    customer_id=contact_id
-                )
-                logger.info(f"Conversa {conversation_id} inicializada no sistema de memória")
-            except Exception as e:
-                logger.error(f"Erro ao inicializar conversa na memória: {str(e)}")
+        # Registra a nova conversa no sistema de memória através do HubCrew
+        # seguindo a arquitetura hub-and-spoke
+        try:
+            # O HubCrew é o ponto central e tem acesso ao sistema de memória
+            self.hub_crew.register_conversation(
+                conversation_id=conversation_id,
+                customer_id=contact_id
+            )
+            logger.info(f"Conversa {conversation_id} inicializada via HubCrew")
+        except Exception as e:
+            logger.error(f"Erro ao inicializar conversa: {str(e)}")
         
         return {
             "status": "processed",
@@ -391,12 +328,12 @@ class ChatwootWebhookHandler:
         
         # Se a conversa foi encerrada
         if status == "resolved":
-            # Registra o encerramento da conversa
-            if self.memory_system:
-                try:
-                    self.memory_system.finalize_conversation(conversation_id)
-                    logger.info(f"Conversa {conversation_id} finalizada no sistema de memória")
-                except Exception as e:
+            # Registra o encerramento da conversa via HubCrew
+            try:
+                # O HubCrew é o ponto central e tem acesso ao sistema de memória
+                self.hub_crew.finalize_conversation(conversation_id)
+                logger.info(f"Conversa {conversation_id} finalizada via HubCrew")
+            except Exception as e:
                     logger.error(f"Erro ao finalizar conversa na memória: {str(e)}")
         
         return {

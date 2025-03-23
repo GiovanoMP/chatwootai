@@ -4,9 +4,13 @@ Agente de agendamento adaptável para diferentes domínios de negócio.
 from typing import Dict, List, Any, Optional
 import logging
 from datetime import datetime, timedelta
+from typing import Dict, Any, Optional
 
-from src.agents.base.adaptable_agent import AdaptableAgent
+from crewai import Agent
 from src.api.erp import OdooClient
+from src.core.domain.domain_manager import DomainManager
+from src.core.memory import MemorySystem
+from src.core.data_proxy_agent import DataProxyAgent
 
 logger = logging.getLogger(__name__)
 

@@ -39,7 +39,7 @@ def mock_memory_system():
 @pytest.fixture
 def mock_data_proxy_agent():
     """Mock para o DataProxyAgent com métodos necessários."""
-    mock = MagicMock()
+    mock = MagicMock(spec=DataProxyAgent)
     mock.query_data = MagicMock(return_value=[{"id": "1", "name": "Produto Teste"}])
     mock.get_tools = MagicMock(return_value=[MagicMock()])
     return mock
@@ -73,7 +73,7 @@ def mock_plugin_manager():
 def mock_patches():
     """Configuração de patches para componentes externos."""
     # Patch para OdooClient
-    odoo_patcher = patch('src.agents.specialized.sales_agent.OdooClient')
+    odoo_patcher = patch('src.api.erp.odoo.client.OdooClient')
     mock_odoo = odoo_patcher.start()
     mock_odoo_instance = MagicMock()
     mock_odoo.return_value = mock_odoo_instance

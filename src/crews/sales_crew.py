@@ -33,11 +33,11 @@ class SalesCrew(FunctionalCrew):
         Args:
             **kwargs: Argumentos adicionais para a classe base
         """
-        # Inicializa os gerenciadores de domínio e plugins
-        self.domain_manager = kwargs.pop('domain_manager', DomainManager())
+        # Inicializa o gerenciador de plugins
         self.plugin_manager = kwargs.pop('plugin_manager', PluginManager(config={}))
         
-        # Inicializa a classe base
+        # Inicializa a classe base com domain_manager
+        # Note que o domain_manager agora é passado diretamente para a classe base
         super().__init__(crew_type="sales", **kwargs)
     
     def _create_agents(self) -> List[Agent]:
@@ -47,16 +47,15 @@ class SalesCrew(FunctionalCrew):
         Returns:
             List[Agent]: Lista de agentes
         """
-        # Agente principal de vendas (adaptável ao domínio)
+        # Obtém as configurações do domínio ativo
+        domain_config = self.domain_manager.get_active_domain()
+        agent_config = domain_config.get("agents", {}).get("sales_agent", {})
+        
+        logger.info(f"Criando SalesAgent com configuração do domínio: {self.domain_manager.get_active_domain_name()}")
+        
+        # Agente principal de vendas (usando configurações do domínio)
         sales_agent = SalesAgent(
-            agent_config={
-                "function_type": "sales",
-                "role": "Especialista em Vendas",
-                "goal": "Ajudar clientes com informações sobre produtos, preços e realizar vendas",
-                "backstory": """Você é um especialista em vendas com amplo conhecimento sobre 
-                os produtos da empresa. Seu objetivo é ajudar os clientes a encontrar os 
-                produtos ideais para suas necessidades e facilitar o processo de compra."""
-            },
+            agent_config=agent_config,
             memory_system=self.memory_system,
             data_proxy_agent=self.data_service_hub.get_data_proxy_agent(),
             domain_manager=self.domain_manager,
@@ -70,7 +69,7 @@ class SalesCrew(FunctionalCrew):
             backstory="""Você é especializado em entender as necessidades dos clientes
             e recomendar os produtos mais adequados. Você conhece profundamente o catálogo
             de produtos e suas características.""",
-            tools=[self.data_service_hub.get_data_proxy_agent()],
+            tools=[],  # Por enquanto, deixamos sem ferramentas
             verbose=True
         )
         
@@ -81,7 +80,7 @@ class SalesCrew(FunctionalCrew):
             backstory="""Você conhece todas as promoções e ofertas especiais disponíveis.
             Seu objetivo é garantir que os clientes aproveitem as melhores oportunidades
             de economia em suas compras.""",
-            tools=[self.data_service_hub.get_data_proxy_agent()],
+            tools=[],  # Por enquanto, deixamos sem ferramentas
             verbose=True
         )
         
@@ -222,3 +221,83 @@ class SalesCrew(FunctionalCrew):
         """
         # Usa processamento sequencial para garantir que as tarefas sejam executadas na ordem correta
         return "sequential"
+        
+    def process(self, message: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Processa uma mensagem relacionada a vendas.
+        
+        Este método é chamado pelo HubCrew quando uma mensagem é roteada para a SalesCrew.
+        Ele executa o fluxo completo de processamento da mensagem:
+        1. Analisa a intenção do cliente
+        2. Busca informações sobre produtos
+        3. Verifica promoções aplicáveis
+        4. Gera uma resposta personalizada
+        
+        Args:
+            message: A mensagem normalizada a ser processada
+            context: Contexto da conversa, incluindo histórico e metadados
+            
+        Returns:
+            Dict[str, Any]: Resultado do processamento, incluindo a resposta para o cliente
+        """
+        logger.info(f"SalesCrew processando mensagem: {message.get('content', '')[:100]}...")
+        
+        # Adapta o contexto para incluir o domínio atual
+        domain_info = self.domain_manager.get_active_domain_info()
+        enriched_context = {**context, "domain": domain_info}
+        
+        # Cria os inputs para a execução da crew
+        inputs = {
+            "message": message,
+            "context": enriched_context,
+            "timestamp": datetime.now().isoformat()
+        }
+        
+        try:
+            # Executa a crew com os inputs fornecidos
+            result = self.crew.kickoff(inputs=inputs)
+            
+            # Extrai a resposta do resultado
+            if isinstance(result, dict) and "response" in result:
+                response_content = result["response"]
+            else:
+                # Se o último resultado for um dicionário com uma chave 'response'
+                response_content = result
+                
+                # Tenta extrair do último resultado se for um dict
+                if isinstance(result, dict):
+                    for key in ["response", "content", "message", "answer"]:
+                        if key in result:
+                            response_content = result[key]
+                            break
+            
+            # Formata a resposta final
+            response = {
+                "content": response_content if isinstance(response_content, str) 
+                          else json.dumps(response_content, ensure_ascii=False),
+                "type": "text",
+                "timestamp": datetime.now().isoformat()
+            }
+            
+            # Retorna o resultado completo
+            return {
+                "response": response,
+                "processing_info": {
+                    "crew_type": self.crew_type,
+                    "domain": domain_info.get("name", "default"),
+                    "processing_time": "N/A"  # Em uma implementação real, mediríamos o tempo
+                }
+            }
+            
+        except Exception as e:
+            logger.error(f"Erro ao processar mensagem na SalesCrew: {str(e)}")
+            
+            # Retorna uma resposta de erro
+            return {
+                "response": {
+                    "content": "Desculpe, não foi possível processar sua solicitação no momento. Por favor, tente novamente mais tarde.",
+                    "type": "text",
+                    "timestamp": datetime.now().isoformat()
+                },
+                "error": str(e)
+            }

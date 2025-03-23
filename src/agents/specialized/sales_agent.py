@@ -1,5 +1,7 @@
 """
 Agente de vendas adaptável para diferentes domínios de negócio.
+Responsável por processar consultas relacionadas a vendas, produtos, preços e promoções.
+Toda interação com dados é feita através do DataProxyAgent.
 """
 from typing import Dict, List, Any, Optional, Type, Union
 import logging
@@ -7,58 +9,77 @@ from pydantic import Field, ConfigDict, validate_call
 
 from crewai import Agent, Task, Crew
 from crewai.tools.base_tool import BaseTool
-from src.agents.base.adaptable_agent import AdaptableAgent
-from src.api.erp import OdooClient
 from src.core.data_proxy_agent import DataProxyAgent
 from src.core.memory import MemorySystem
 from src.core.domain.domain_manager import DomainManager
 from src.plugins.core.plugin_manager import PluginManager
+from src.core.exceptions import DataAccessError, ConfigurationError
 
 logger = logging.getLogger(__name__)
 
-class SalesAgent(AdaptableAgent):
+class SalesAgent(Agent):
     """
     Agente especializado em vendas, adaptando-se ao domínio de negócio ativo.
     
     Processa consultas relacionadas a vendas, produtos, preços e promoções.
     """
-    # Configuração do modelo Pydantic
+    # Configuração do modelo
     model_config = ConfigDict(arbitrary_types_allowed=True)
     
-    def __init__(self, agent_config: Dict[str, Any], 
+    def __init__(self, 
+                 agent_config: Dict[str, Any], 
                  memory_system: Optional[MemorySystem] = None,
                  data_proxy_agent: Optional[DataProxyAgent] = None,
                  domain_manager: Optional[DomainManager] = None,
                  plugin_manager: Optional[PluginManager] = None):
-        # Validar a configuração do agente usando um método separado
-        self._validate_agent_config(agent_config)
         """
         Inicializa o agente de vendas.
         
         Args:
             agent_config: Configuração do agente
             memory_system: Sistema de memória compartilhada
-            data_proxy_agent: Agente proxy para acesso a dados
+            data_proxy_agent: Agente proxy para acesso a dados (OBRIGATÓRIO)
             domain_manager: Gerenciador de domínios de negócio
             plugin_manager: Gerenciador de plugins
-        """
-        # Adiciona o tipo de função ao config se não estiver presente
-        if "function_type" not in agent_config:
-            agent_config["function_type"] = "sales"
             
-        # Chama o construtor da classe pai
-        super().__init__(agent_config, memory_system, data_proxy_agent, domain_manager, plugin_manager)
+        Raises:
+            ConfigurationError: Se data_proxy_agent não for fornecido
+        """
         
-        # Inicializa atributos adicionais usando o dicionário privado
-        # Isso evita problemas com a validação do Pydantic
-        self.__dict__["_odoo_client"] = None
-        self.__dict__["_crew_agent"] = None
-        self.__dict__["_tools"] = []
-        self.__dict__["_domain_config"] = {}
+        if not data_proxy_agent:
+            raise ConfigurationError("SalesAgent requer um DataProxyAgent válido")
         
-        # Valida a configuração e inicializa o agente
-        self._validate_config(agent_config)
-        self.initialize()
+        # Configurações do agentem, extraídas de agent_config
+        role = agent_config.get("role", "Especialista em Vendas")
+        goal = agent_config.get("goal", "Ajudar clientes com informações sobre produtos")
+        backstory = agent_config.get("backstory", "Especialista em produtos da empresa")
+        verbose = agent_config.get("verbose", True)
+        allow_delegation = agent_config.get("allow_delegation", True)
+        
+        # Ferramentas padrão para o SalesAgent
+        tools = []
+        # Armazenamos o data_proxy_agent para uso posterior, mas não tentamos obter suas ferramentas aqui
+        # pois isso está causando problemas com o Pydantic
+        
+        # Chama o construtor da classe Agent do CrewAI primeiro
+        super().__init__(
+            role=role,
+            goal=goal,
+            backstory=backstory,
+            verbose=verbose,
+            allow_delegation=allow_delegation,
+            tools=tools
+        )
+        
+        # Atributos adicionais para persistência - definidos após super().__init__()
+        self._domain_manager = domain_manager
+        self._plugin_manager = plugin_manager
+        self._memory_system = memory_system
+        self._data_proxy_agent = data_proxy_agent
+        self._agent_config = agent_config
+        
+        # Geração de log para acompanhamento
+        logger.info(f"SalesAgent inicializado com domínio: {domain_manager.get_active_domain_name() if domain_manager else 'N/A'}")
 
     @validate_call
     def _validate_agent_config(self, config: Dict[str, Any]):
@@ -86,19 +107,17 @@ class SalesAgent(AdaptableAgent):
     def initialize(self):
         """Inicializa o agente com ferramentas específicas para vendas."""
         try:
-            # Inicializa o cliente Odoo
-            self.__dict__["_odoo_client"] = OdooClient()
+            # Verifica se o DataProxyAgent está configurado corretamente
+            if not self._data_proxy_agent.is_ready():
+                raise ConfigurationError("DataProxyAgent não está pronto para uso")
+                
+            # Configura o domínio ativo
+            domain = self._domain_manager.get_active_domain() if self._domain_manager else "default"
+            logger.info(f"Inicializando SalesAgent para o domínio: {domain}")
             
-            # Verifica se temos acesso ao DataProxyAgent
-            if not self.data_proxy_agent:
-                logger.warning("DataProxyAgent não disponível para o SalesAgent. Algumas funcionalidades estarão limitadas.")
-            else:
-                # Obtém as ferramentas do DataProxyAgent
-                self.__dict__["_tools"] = self.data_proxy_agent.get_tools()
-                logger.info(f"Obtidas {len(self.tools)} ferramentas do DataProxyAgent")
         except Exception as e:
-            logger.error(f"Erro na inicialização do SalesAgent: {str(e)}")
-            raise
+            logger.error(f"Erro fatal na inicialização do SalesAgent: {str(e)}")
+            raise ConfigurationError(f"Falha na inicialização do SalesAgent: {str(e)}")
     
     def get_agent_type(self) -> str:
         """
@@ -111,11 +130,6 @@ class SalesAgent(AdaptableAgent):
     
     # Propriedades para acessar os atributos privados
     @property
-    def odoo_client(self):
-        """Retorna o cliente Odoo."""
-        return self.__dict__.get("_odoo_client")
-    
-    @property
     def crew_agent(self):
         """Retorna o agente CrewAI."""
         return self.__dict__.get("_crew_agent")
@@ -124,11 +138,6 @@ class SalesAgent(AdaptableAgent):
     def crew_agent(self, value):
         """Define o agente CrewAI."""
         self.__dict__["_crew_agent"] = value
-    
-    @property
-    def tools(self):
-        """Retorna as ferramentas do agente."""
-        return self.__dict__.get("_tools", [])
     
     @property
     def domain_config(self):
@@ -152,16 +161,16 @@ class SalesAgent(AdaptableAgent):
             return self.crew_agent
             
         # Garantir que temos data_proxy_agent
-        if not self.data_proxy_agent:
+        if not self._data_proxy_agent:
             logger.warning("DataProxyAgent não disponível para o SalesAgent. O agente CrewAI não terá acesso às ferramentas de consulta de dados.")
             tools = []
         else:
             # Obter ferramentas do DataProxyAgent
-            tools = self.data_proxy_agent.get_tools()
+            tools = self._data_proxy_agent.get_tools()
             logger.info(f"Ferramentas obtidas do DataProxyAgent: {[t.name for t in tools]}")
         
         # Adaptar a configuração ao domínio ativo
-        domain_name = self.domain_manager.get_active_domain() if self.domain_manager else "default"
+        domain_name = self._domain_manager.get_active_domain() if self._domain_manager else "default"
         
         # Configuração padrão que será sobrescrita pela configuração do domínio se disponível
         role = f"Especialista em vendas para {domain_name}"
@@ -169,10 +178,10 @@ class SalesAgent(AdaptableAgent):
         backstory = f"Você é um especialista em produtos e serviços de {domain_name}, com amplo conhecimento sobre preços, promoções e características dos produtos."
         
         # Sobrescrever com valores do domínio se disponíveis
-        if self.domain_config:
-            role = self.domain_config.get('sales_agent_role', role)
-            goal = self.domain_config.get('sales_agent_goal', goal)
-            backstory = self.domain_config.get('sales_agent_backstory', backstory)
+        if self._domain_config:
+            role = self._domain_config.get('sales_agent_role', role)
+            goal = self._domain_config.get('sales_agent_goal', goal)
+            backstory = self._domain_config.get('sales_agent_backstory', backstory)
         
         # Criar um agente CrewAI
         crew_agent = Agent(
@@ -309,28 +318,28 @@ class SalesAgent(AdaptableAgent):
         
         return any(keyword in content.lower() for keyword in product_keywords)
     
+    def _handle_product_query(self, query):
+        """Encaminha a consulta de produtos para o DataProxyAgent usando o método fetch_data."""
+        return self._data_proxy_agent.fetch_data('products', {'query': query})
+    
     def _query_products(self, content: str) -> List[Dict[str, Any]]:
         """
-        Consulta informações de produtos.
+        Consulta informações de produtos através do DataProxyAgent.
         
         Args:
             content: Conteúdo da mensagem
             
         Returns:
             List[Dict[str, Any]]: Lista de produtos
+            
+        Raises:
+            DataAccessError: Se houver erro ao acessar os dados
         """
-        # Simulação de consulta de produtos
-        if self.data_proxy_agent:
-            try:
-                return self.data_proxy_agent.query_data(
-                    query=f"Encontre produtos relacionados a: {content}",
-                    data_type="products",
-                    limit=5
-                )
-            except Exception as e:
-                logger.error(f"Erro ao consultar produtos: {e}")
-        
-        return []
+        try:
+            return self._handle_product_query(content)
+        except Exception as e:
+            logger.error(f"Erro ao consultar produtos: {e}")
+            raise DataAccessError(f"Falha ao consultar produtos: {str(e)}")
     
     def _should_query_pricing(self, content: str) -> bool:
         """
@@ -350,26 +359,33 @@ class SalesAgent(AdaptableAgent):
     
     def _query_pricing(self, product_ids: List[str]) -> Dict[str, Any]:
         """
-        Consulta informações de preço.
+        Consulta informações de preço através do DataProxyAgent.
         
         Args:
             product_ids: IDs dos produtos
             
         Returns:
             Dict[str, Any]: Informações de preço
+            
+        Raises:
+            DataAccessError: Se houver erro ao acessar os dados
         """
-        # Simulação de consulta de preços
-        if self.data_proxy_agent and product_ids:
-            try:
-                return self.data_proxy_agent.query_data(
-                    query=f"Obtenha preços para os produtos: {','.join(product_ids)}",
-                    data_type="pricing",
-                    product_ids=product_ids
-                )
-            except Exception as e:
-                logger.error(f"Erro ao consultar preços: {e}")
-        
-        return {}
+        if not product_ids:
+            return {}
+            
+        try:
+            domain = self._domain_manager.get_active_domain_name() if self._domain_manager else "default"
+            return self._data_proxy_agent.fetch_data(
+                data_type="products",
+                query_params={
+                    "query": f"Obtenha preços para os produtos: {','.join(product_ids)}",
+                    "filters": {"product_ids": product_ids},
+                    "domain": domain
+                }
+            )
+        except Exception as e:
+            logger.error(f"Erro ao consultar preços: {e}")
+            raise DataAccessError(f"Falha ao consultar preços: {str(e)}")
     
     def _should_query_promotions(self, content: str) -> bool:
         """
@@ -389,23 +405,27 @@ class SalesAgent(AdaptableAgent):
     
     def _query_promotions(self) -> List[Dict[str, Any]]:
         """
-        Consulta informações de promoções.
+        Consulta informações de promoções através do DataProxyAgent.
         
         Returns:
             List[Dict[str, Any]]: Lista de promoções
+            
+        Raises:
+            DataAccessError: Se houver erro ao acessar os dados
         """
-        # Simulação de consulta de promoções
-        if self.data_proxy_agent:
-            try:
-                return self.data_proxy_agent.query_data(
-                    query="Liste as promoções ativas",
-                    data_type="promotions",
-                    is_active=True
-                )
-            except Exception as e:
-                logger.error(f"Erro ao consultar promoções: {e}")
-        
-        return []
+        try:
+            domain = self._domain_manager.get_active_domain_name() if self._domain_manager else "default"
+            return self._data_proxy_agent.fetch_data(
+                data_type="business_rules",
+                query_params={
+                    "query": "Liste as promoções ativas",
+                    "category": "promotions",
+                    "domain": domain
+                }
+            )
+        except Exception as e:
+            logger.error(f"Erro ao consultar promoções: {e}")
+            raise DataAccessError(f"Falha ao consultar promoções: {str(e)}")
     
     def adapt_prompt(self, prompt: str) -> str:
         """
@@ -495,3 +515,31 @@ class SalesAgent(AdaptableAgent):
         except Exception as e:
             logger.error(f"Erro ao executar tarefa: {str(e)}")
             return f"Desculpe, não foi possível processar sua solicitação. Erro: {str(e)}"
+            
+    # Método auxiliar para facilitar o acesso a dados
+    def fetch_data(self, data_type: str, query: str, **kwargs):
+        """
+        Método auxiliar para acessar dados através do DataProxyAgent.
+        
+        Args:
+            data_type: Tipo de dados a ser consultado (ex: 'products', 'customers')
+            query: Texto da consulta
+            **kwargs: Parâmetros adicionais para a consulta
+            
+        Returns:
+            Any: Resultados da consulta, formatados de acordo com o tipo de dados
+        """
+        if not self._data_proxy_agent:
+            logger.error("DataProxyAgent não disponível")
+            return {"error": "DataProxyAgent não disponível"}
+            
+        try:
+            # Preparar os parâmetros da consulta
+            query_params = {"query": query}
+            query_params.update(kwargs)
+            
+            # Chamar o método fetch_data do DataProxyAgent
+            return self._data_proxy_agent.fetch_data(data_type, query_params)
+        except Exception as e:
+            logger.error(f"Erro ao buscar dados do tipo {data_type}: {str(e)}")
+            return {"error": f"Falha na busca de dados: {str(e)}"}

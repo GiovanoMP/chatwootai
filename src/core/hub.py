@@ -237,9 +237,9 @@ class OrchestratorAgent(Agent):
         # This is a simplified routing logic - in a real system, this would be more complex
         
         # Default values
-        selected_crew = "general"
+        selected_crew = "SalesCrew"
         confidence = 0.5
-        reasoning = "Default routing to general crew"
+        reasoning = "Default routing to SalesCrew"
         
         # Check for sales-related keywords
         sales_keywords = ["buy", "price", "cost", "purchase", "order", "discount"]
@@ -735,7 +735,8 @@ class HubCrew(Crew):
             "tasks": [],  # Tasks will be created dynamically
             "verbose": True,
             "process": "sequential",  # Process tasks sequentially
-            "cache": True  # Habilitar cache (booleano)
+            "cache": True,  # Habilitar cache (booleano)
+            "name": "HubCrew"  # Nome da crew para identificação
         }
         
         # Override defaults with any provided kwargs
@@ -748,6 +749,8 @@ class HubCrew(Crew):
         # Corrigido: data_proxy_agent deve ser a variável data_proxy que criamos acima
         self.__dict__["_data_proxy_agent"] = data_proxy  # A variável correta é data_proxy
         self.__dict__["_agent_cache"] = agent_cache
+        # Adicionar o atributo role para identificação da crew
+        self.__dict__["_role"] = "HubCrew"
         self.__dict__["_integration_agent"] = integration_agent
         self.__dict__["_context_manager"] = context_manager
         self.__dict__["_data_proxy"] = data_proxy
@@ -801,7 +804,8 @@ class HubCrew(Crew):
         
         # Check cache first for performance optimization if agent_cache is available
         message_id = normalized_message.get('id', '')
-        agent_id = f"hubcrew:{self.role}"
+        # Usar o atributo _role em vez de acessar self.role diretamente
+        agent_id = f"hubcrew:{self.__dict__.get('_role', 'HubCrew')}"
         input_data = json.dumps({"message": normalized_message, "context": context})
         cached_route = None
         
@@ -870,9 +874,9 @@ class HubCrew(Crew):
         # This is a simplified routing logic - in a real system, this would be more complex
         
         # Default values
-        selected_crew = "general"
+        selected_crew = "SalesCrew"
         confidence = 0.5
-        reasoning = "Default routing to general crew"
+        reasoning = "Default routing to SalesCrew"
         
         # Check for sales-related keywords
         sales_keywords = ["buy", "price", "cost", "purchase", "order", "discount"]
@@ -921,53 +925,207 @@ class HubCrew(Crew):
         logger.info(f"Roteamento da mensagem {message.get('id', '')} para a crew funcional")
         return routing_result
     
-    def process_message(self, 
-                       message: Dict[str, Any],
-                       conversation_id: str,
-                       channel_type: str) -> Dict[str, Any]:
+    def register_conversation(self, conversation_id: str, customer_id: str) -> None:
         """
-        Process a message and route it to the appropriate functional crew.
+        Registra uma nova conversa no sistema de memória.
         
-        This is the main entry point for message processing in the hub-and-spoke architecture.
-        It handles the complete workflow from receiving a message to determining which
-        specialized crew should process it.
+        Este método é chamado pelo webhook_handler quando uma nova conversa é criada,
+        permitindo que o HubCrew inicialize o contexto da conversa e prepare
+        os sistemas de memória e gerenciamento de contexto.
         
         Args:
-            message: The message to process (content, sender info, etc.)
-            conversation_id: Unique identifier for the conversation
-            channel_type: Source channel (WhatsApp, Instagram, etc.)
+            conversation_id: ID único da conversa
+            customer_id: ID do cliente/contato
+        """
+        try:
+            # Inicializa a conversa no sistema de memória
+            self.memory_system.initialize_conversation(
+                conversation_id=conversation_id,
+                customer_id=customer_id
+            )
+            
+            # Prepara o contexto inicial da conversa
+            initial_context = {
+                "customer_id": customer_id,
+                "start_time": self._get_current_timestamp(),
+                "interaction_count": 0
+            }
+            
+            # Armazena o contexto inicial
+            self.memory_system.store_conversation_context(
+                conversation_id=conversation_id,
+                context=initial_context
+            )
+            
+            logger.info(f"Conversa {conversation_id} inicializada no HubCrew")
+        except Exception as e:
+            logger.error(f"Erro ao inicializar conversa no HubCrew: {str(e)}")
+            raise
+    
+    def finalize_conversation(self, conversation_id: str) -> None:
+        """
+        Finaliza uma conversa no sistema de memória.
+        
+        Este método é chamado pelo webhook_handler quando uma conversa é encerrada,
+        permitindo que o HubCrew finalize o contexto da conversa e libere recursos.
+        
+        Args:
+            conversation_id: ID único da conversa
+        """
+        try:
+            # Finaliza a conversa no sistema de memória
+            self.memory_system.finalize_conversation(conversation_id)
+            
+            # Atualiza o contexto com a finalização
+            context = self.memory_system.retrieve_conversation_context(conversation_id) or {}
+            context["end_time"] = self._get_current_timestamp()
+            context["status"] = "resolved"
+            
+            # Armazena o contexto final
+            self.memory_system.store_conversation_context(
+                conversation_id=conversation_id,
+                context=context
+            )
+            
+            logger.info(f"Conversa {conversation_id} finalizada no HubCrew")
+        except Exception as e:
+            logger.error(f"Erro ao finalizar conversa no HubCrew: {str(e)}")
+            raise
+    
+    def _get_current_timestamp(self) -> str:
+        """
+        Retorna o timestamp atual no formato ISO.
+        
+        Returns:
+            Timestamp atual no formato ISO
+        """
+        from datetime import datetime
+        return datetime.now().isoformat()
+    
+    async def process_message(self, 
+                       message: Dict[str, Any],
+                       conversation_id: str,
+                       channel_type: str,
+                       functional_crews: Dict[str, Any] = None) -> Dict[str, Any]:
+        """
+        Processa uma mensagem e a encaminha para a crew funcional apropriada.
+        
+        Este é o ponto de entrada principal para o processamento de mensagens na arquitetura hub-and-spoke.
+        Ele gerencia o fluxo completo desde o recebimento de uma mensagem até o encaminhamento
+        para a crew especializada adequada, agora com suporte assíncrono.
+        
+        Args:
+            message: A mensagem a ser processada (conteúdo, informações do remetente, etc.)
+            conversation_id: Identificador único da conversa
+            channel_type: Canal de origem (WhatsApp, Instagram, etc.)
+            functional_crews: Dicionário de crews funcionais disponíveis (opcional)
             
         Returns:
-            Processing result with message, context, and routing information
+            Resultado do processamento com mensagem, contexto, roteamento e resposta
         """
-        # Load or create conversation context
+        # Carrega ou cria o contexto da conversa
         context = self.memory_system.retrieve_conversation_context(conversation_id) or {}
         
-        # Add channel information to context
+        # Adiciona informações do canal ao contexto
         context["channel_type"] = channel_type
         context["conversation_id"] = conversation_id
         
-        # Update context with the new message
+        # Incrementa o contador de interações
+        context["interaction_count"] = context.get("interaction_count", 0) + 1
+        
+        # Obtém o domínio ativo para esta conversa
+        # Se não estiver no contexto, consulta o DataProxyAgent
+        if "active_domain" not in context:
+            try:
+                # Obter informações do cliente ou da conversa para determinar o domínio
+                customer_id = context.get("customer_id", None)
+                if customer_id:
+                    customer_data = self.get_customer_data(customer_id)
+                    active_domain = customer_data.get("domain", "cosmetics")
+                else:
+                    # Se não tiver customer_id, usa o domínio padrão
+                    active_domain = "cosmetics"
+                
+                # Adiciona o domínio ativo ao contexto
+                context["active_domain"] = active_domain
+                logger.info(f"Domínio ativo para conversa {conversation_id}: {active_domain}")
+            except Exception as e:
+                logger.error(f"Erro ao obter domínio ativo: {str(e)}. Usando domínio padrão 'cosmetics'.")
+                context["active_domain"] = "cosmetics"
+        
+        # Atualiza o contexto com a nova mensagem
         updated_context = self.context_manager.update_context(
             conversation_id=conversation_id,
             message=message,
             current_context=context
         )
         
-        # Route the message to the appropriate functional crew
+        # Garante que o domínio ativo esteja no contexto atualizado
+        if "active_domain" not in updated_context and "active_domain" in context:
+            updated_context["active_domain"] = context["active_domain"]
+        
+        # Roteia a mensagem para a crew funcional apropriada
         routing = self._route_message(
             message=message,
             context=updated_context
         )
         
-        # Return the processing result
-        result = {
-            "message": message,
-            "context": updated_context,
-            "routing": routing
-        }
+        # Se não há crews funcionais disponíveis, apenas retorna o roteamento
+        if not functional_crews:
+            logger.warning("Nenhuma crew funcional disponível para processar a mensagem")
+            result = {
+                "message": message,
+                "context": updated_context,
+                "routing": routing,
+                "response": None
+            }
+            return result
         
-        return result
+        # Processa a mensagem com a crew funcional apropriada
+        selected_crew_name = routing.get("crew")
+        selected_crew = functional_crews.get(selected_crew_name)
+        
+        if not selected_crew:
+            logger.warning(f"Crew '{selected_crew_name}' não encontrada")
+            result = {
+                "message": message,
+                "context": updated_context,
+                "routing": routing,
+                "response": None
+            }
+            return result
+        
+        # Chama o método process da crew funcional
+        try:
+            # Adiciona informações adicionais ao contexto
+            processing_context = {
+                **updated_context,
+                "routing": routing
+            }
+            
+            # Chama o método process da crew funcional
+            response = await selected_crew.process(message, processing_context)
+            
+            # Retorna o resultado completo do processamento
+            result = {
+                "message": message,
+                "context": updated_context,
+                "routing": routing,
+                "response": response
+            }
+            
+            return result
+        except Exception as e:
+            logger.error(f"Erro ao processar mensagem com a crew {selected_crew_name}: {str(e)}")
+            # Em caso de erro, retorna o resultado sem resposta
+            result = {
+                "message": message,
+                "context": updated_context,
+                "routing": routing,
+                "response": None,
+                "error": str(e)
+            }
+            return result
     
     def get_customer_data(self, customer_id: str) -> Dict[str, Any]:
         """
@@ -1046,20 +1204,55 @@ class HubCrew(Crew):
         # Obtém o tipo de crew com base na intenção ou usa um default
         crew_type = intent_to_crew_map.get(intent.lower() if intent else "", "info")
         
-        # Obtém a crew funcional apropriada ou usa uma padrão
-        target_crew = functional_crews.get(crew_type)
+        # Obtém o domínio ativo para determinar o nome específico da crew
+        active_domain = context.get("active_domain", "cosmetics")
+        
+        # Mapeia tipos de crew para nomes específicos de crew por domínio
+        domain_crew_map = {
+            "cosmetics": {
+                "sales": "CosmeticsSalesCrew",
+                "support": "CosmeticsSupportCrew",
+                "info": "CosmeticsInfoCrew",
+                "scheduling": "CosmeticsSchedulingCrew"
+            },
+            "health": {
+                "sales": "HealthSalesCrew",
+                "support": "HealthSupportCrew",
+                "info": "HealthInfoCrew",
+                "scheduling": "HealthSchedulingCrew"
+            },
+            "retail": {
+                "sales": "RetailSalesCrew",
+                "support": "RetailSupportCrew",
+                "info": "RetailInfoCrew",
+                "scheduling": "RetailSchedulingCrew"
+            }
+        }
+        
+        # Obtém o nome específico da crew para o domínio ativo
+        domain_specific_crews = domain_crew_map.get(active_domain, {})
+        crew_name = domain_specific_crews.get(crew_type, crew_type)
+        
+        # Tenta obter a crew pelo nome específico do domínio
+        target_crew = functional_crews.get(crew_name)
+        
+        # Se não encontrar, tenta pelo tipo genérico como fallback
+        if not target_crew:
+            target_crew = functional_crews.get(crew_type)
         
         # Registra a decisão de roteamento para debug
-        logger.info(f"Roteando mensagem para crew funcional: {crew_type}")
+        logger.info(f"Roteando mensagem para crew funcional: {crew_name} (tipo: {crew_type}, domínio: {active_domain})")
         
         # Se não encontrar a crew apropriada, usa uma resposta padrão
         if not target_crew:
-            logger.warning(f"Crew funcional '{crew_type}' não encontrada!")
+            logger.warning(f"Crew funcional '{crew_name}' não encontrada! Tentou também '{crew_type}'")
             return {
                 "functional_result": "Desculpe, não consegui processar sua solicitação adequadamente.",
                 "hub_metadata": {
                     "original_intent": intent,
                     "mapped_crew_type": crew_type,
+                    "domain_specific_crew": crew_name,
+                    "active_domain": active_domain,
                     "routing_error": "crew not found"
                 }
             }

@@ -1,0 +1,234 @@
+Documento de Projeto: Reestruturação Arquitetural do ChatwootAI
+Data: 22 de março de 2025
+
+1. Resumo Executivo
+Este documento detalha o plano de reestruturação da arquitetura do sistema ChatwootAI, movendo de uma abordagem baseada em código para uma abordagem declarativa centrada em configurações YAML com persistência de memória. A transformação visa simplificar drasticamente a criação de novos domínios de negócio, eliminar inconsistências arquiteturais e reduzir o tempo de inicialização do sistema. Após implementação, novos domínios de negócio poderão ser adicionados sem alterações de código, apenas através da criação de arquivos de configuração.
+
+2. Análise da Arquitetura Atual
+2.1 Problemas Identificados
+Complexidade Excessiva
+Múltiplas camadas de abstração
+Duplicação entre SalesAgent e SalesCrew
+Agentes especializados que criam outros agentes
+Inconsistências Arquiteturais
+Uso misto do DataProxyAgent e acesso direto a serviços
+Gestão redundante de ferramentas em agentes
+Tratamento inconsistente de erros
+Configuração Fragmentada
+Código espalhado em múltiplos arquivos Python
+Configurações misturadas com lógica de negócio
+Dificuldade para adicionar novos domínios
+Performance Sub-ótima
+Reconstrução de agentes e crews a cada inicialização
+Ausência de camada de cache eficiente
+Tempo de resposta impactado por cold starts
+3. Arquitetura Proposta
+3.1 Visão Geral
+mermaid
+CopyInsert
+graph TD
+    A[YAML Domain Configs] --> B[Domain Manager]
+    B --> C[Plugin Registry]
+    B --> D[Crew Registry]
+    C --> D
+    D --> E[Cached Crews/Agents]
+    D --> F[Memory System]
+    E --> G[DataProxyAgent]
+    G --> H[(Data Services)]
+3.2 Princípios Orientadores
+Configuração sobre Código
+Toda personalização via arquivos YAML
+Zero alterações de código para novos domínios
+Validação automática de configurações
+Persistência Inteligente
+Cache de agentes e crews entre execuções
+Detecção automática de mudanças em configuração
+Warm-up proativo para evitar cold starts
+Padronização de Acesso a Dados
+DataProxyAgent como único ponto de entrada
+Eliminação de acessos diretos a serviços
+Ferramentas uniformes para todos os agentes
+4. Componentes a Remover ou Substituir
+4.1 Classes Atuais a Serem Refatoradas
+SalesAgent (src/agents/specialized/sales_agent.py)
+Remover método get_crew_agent() que cria outro agente
+Eliminar gestão redundante de ferramentas (_tools)
+Substituir por implementação que herda diretamente de Agent
+AdaptableAgent (src/agents/base/adaptable_agent.py)
+Simplificar para ser um wrapper direto do Agent do CrewAI
+Mover lógica de domínio para o DomainManager
+BaseCrew e SalesCrew
+Substituir por classes dinâmicas geradas por configuração
+Centralizar lógica em CrewRegistry
+4.2 Práticas a Serem Eliminadas
+Acesso Direto a Serviços
+Remover todas as instanciações de OdooClient
+Eliminar conexões diretas com Qdrant ou Redis
+Configuração Hard-coded
+Eliminar constantes e valores fixos no código
+Mover todas as strings e valores para YAML
+5. Novos Componentes a Adicionar
+5.1 Sistema de Configuração via YAML
+Estrutura de Diretórios:
+
+CopyInsert
+domains/
+├── cosmetics/
+│   ├── config.yaml     # Configuração principal
+│   ├── plugins.yaml    # Plugins específicos (opcional)
+│   └── tools.yaml      # Ferramentas específicas (opcional)
+├── healthcare/
+│   ├── config.yaml
+│   └── plugins/
+├── _base/               # Configurações compartilhadas
+│   ├── base_agents.yaml
+│   └── base_tools.yaml
+Exemplo de config.yaml:
+
+yaml
+CopyInsert
+# domains/cosmetics/config.yaml
+version: 2.1
+metadata:
+  domain: cosmetics
+  description: "Domínio de vendas para produtos de beleza"
+  inherit: "_base"  # Herda configs base
+
+agents:
+  sales_expert:
+    type: SalesAgent
+    config:
+      role: "Consultor de Beleza"
+      goal: "Auxiliar clientes na escolha de produtos cosméticos adequados"
+      backstory: |
+        Especialista em produtos de beleza com profundo conhecimento
+        de formulações cosméticas e preferências de clientes.
+    tools:
+      - product_catalog
+      - skin_analyzer
+      - beauty_recommender
+    plugins:
+      - name: cosmetics_advisor
+        version: 1.2
+        config:
+          skin_types: ["normal", "seca", "oleosa", "mista"]
+
+crew:
+  name: CosmeticsSalesCrew
+  agents:
+    - sales_expert
+  workflow:
+    - step: initial_contact
+      agent: sales_expert
+      tools: [product_catalog]
+    - step: recommend_products
+      agent: sales_expert
+      tools: [beauty_recommender, skin_analyzer]
+
+memory:
+  ttl: 3600  # 1 hora em segundos
+  storage: redis
+5.2 DomainManager Aprimorado
+Responsável por:
+
+Carregamento automático de configurações YAML
+Validação de schema contra modelos Pydantic
+Herança e override de configurações
+Gestão de ciclo de vida de domínios
+5.3 CrewRegistry com Persistência
+Responsável por:
+
+Cache de agentes e crews instanciados
+Serialização/desserialização via Redis/Pickle
+Invalidação automática de cache baseada em versão
+Pré-carregamento inteligente
+5.4 PluginRegistry
+Responsável por:
+
+Registro central de plugins disponíveis
+Versionamento e compatibilidade
+Injeção de dependências em agentes
+Configuração via YAML
+6. Plano de Implementação
+6.1 Fase 1: Infraestrutura Core (Semanas 1-2)
+Implementar DomainManager
+Parser YAML com suporte a herança e overlays
+Sistema de validação com Pydantic
+Integração com disco para hot-reload
+Criar PluginRegistry
+Sistema de versões e compatibilidade
+Decorator para registro automático
+Carregamento preguiçoso para otimização
+Desenvolver CrewRegistry
+Integração com Redis para persistência
+Serialização segura de estados
+Cache com algoritmo LRU
+6.2 Fase 2: Adaptadores e Migração (Semanas 3-4)
+Criar Adaptadores Legado → Novo
+Compatibilidade para SalesAgent existente
+Tradução automática de configurações
+Modo híbrido para transição suave
+Refatorar YAML de Domínios
+Converter configurações existentes
+Criar templates e exemplos
+Documentação YAML Schema
+Implementar Validação Automática
+Testes automáticos para schemas
+CI/CD para validar YAMLs
+Alerta para inconsistências
+6.3 Fase 3: Otimização e Consolidação (Semanas 5-6)
+Otimizar Performance
+Warmup automático de caches
+Pré-compilação de prompts
+Compressão de dados em cache
+Consolidar Módulos
+Remover código legado
+Unificar interfaces
+Documentação atualizada
+Implementar Monitoramento
+Métricas de uso de cache
+Tempo de resposta por domínio
+Alertas para degradação
+7. Benefícios e Análise de Riscos
+7.1 Benefícios Quantitativos
+| Métrica | Atual | Esperado | Melhoria | |-------------------------------|--------|----------|-------------| | Tempo para novo domínio | 8h | 15min | 32x mais rápido | | Linhas de código por agente | ~500 | ~100 | 80% menos | | Tempo de inicialização | 3-5s | 0.5-1s | 5x mais rápido | | Uso de memória | Alto | Médio | 40% redução | | Modificabilidade (escala 1-10)| 4 | 9 | 125% melhor |
+
+7.2 Benefícios Qualitativos
+Melhor Developer Experience
+Edição declarativa vs. código imperativo
+Feedback imediato sobre mudanças
+Visualização clara do fluxo de trabalho
+Maior Confiabilidade
+Validação automática de configurações
+Isolamento entre domínios
+Menos código = menos bugs
+Manutenibilidade Superior
+Documentação embutida no YAML
+Versionamento explícito
+Separação de configuração e código
+7.3 Riscos e Mitigação
+| Risco | Severidade | Probabilidade | Mitigação | |-------------------------------|------------|---------------|------------------------------| | Bugs durante migração | Alta | Média | Testes extensivos, modo híbrido | | Complexidade de YAML | Média | Alta | Editor com schema, validação automática | | Performance de serialização | Média | Baixa | Formato binário, compressão | | Resistência a mudança | Baixa | Média | Documentação clara, demonstrações |
+
+8. Próximos Passos Imediatos
+Esta Semana (22-29 Março)
+Criar protótipo do DomainManager
+Definir schema YAML detalhado
+Implementar CrewRegistry básico
+Próxima Semana (30 Março - 5 Abril)
+Migrar um domínio para novo formato
+Implementar persistência em Redis
+Criar testes de benchmark
+Médio Prazo (Abril)
+Migrar todos os domínios
+Documentação completa
+Treinamento da equipe
+9. Conclusão
+A reestruturação proposta representa uma mudança paradigmática na forma como o ChatwootAI é configurado e mantido. Ao adotar uma abordagem declarativa baseada em YAML e incorporar persistência inteligente, podemos alcançar uma arquitetura significativamente mais simples, flexível e eficiente.
+
+Essa mudança não apenas resolve os problemas arquiteturais identificados na análise, mas também posiciona o sistema para escalar facilmente para novos domínios de negócio sem o atual overhead de desenvolvimento. A migração é tecnicamente viável, com um plano de implementação gradual que minimiza riscos enquanto maximiza benefícios.
+
+O resultado final será um sistema que pode ser expandido para novos domínios em minutos em vez de dias, com melhor performance, maior confiabilidade e manutenção simplificada. Isso representa um retorno significativo sobre o investimento inicial necessário para a refatoração.
+
+Documento preparado por: Equipe ChatwootAI
+Aprovação necessária de: Gerência de Projeto, Arquitetura de Software
+Status atual: Proposta para Revisão

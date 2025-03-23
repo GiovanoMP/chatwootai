@@ -2,386 +2,236 @@
 Servidor webhook para receber eventos do Chatwoot.
 
 Este servidor recebe notificações do Chatwoot quando eventos ocorrem
-(como novas mensagens) e os processa usando o sistema de crews.
+(como novas mensagens) e os processa usando a arquitetura hub-and-spoke.
 """
 
 import os
 import sys
 import logging
 import json
+import traceback
 import uvicorn
 from fastapi import FastAPI, Request, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any
 from datetime import datetime
 
 # Adiciona o diretório raiz ao path para importar os módulos
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 # Importa o sistema de debug_logger
-from src.utils.debug_logger import DebugLogger, get_logger, log_function_call, TRACE
+from src.utils.debug_logger import get_logger
 
-# Configura o logger com nível mais detalhado para depuração
+# Configura o logger
 logger = get_logger('webhook_server', level=logging.DEBUG)
+
+# Configurar o logging padrão do Python para gravar no arquivo
+file_handler = logging.FileHandler('logs/webhook.log')
+file_handler.setLevel(logging.DEBUG)
+file_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+file_handler.setFormatter(file_formatter)
+root_logger = logging.getLogger()
+root_logger.addHandler(file_handler)
 
 # Carrega variáveis de ambiente
 load_dotenv()
 
-# Importa o gerenciador de instâncias
-from src.api.multi_instance_handler import MultiInstanceManager
-
-# Cria uma instância simples do gerenciador
-instance_manager = MultiInstanceManager()
-
-# Importa os componentes necessários
-from src.api.chatwoot.client import ChatwootWebhookHandler, ChatwootClient
-from src.core.hub import HubCrew  # Importa HubCrew do core.hub em vez de crews.hub_crew
-from src.core.crew_registry import CrewRegistry
+# Importa componentes necessários
+from src.webhook.webhook_handler import ChatwootWebhookHandler
+from src.core.hub import HubCrew
+from src.core.data_service_hub import DataServiceHub
+from src.core.memory import MemorySystem
+from src.core.domain import DomainManager
+from src.plugins.core.plugin_manager import PluginManager
+from src.crews.sales_crew import SalesCrew
+from src.api.chatwoot.client import ChatwootClient  # Usando a implementação da arquitetura hub-and-spoke
 
 # Cria a aplicação FastAPI
 app = FastAPI(title="Chatwoot Webhook Server", description="Servidor para receber webhooks do Chatwoot")
 
-# Adiciona middleware CORS para permitir requisições de diferentes origens
+# Adiciona middleware CORS para aceitar requisições do proxy na VPS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Em produção, especifique as origens permitidas
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Variáveis globais para armazenar as instâncias das crews
-crew_registry = None
+# Variáveis globais
 webhook_handler = None
 
 def get_webhook_handler():
-    """
-    Obtém o handler de webhook.
-    
-    Returns:
-        ChatwootWebhookHandler: Handler de webhook
-    """
+    """Obtém ou inicializa o webhook handler"""
     global webhook_handler
     if webhook_handler is None:
-        initialize_crews()
+        webhook_handler = initialize_system()
     return webhook_handler
 
-def initialize_crews():
+def initialize_system():
     """
-    Inicializa as crews e o handler de webhook.
+    Inicializa o sistema completo usando a mesma abordagem 
+    que funcionou nos testes manuais
     """
-    global crew_registry, webhook_handler
+    logger.info("🚀 Inicializando sistema para receber webhooks do Chatwoot...")
     
-    # Obtém as variáveis de ambiente
-    chatwoot_base_url = os.getenv('CHATWOOT_BASE_URL')
-    chatwoot_api_key = os.getenv('CHATWOOT_API_KEY')
-    chatwoot_account_id = int(os.getenv('CHATWOOT_ACCOUNT_ID', '1'))
-    
-    if not all([chatwoot_base_url, chatwoot_api_key]):
-        raise ValueError("Variáveis de ambiente CHATWOOT_BASE_URL e CHATWOOT_API_KEY devem estar definidas")
-    
-    # Inicializa o cliente do Chatwoot
-    chatwoot_client = ChatwootClient(
-        base_url=chatwoot_base_url,
-        api_key=chatwoot_api_key
-    )
-    
-    # Inicializa o registro de crews
-    crew_registry = CrewRegistry()
-    
-    # Inicializa os componentes necessários para o HubCrew
-    from redis import Redis
-    from src.core.memory import MemorySystem
-    from src.tools.vector_tools import QdrantVectorSearchTool
-    from src.tools.database_tools import PGSearchTool
-    from src.tools.cache_tools import CacheTool
-    from src.core.cache.agent_cache import RedisAgentCache
-    
-    # Cria instâncias dos componentes necessários
+    # Sistema de memória
     memory_system = MemorySystem()
+    logger.info("✅ Sistema de memória inicializado")
     
-    # Inicializa ferramentas (usando valores padrão para desenvolvimento)
-    vector_tool = QdrantVectorSearchTool(
-        qdrant_url=os.getenv('QDRANT_URL', 'http://localhost:6333'),
-        collection_name=os.getenv('QDRANT_COLLECTION', 'chatwoot_vectors')
-    )
+    # Gerenciador de domínio
+    domain_manager = DomainManager()
+    domain_manager.switch_domain("cosmetics")
+    logger.info(f"✅ Domínio 'cosmetics' carregado com sucesso")
     
-    db_tool = PGSearchTool(
-        db_uri=os.getenv('DATABASE_URL', 'postgresql://postgres:postgres@localhost:5432/chatwoot_ai'),
-        table_name=['customers', 'products']
-    )
+    # Gerenciador de plugins
+    plugin_config = {
+        "enabled_plugins": ["sentiment_analysis_plugin", "faq_knowledge_plugin", "response_enhancer_plugin"]
+    }
+    plugin_manager = PluginManager(config=plugin_config)
+    logger.info("✅ Gerenciador de plugins inicializado")
     
-    # Configura o Redis usando o endereço IP direto do contêiner
-    # Usar diretamente o IP, ignorando a variável de ambiente para garantir que funcione
-    redis_url = 'redis://172.24.0.5:6379/0'
-    logger.info(f"Conectando ao Redis usando URL: {redis_url}")
-    try:
-        redis_client = Redis.from_url(redis_url)
-        redis_info = redis_client.info()
-        logger.info(f"Conexão Redis estabelecida com sucesso: {redis_info.get('redis_version', 'desconhecido')}")
-    except Exception as e:
-        logger.error(f"Erro ao conectar ao Redis: {e}")
-        # Tentar com o host local como fallback
-        redis_url = 'redis://localhost:6379/0'
-        logger.info(f"Tentando conectar ao Redis com fallback: {redis_url}")
-        try:
-            redis_client = Redis.from_url(redis_url)
-            redis_info = redis_client.info()
-            logger.info(f"Conexão Redis fallback estabelecida com sucesso")
-        except Exception as e2:
-            logger.error(f"Erro ao conectar ao Redis fallback: {e2}")
-            # Última tentativa - criar um cliente Redis sem parametros
-            redis_client = Redis()
-    
-    cache_tool = CacheTool(
-        redis_client=redis_client,
-        prefix='chatwoot_ai:'
-    )
-    
-    # Inicializa o cache de agentes
-    agent_cache = RedisAgentCache(
-        redis_client=redis_client,
-        prefix='agent_cache:'
-    )
-    
-    # Inicializa o DataServiceHub para obter o data_proxy_agent
-    from src.core.data_service_hub import DataServiceHub
+    # DataServiceHub
     data_service_hub = DataServiceHub()
-    data_proxy_agent = data_service_hub.get_data_proxy_agent()
+    logger.info("✅ DataServiceHub inicializado")
     
-    # Inicializa a hub crew com os parâmetros corretos
+    # HubCrew (centro da arquitetura hub-and-spoke)
     hub_crew = HubCrew(
         memory_system=memory_system,
-        data_proxy_agent=data_proxy_agent,  # Adicionado data_proxy_agent
-        vector_tool=vector_tool,
-        db_tool=db_tool,
-        cache_tool=cache_tool,
-        agent_cache=agent_cache,
-        data_service_hub=data_service_hub  # Adicionado data_service_hub
+        data_service_hub=data_service_hub
     )
+    logger.info("✅ HubCrew inicializado")
     
-    # Registra as crews
-    crew_registry.register_crew("hub", hub_crew)
+    # SalesCrew
+    sales_crew = SalesCrew(
+        memory_system=memory_system,
+        domain_manager=domain_manager,
+        data_service_hub=data_service_hub,
+        plugin_manager=plugin_manager
+    )
+    logger.info("✅ SalesCrew inicializada")
     
-    # Inicializa o handler de webhook com acesso ao registro de crews
-    webhook_handler = ChatwootWebhookHandler(hub_crew, crew_registry)
+    # Registra a SalesCrew no HubCrew (como no test_message_manually.py)
+    functional_crews = {
+        "sales": sales_crew
+    }
     
-    logger.info("Crews e handler de webhook inicializados com sucesso")
+    # Adiciona as crews funcionais ao HubCrew
+    setattr(hub_crew, "_functional_crews", functional_crews)
+    logger.info("✅ Crews funcionais registradas no HubCrew")
+    
+    # Configuração do webhook handler
+    webhook_config = {
+        "chatwoot_base_url": os.getenv('CHATWOOT_BASE_URL'),
+        "chatwoot_api_key": os.getenv('CHATWOOT_API_KEY'),
+        "channel_mapping": {"1": "whatsapp"}
+    }
+    
+    # Inicializa o webhook handler
+    webhook_handler = ChatwootWebhookHandler(
+        hub_crew=hub_crew,
+        config=webhook_config
+    )
+    logger.info("✅ ChatwootWebhookHandler inicializado")
+    
+    logger.info("🎉 Sistema inicializado com sucesso para receber webhooks!")
+    return webhook_handler
 
 @app.on_event("startup")
 async def startup_event():
-    """
-    Evento executado na inicialização do servidor.
-    """
-    logger.info("Iniciando servidor webhook...")
-    initialize_crews()
-    
-    # Obtém informações do ambiente para exibir a URL do webhook
-    webhook_domain = os.getenv('WEBHOOK_DOMAIN', 'localhost')
-    webhook_port = int(os.getenv('WEBHOOK_PORT', '8001'))
-    use_https = os.getenv('WEBHOOK_USE_HTTPS', 'false').lower() == 'true'
-    
-    protocol = "https" if use_https else "http"
-    port_str = f":{webhook_port}" if (not use_https and webhook_port != 80) or (use_https and webhook_port != 443) else ""
-    
-    webhook_url = f"{protocol}://{webhook_domain}{port_str}/webhook"
-    
-    logger.info("Servidor webhook iniciado com sucesso")
-    logger.info(f"URL do webhook: {webhook_url}")
-    logger.info("Configure esta URL no painel de administração do Chatwoot")
+    """Evento executado na inicialização do servidor."""
+    logger.info("🚀 Iniciando servidor webhook...")
+    try:
+        # Inicializa o handler de webhook
+        get_webhook_handler()
+        logger.info("✅ Servidor webhook iniciado com sucesso")
+    except Exception as e:
+        logger.error(f"❌ Erro na inicialização do servidor webhook: {str(e)}")
+        logger.error(traceback.format_exc())
 
 @app.get("/")
 async def root():
-    """
-    Rota raiz para verificar se o servidor está funcionando.
-    """
-    # Obtém informações do ambiente para exibir a URL do webhook
-    webhook_domain = os.getenv('WEBHOOK_DOMAIN', 'localhost')
-    webhook_port = int(os.getenv('WEBHOOK_PORT', '8001'))
-    use_https = os.getenv('WEBHOOK_USE_HTTPS', 'false').lower() == 'true'
-    
-    protocol = "https" if use_https else "http"
-    port_str = f":{webhook_port}" if (not use_https and webhook_port != 80) or (use_https and webhook_port != 443) else ""
-    
-    webhook_url = f"{protocol}://{webhook_domain}{port_str}/webhook"
-    
+    """Endpoint raiz para verificar se o servidor está funcionando"""
     return {
-        "status": "online", 
-        "message": "Chatwoot Webhook Server está funcionando",
-        "webhook_url": webhook_url
+        "status": "online",
+        "message": "Servidor webhook do Chatwoot está funcionando!",
+        "timestamp": str(datetime.now())
     }
-    
+
 @app.get("/health")
 async def health_check():
-    """
-    Endpoint de verificação de saúde (health check) para monitoramento.
-    
-    Este endpoint é usado para verificar se o servidor webhook está funcionando
-    corretamente. É útil para monitoramento e verificações automáticas de status.
-    
-    Returns:
-        Dict: Status do servidor e timestamp atual
-    """
+    """Endpoint de verificação de saúde (health check)"""
     return {
         "status": "healthy",
-        "timestamp": datetime.now().isoformat(),
-        "service": "webhook_server",
-        "version": "1.0.0",
-        "instances": len(instance_manager.instances) if hasattr(instance_manager, 'instances') else 1
+        "timestamp": str(datetime.now())
     }
 
 @app.post("/webhook")
-@log_function_call(level=TRACE)
 async def webhook(request: Request, handler: ChatwootWebhookHandler = Depends(get_webhook_handler)):
-    """
-    Endpoint para receber webhooks do Chatwoot.
-    
-    Este endpoint é o ponto de entrada para todos os eventos enviados pelo Chatwoot.
-    Quando o Chatwoot detecta uma nova mensagem ou mudança de status em uma conversa,
-    ele envia uma notificação para este endpoint.
-    
-    O fluxo de processamento é:
-    1. Verificar o token de autenticação
-    2. Receber os dados JSON do webhook
-    3. Identificar o tipo de evento (message_created, conversation_created, etc.)
-    4. Encaminhar para o handler apropriado
-    5. Processar o evento e retornar uma resposta
-    
-    Args:
-        request: Requisição HTTP contendo os dados do webhook
-        handler: Handler de webhook que processa os diferentes tipos de eventos
-        
-    Returns:
-        Resposta do processamento do webhook
-        
-    Raises:
-        HTTPException: Se ocorrer um erro durante o processamento ou autenticação falhar
-    """
+    """Endpoint para receber webhooks do Chatwoot"""
     try:
-        # Verificar o token de autenticação
-        auth_header = request.headers.get('Authorization')
-        expected_token = os.getenv('WEBHOOK_AUTH_TOKEN')
+        # Registra chegada do webhook com timestamp
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")
+        logger.info(f"📩 [{timestamp}] Webhook recebido do Chatwoot")
         
-        # Registrar informações detalhadas da requisição para debug
-        logger.info(f"Requisição recebida de {request.client.host}")
-        logger.debug(f"Headers recebidos: {dict(request.headers)}")
+        # Registra headers da requisição para debug
+        headers = dict(request.headers)
+        logger.debug(f"Headers da requisição: {json.dumps(headers, indent=2)}")
         
-        # Verificar se estamos em modo de desenvolvimento
-        dev_mode = os.getenv('ENVIRONMENT', 'development').lower() == 'development'
-        
-        # Se o token estiver configurado, verificar a autenticação
-        if expected_token and not dev_mode:
-            is_authenticated = False
-            
-            # Verificar se o token está no cabeçalho de autorização
-            if auth_header:
-                # Caso 1: Formato "Bearer token"
-                if auth_header.startswith("Bearer "):
-                    token = auth_header.split(" ", 1)[1]
-                    if token == expected_token:
-                        is_authenticated = True
-                # Caso 2: Apenas o token sem o prefixo "Bearer"
-                elif auth_header == expected_token:
-                    is_authenticated = True
-            
-            # Caso 3: Verificar se o token está nos parâmetros da consulta
-            if not is_authenticated:
-                query_token = request.query_params.get('token')
-                if query_token and query_token == expected_token:
-                    is_authenticated = True
-            
-            # Se nenhuma forma de autenticação for bem-sucedida, rejeitar a requisição
-            if not is_authenticated:
-                logger.warning(f"Tentativa de acesso não autorizado ao webhook. IP: {request.client.host}")
-                logger.debug(f"Cabeçalho de autorização recebido: {auth_header}")
-                raise HTTPException(
-                    status_code=401, 
-                    detail="Não autorizado. Token de autenticação inválido ou ausente."
-                )
-            
-            logger.debug("Autenticação do webhook bem-sucedida")
-        else:
-            if dev_mode:
-                logger.info("Modo de desenvolvimento: Autenticação desativada")
-            else:
-                logger.warning("Webhook está sendo executado sem autenticação. Recomenda-se configurar WEBHOOK_AUTH_TOKEN.")
-        
-        # Obtém os dados do webhook (formato JSON)
+        # Obtém dados do webhook
         data = await request.json()
         
-        # Registra o recebimento do webhook no log com detalhes
-        event_type = data.get('event')
-        timestamp_received = datetime.now().isoformat()
-        logger.info(f"Webhook recebido: {event_type} de {request.client.host} em {timestamp_received}")
+        # Log completo dos dados para arquivo
+        with open('logs/last_webhook_payload.json', 'w') as f:
+            json.dump(data, f, indent=2)
         
-        # Log detalhado do payload para depuração
-        try:
-            # Usa a função log_dict do DebugLogger para formatar o JSON
-            logger.log_dict(logging.DEBUG, "Payload do webhook", data)
-        except Exception as log_err:
-            logger.warning(f"Erro ao logar payload completo: {log_err}")
+        # Log resumido para console
+        logger.debug(f"Dados do webhook: {json.dumps(data, indent=2)[:1000]}...")
         
-        # Exemplo de estrutura de dados para evento 'message_created':
-        # {
-        #   "event": "message_created",
-        #   "account": { "id": 1, "name": "Conta de Exemplo" },
-        #   "conversation": { "id": 123, ... },
-        #   "message": { 
-        #     "id": 456, 
-        #     "content": "Olá, preciso de ajuda",
-        #     "message_type": 0,  # 0 = mensagem recebida
-        #     ... 
-        #   }
-        # }
+        # Verifica o tipo de evento
+        event_type = data.get("event")
+        if not event_type:
+            logger.warning("⚠️ Webhook sem tipo de evento")
+            raise HTTPException(status_code=400, detail="Tipo de evento não especificado")
         
-        # Marca o início do processamento para medir performance
-        start_time = datetime.now()
+        # Extrai informações importantes para log
+        message_info = ""
+        if event_type == "message_created":
+            message = data.get("message", {})
+            conversation = data.get("conversation", {})
+            contact = data.get("contact", {})
+            message_info = f"ID: {message.get('id')}, Conversa: {conversation.get('id')}, Contato: {contact.get('name')}"
+            logger.info(f"📨 Mensagem: '{message.get('content', '')[:100]}...'")
         
-        # Processa o webhook usando o handler apropriado
-        # O handler.handle_webhook irá direcionar para o método específico
-        # com base no tipo de evento (ex: _handle_message_created)
-        response = handler.handle_webhook(data)
+        # Processa o webhook
+        logger.info(f"⚙️ Processando evento: {event_type} | {message_info}")
+        response = await handler.process_webhook(data)
         
-        # Calcula e registra o tempo de processamento
-        processing_time = (datetime.now() - start_time).total_seconds()
-        logger.info(f"Tempo de processamento do webhook {event_type}: {processing_time:.3f}s")
-        
-        # Adiciona o tempo de processamento à resposta
-        if isinstance(response, dict):
-            response["processing_time"] = f"{processing_time:.3f}s"
-        
+        # Retorna a resposta do processamento com detalhes
+        logger.info(f"✅ Webhook processado com sucesso: {json.dumps(response)}")
         return response
-    
-    except HTTPException:
-        # Re-lança exceções HTTP para manter o código de status correto
-        raise
-    
-    except json.JSONDecodeError as e:
-        # Log detalhado para erro de JSON inválido
-        logger.error(f"Erro de JSON inválido no webhook: {e}")
-        body = await request.body()
-        logger.error(f"Corpo da requisição: {body.decode('utf-8', errors='replace')}")
-        raise HTTPException(status_code=400, detail=f"JSON inválido: {str(e)}")
-    
+        
     except Exception as e:
-        # Registra o erro de forma detalhada usando o logger avançado
-        logger.error(f"Erro ao processar webhook: {type(e).__name__}: {str(e)}")
-        logger.log_exception(e, context="processamento do webhook")
-        # Retorna um erro HTTP 500 com a mensagem de erro
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"❌ Erro ao processar webhook: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Erro ao processar webhook: {str(e)}")
 
 def main():
-    """
-    Função principal para iniciar o servidor.
-    """
-    # Obtém a porta do ambiente ou usa 8001 como padrão
-    port = int(os.getenv('WEBHOOK_PORT', '8001'))
+    """Função principal para iniciar o servidor"""
+    # Usa valores de .env ou padrões
+    port = int(os.getenv("WEBHOOK_PORT", "8000"))
+    host = os.getenv("WEBHOOK_HOST", "0.0.0.0")  # Importante usar 0.0.0.0 para funcionar com ngrok
     
-    logger.info(f"Iniciando servidor webhook na porta {port}")
+    print("\n" + "="*70)
+    print("🚀 INICIANDO SERVIDOR WEBHOOK PARA CHATWOOT")
+    print("="*70)
+    print(f"📡 Servidor rodando em: http://{host}:{port}")
+    print(f"🔗 Use ngrok para expor este servidor para a internet:")
+    print(f"   ngrok http {port}")
+    print("="*70 + "\n")
     
     # Inicia o servidor
-    uvicorn.run(app, host="0.0.0.0", port=port, log_level="info")
+    uvicorn.run(app, host=host, port=port)
 
 if __name__ == "__main__":
     main()

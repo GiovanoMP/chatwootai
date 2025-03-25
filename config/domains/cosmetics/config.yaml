@@ -49,26 +49,42 @@ agents:
           diagnosis_depth: "detailed"
           include_ingredients: true
 
-# Configuração da crew para este domínio
+# Configuração das crews para este domínio
 crew:
-  name: CosmeticsSalesCrew
-  description: "Equipe especializada em vendas de produtos cosméticos"
-  agents:
-    - sales_expert
-    - skincare_specialist
-  workflow:
-    - step: initial_contact
-      agent: sales_expert
-      tools: [product_catalog]
-    - step: skin_analysis
-      agent: skincare_specialist
-      tools: [skin_analyzer]
-    - step: recommend_products
-      agent: sales_expert
-      tools: [beauty_recommender, product_catalog]
-    - step: create_routine
-      agent: skincare_specialist
-      tools: [routine_builder]
+  # Crew de vendas para cosméticos
+  sales_crew:
+    name: CosmeticsSalesCrew
+    description: "Equipe especializada em vendas de produtos cosméticos"
+    agents: [sales_expert, skincare_specialist]
+    tasks:
+      - description: "Analisar a consulta do cliente e identificar necessidades de beleza"
+        agent: sales_expert
+        expected_output: "Análise das necessidades do cliente"
+      - description: "Avaliar o tipo de pele e condições específicas"
+        agent: skincare_specialist
+        expected_output: "Diagnóstico do tipo de pele e recomendações"
+      - description: "Formular recomendações de produtos personalizadas"
+        agent: sales_expert
+        expected_output: "Lista de produtos recomendados com justificativas"
+      - description: "Criar uma rotina de cuidados personalizada"
+        agent: skincare_specialist
+        expected_output: "Rotina de cuidados com a pele passo a passo"
+  
+  # Crew de suporte para cosméticos
+  support_crew:
+    name: CosmeticsSupportCrew
+    description: "Equipe especializada em suporte técnico para produtos cosméticos"
+    agents: [skincare_specialist, sales_expert]
+    tasks:
+      - description: "Analisar problemas reportados com produtos cosméticos"
+        agent: skincare_specialist
+        expected_output: "Diagnóstico do problema reportado"
+      - description: "Fornecer orientações de uso correto dos produtos"
+        agent: sales_expert
+        expected_output: "Instruções detalhadas de uso"
+      - description: "Recomendar alternativas para casos de reações adversas"
+        agent: skincare_specialist
+        expected_output: "Recomendações de produtos alternativos"
 
 # Configurações de integração com serviços externos específicos para este domínio
 integrations:

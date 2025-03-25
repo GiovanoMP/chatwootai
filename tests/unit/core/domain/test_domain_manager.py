@@ -10,7 +10,7 @@ from unittest.mock import Mock, patch
 from pathlib import Path
 
 from src.core.domain.domain_manager import DomainManager
-from src.core.exceptions import ConfigurationError
+from src.core.domain.domain_loader import ConfigurationError
 
 
 class TestDomainManager:
@@ -80,8 +80,11 @@ class TestDomainManager:
         mock_domain_loader.load_domain.return_value = None
         
         # Tenta definir um domínio inválido
-        with pytest.raises(ConfigurationError, match="Domínio 'nonexistent' não encontrado"):
+        try:
             domain_manager.set_active_domain("nonexistent")
+            pytest.fail("Deveria ter lançado ConfigurationError")
+        except ConfigurationError as e:
+            assert str(e) == "Domínio 'nonexistent' não encontrado"
         
         # Verifica se o domínio ativo permanece inalterado
         assert domain_manager.active_domain == "default"
@@ -150,8 +153,11 @@ class TestDomainManager:
         mock_domain_loader.load_domain.return_value = None
         
         # Tenta obter a configuração de um domínio inválido
-        with pytest.raises(ConfigurationError, match="Domínio 'nonexistent' não encontrado"):
+        try:
             domain_manager.get_domain_config("nonexistent")
+            pytest.fail("Deveria ter lançado ConfigurationError")
+        except ConfigurationError as e:
+            assert str(e) == "Domínio 'nonexistent' não encontrado"
 
     def test_get_active_domain_config(self, domain_manager):
         """Testa a obtenção da configuração do domínio ativo."""

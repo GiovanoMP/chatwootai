@@ -49,26 +49,42 @@ agents:
           room_types: ["sala", "cozinha", "quarto", "banheiro"]
           style_options: ["moderno", "clássico", "minimalista", "rústico"]
 
-# Configuração da crew para este domínio
+# Configuração das crews para este domínio
 crew:
-  name: RetailSalesCrew
-  description: "Equipe especializada em vendas de produtos de varejo"
-  agents:
-    - retail_expert
-    - home_specialist
-  workflow:
-    - step: initial_contact
-      agent: retail_expert
-      tools: [product_catalog]
-    - step: customer_profiling
-      agent: retail_expert
-      tools: [customer_profiler]
-    - step: recommend_products
-      agent: retail_expert
-      tools: [retail_recommender, product_catalog]
-    - step: home_solutions
-      agent: home_specialist
-      tools: [home_planner]
+  # Crew de vendas para produtos de varejo
+  sales_crew:
+    name: RetailSalesCrew
+    description: "Equipe especializada em vendas de produtos de varejo"
+    agents: [retail_expert, home_specialist]
+    tasks:
+      - description: "Analisar a consulta do cliente e identificar necessidades de consumo"
+        agent: retail_expert
+        expected_output: "Análise das necessidades do cliente"
+      - description: "Criar um perfil de consumidor baseado nas preferências"
+        agent: retail_expert
+        expected_output: "Perfil detalhado do consumidor"
+      - description: "Formular recomendações de produtos personalizadas"
+        agent: retail_expert
+        expected_output: "Lista de produtos recomendados com justificativas"
+      - description: "Sugerir soluções para ambientes domésticos"
+        agent: home_specialist
+        expected_output: "Soluções personalizadas para casa"
+  
+  # Crew de suporte para produtos de varejo
+  support_crew:
+    name: RetailSupportCrew
+    description: "Equipe especializada em suporte técnico para produtos de varejo"
+    agents: [home_specialist, retail_expert]
+    tasks:
+      - description: "Analisar problemas reportados com produtos"
+        agent: retail_expert
+        expected_output: "Diagnóstico do problema reportado"
+      - description: "Fornecer orientações de uso e instalação"
+        agent: home_specialist
+        expected_output: "Instruções detalhadas de uso e instalação"
+      - description: "Recomendar soluções para problemas comuns"
+        agent: retail_expert
+        expected_output: "Soluções para problemas frequentes"
 
 # Configurações de integração com serviços externos específicos para este domínio
 integrations:

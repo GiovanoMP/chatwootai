@@ -5,11 +5,13 @@ Este documento explica como configurar, iniciar e testar o servidor webhook que 
 ## 📋 Índice
 
 1. [Visão Geral](#visão-geral)
-2. [Configuração Inicial](#configuração-inicial)
-3. [Iniciando o Sistema](#iniciando-o-sistema)
-4. [Testando a Conexão](#testando-a-conexão)
-5. [Monitoramento e Logs](#monitoramento-e-logs)
-6. [Troubleshooting](#troubleshooting)
+2. [Fluxo de Determinação de Domínio](#fluxo-de-determinação-de-domínio)
+3. [Configuração Inicial](#configuração-inicial)
+4. [Configuração da VPS](#configuração-da-vps)
+5. [Iniciando o Sistema](#iniciando-o-sistema)
+6. [Testando a Conexão](#testando-a-conexão)
+7. [Monitoramento e Logs](#monitoramento-e-logs)
+8. [Troubleshooting](#troubleshooting)
 
 ## 🔍 Visão Geral
 
@@ -17,12 +19,52 @@ O servidor webhook é o ponto de entrada para mensagens do Chatwoot. Ele:
 
 1. Recebe mensagens do Chatwoot via webhook
 2. Processa e valida as mensagens
-3. Encaminha as mensagens para o `HubCrew` no módulo `hub.py`
-4. Retorna respostas apropriadas ao Chatwoot
+3. Determina o domínio de negócio apropriado para a conversa
+4. Encaminha as mensagens para o `HubCrew` no módulo `hub.py`
+5. Retorna respostas apropriadas ao Chatwoot
 
-Para que o Chatwoot possa enviar mensagens ao nosso servidor local, utilizamos o Ngrok para criar um túnel seguro, expondo nosso servidor local à internet.
+Para que o Chatwoot possa enviar mensagens ao nosso servidor local, utilizamos o Ngrok para criar um túnel seguro, expondo nosso servidor local à internet. Além disso, utilizamos um servidor proxy na VPS que recebe as mensagens do Chatwoot e as encaminha para o nosso ambiente local via Ngrok.
 
-## ⚙️ Configuração Inicial
+## 🔎 Fluxo de Determinação de Domínio
+
+Uma das principais responsabilidades do webhook handler é determinar o domínio de negócio apropriado para cada conversa. Isso é feito seguindo uma hierarquia de fontes:
+
+### Hierarquia de Determinação
+
+1. **Mapeamento via account_id**:
+   - Primeiro, o handler verifica se o `account_id` do webhook está mapeado para um domínio no arquivo `chatwoot_mapping.yaml`
+   - Exemplo: `account_id: 1` → domínio: `cosmetics`
+
+2. **Mapeamento via inbox_id**:
+   - Se não encontrar pelo account_id, verifica se o `inbox_id` está mapeado
+   - Exemplo: `inbox_id: 3` → domínio: `retail`
+
+3. **Consulta à API do Chatwoot**:
+   - Se ainda não encontrou, consulta metadados adicionais via API do Chatwoot
+   - Utiliza o método `get_inbox()` do `ChatwootClient`
+
+4. **Domínio Fallback**:
+   - Como último recurso, utiliza o domínio fallback configurado via variável de ambiente `DEFAULT_DOMAIN`
+   - O fallback padrão é "cosmetics", mas é apenas uma rede de segurança
+
+### Arquivo de Mapeamento
+
+O arquivo `config/chatwoot_mapping.yaml` contém o mapeamento de accounts e inboxes para domínios:
+
+```yaml
+accounts:
+  "1": "cosmetics"  # Account ID 1 usa o domínio de cosméticos
+  "2": "health"     # Account ID 2 usa o domínio de saúde
+  "3": "retail"     # Account ID 3 usa o domínio de varejo
+
+inboxes:
+  "1": "cosmetics"  # Inbox ID 1 usa o domínio de cosméticos
+  "2": "health"     # Inbox ID 2 usa o domínio de saúde
+  "3": "retail"     # Inbox ID 3 usa o domínio de varejo
+  "4": "cosmetics"  # Inbox ID 4 usa o domínio de cosméticos
+```
+
+## ⚙️ Configuração Inicial (Ambiente Local)
 
 ### Pré-requisitos
 
@@ -47,13 +89,50 @@ NGROK_AUTH_TOKEN=seu_token_ngrok
 CHATWOOT_API_KEY=sua_chave_api
 CHATWOOT_BASE_URL=https://seu.chatwoot.url/api/v1
 CHATWOOT_ACCOUNT_ID=1
+```
 
-# Configurações da VPS para atualização automática do proxy
-VPS_HOST=seu.servidor.vps
-VPS_USER=usuario_vps
-VPS_PASSWORD=senha_vps
-PROXY_CONTAINER_NAME=id_do_container
-PROXY_FILE_PATH=/caminho/para/arquivo_proxy.py
+## 🖥️ Configuração da VPS
+
+O sistema utiliza uma VPS (Virtual Private Server) para hospedar um servidor proxy que recebe as mensagens do Chatwoot e as encaminha para o ambiente local via Ngrok.
+
+### Detalhes da Configuração Atual
+
+- **Servidor VPS**: srv692745.hstgr.cloud
+- **Usuário SSH**: root
+- **Container Docker**: webhook-proxy
+- **Portas**: 8802:8002 (porta externa 8802 mapeada para porta interna 8002)
+- **URL do Webhook no Chatwoot**: http://147.93.9.211:8802/webhook
+
+### Arquivo de Configuração do Proxy
+
+O arquivo de configuração do proxy está localizado em `/app/simple_webhook.py` dentro do container. Ele contém a URL para a qual as mensagens serão encaminhadas:
+
+```python
+FORWARD_URL = 'https://be7a-2804-2610-6721-6300-25eb-907f-416b-7703.ngrok-free.app/webhook'
+```
+
+### Comandos Úteis para Gerenciar o Proxy na VPS
+
+```bash
+# Verificar o status do container
+docker ps | grep webhook
+
+# Visualizar o arquivo de configuração
+docker exec webhook-proxy cat /app/simple_webhook.py
+
+# Editar o arquivo de configuração (usando sed)
+docker exec webhook-proxy sed -i "s|FORWARD_URL *= *[\"'][^\"']*[\"']|FORWARD_URL = 'https://nova-url-do-ngrok.ngrok-free.app/webhook'|g" /app/simple_webhook.py
+
+# Editar o arquivo de configuração (usando nano)
+docker exec -it webhook-proxy bash
+apt-get update && apt-get install -y nano
+nano /app/simple_webhook.py
+
+# Reiniciar o container
+docker restart webhook-proxy
+
+# Verificar logs do container
+docker logs webhook-proxy
 ```
 
 ## 🚀 Iniciando o Sistema
@@ -65,7 +144,7 @@ PROXY_FILE_PATH=/caminho/para/arquivo_proxy.py
 python scripts/webhook/setup_logging.py
 ```
 
-Este passo é essencial para criar os arquivos de log necessários antes de iniciar o servidor.
+Este passo é essencial para criar os arquivos de log necessários antes de iniciar o servidor. O script configura os loggers para o webhook e para o hub, e cria os arquivos de log necessários.
 
 ### Passo 1: Iniciar o Servidor Webhook
 
@@ -74,7 +153,7 @@ Este passo é essencial para criar os arquivos de log necessários antes de inic
 python src/webhook/server.py
 ```
 
-Isso iniciará o servidor webhook na porta especificada no arquivo `.env` (padrão: 8001). Você verá uma mensagem confirmando que o servidor está rodando.
+Isso iniciará o servidor webhook na porta especificada no arquivo `.env` (padrão: 8001). Você verá uma mensagem confirmando que o servidor está rodando. O servidor carrega automaticamente o arquivo `chatwoot_mapping.yaml` para determinar os domínios de negócio.
 
 ### Passo 2: Iniciar o Ngrok e Configurar o Webhook
 
@@ -96,16 +175,25 @@ Este script:
 python scripts/webhook/test_webhook_connection.py
 ```
 
-Este script verificará se o Ngrok, o servidor webhook e a conexão com a VPS estão funcionando corretamente.
+Este script verificará se o Ngrok, o servidor webhook e a conexão com a VPS estão funcionando corretamente. Ele também simula o recebimento de uma mensagem do Chatwoot para garantir que o fluxo completo está funcionando.
 
-### Passo 3: Atualizar o Proxy na VPS (Manual)
+### Passo 4: Testar a Conexão com a VPS (Opcional)
 
-Siga as instruções fornecidas pelo script `simple_ngrok_starter.py` para atualizar o proxy na VPS. Geralmente, isso envolve:
+```bash
+# A partir da raiz do projeto
+python scripts/webhook/test_vps_connection.py
+```
 
-1. Conectar-se à VPS via SSH
-2. Verificar o status do container Docker
-3. Atualizar a URL no arquivo de configuração do proxy
-4. Reiniciar o container
+Este script testa especificamente a conexão com a VPS e a capacidade de atualizar o proxy remotamente.
+
+### Passo 5: Monitorar os Logs em Tempo Real
+
+```bash
+# A partir da raiz do projeto
+python scripts/webhook/monitor_webhook_logs.py
+```
+
+Este script monitora os logs do webhook e do hub em tempo real, com destaque colorido para facilitar a identificação de eventos importantes.
 
 ## 🧪 Testando a Conexão
 
@@ -155,7 +243,7 @@ Para confirmar que uma mensagem percorreu todo o fluxo:
 
 ### Arquivos de Log Importantes
 
-- `logs/webhook.log`: Logs do servidor webhook (mensagens recebidas, processamento)
+- `logs/webhook.log`: Logs do servidor webhook (mensagens recebidas, processamento, determinação de domínio)
 - `logs/hub.log`: Logs do hub central (processamento de mensagens, roteamento)
 - `logs/webhook_test.log`: Logs dos testes de conexão
 
@@ -168,7 +256,7 @@ Antes de iniciar o servidor, configure o sistema de logs executando:
 python scripts/webhook/setup_logging.py
 ```
 
-Este script criará os arquivos de log necessários e testará os loggers.
+Este script criará os arquivos de log necessários e testará os loggers. Ele também gera instruções para implementação de logs em novos arquivos do projeto.
 
 ### Monitoramento em Tempo Real
 
@@ -181,8 +269,8 @@ tail -f logs/webhook.log
 # Monitorar logs do hub
 tail -f logs/hub.log
 
-# Monitorar ambos os logs com destaque colorido
-python scripts/webhook/monitor_webhook_logs.py --webhook-log logs/webhook.log --hub-log logs/hub.log
+# Monitorar ambos os logs com destaque colorido (recomendado)
+python scripts/webhook/monitor_webhook_logs.py
 
 # Monitorar logs do Ngrok
 tail -f ngrok.log
@@ -190,6 +278,8 @@ tail -f ngrok.log
 # Ver todas as conexões Ngrok no navegador
 # Acesse http://localhost:4040
 ```
+
+O script `monitor_webhook_logs.py` oferece opções avançadas para filtrar e destacar mensagens importantes. Execute com `--help` para ver todas as opções disponíveis.
 
 ## 🔧 Troubleshooting
 
@@ -199,6 +289,21 @@ tail -f ngrok.log
    - Verifique se o Ngrok está rodando: `curl http://localhost:4040/api/tunnels`
    - Confirme se a URL do webhook foi atualizada no Chatwoot
    - Verifique se o proxy na VPS está configurado corretamente
+
+2. **Erro na determinação de domínio**
+   - Verifique se o arquivo `chatwoot_mapping.yaml` está corretamente configurado
+   - Confirme se os IDs de account e inbox estão corretos
+   - Verifique se a conexão com a API do Chatwoot está funcionando
+
+3. **Servidor webhook não inicia**
+   - Verifique se todas as dependências estão instaladas
+   - Confirme se as variáveis de ambiente estão configuradas corretamente
+   - Verifique se a porta 8001 não está sendo usada por outro processo
+
+4. **Mensagens não chegam ao HubCrew**
+   - Verifique os logs para identificar onde o processamento está parando
+   - Confirme se o domínio está sendo determinado corretamente
+   - Verifique se o HubCrew está inicializado corretamente
 
 2. **Erro de autenticação**
    - Confirme se o token de autenticação no cabeçalho da requisição corresponde ao `WEBHOOK_AUTH_TOKEN` no arquivo `.env`

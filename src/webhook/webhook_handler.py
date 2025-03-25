@@ -279,34 +279,96 @@ class ChatwootWebhookHandler:
         """
         Processa um evento de conversa criada.
         
+        Na arquitetura otimizada, extraímos informações da empresa/account do webhook
+        e as usamos para determinar o domínio antes de chamar o HubCrew, seguindo o
+        princípio de "Responsabilidade Única" e evitando consultas desnecessárias.
+        
         Args:
             webhook_data: Dados do webhook
             
         Returns:
             Dict[str, Any]: Resultado do processamento
         """
+        # Extrair informações básicas da conversa e contato
         conversation_data = webhook_data.get("conversation", {})
         conversation_id = str(conversation_data.get("id", ""))
         contact_data = webhook_data.get("contact", {})
         contact_id = str(contact_data.get("id", ""))
         
-        logger.info(f"Nova conversa criada: {conversation_id}, Contato: {contact_id}")
+        # Extrair informações da empresa/account
+        account_id = str(webhook_data.get("account", {}).get("id", ""))
+        inbox_id = str(conversation_data.get("inbox_id", ""))
         
-        # Registra a nova conversa no sistema de memória através do HubCrew
-        # seguindo a arquitetura hub-and-spoke
+        logger.info(f"Nova conversa criada: {conversation_id}, Contato: {contact_id}, Account: {account_id}, Inbox: {inbox_id}")
+        
+        # Determinar o domínio com base nas informações da empresa/account
+        domain_name = None
+        
+        # 1. Primeiro, tentar determinar o domínio a partir do account_id
+        if account_id:
+            try:
+                # Consultar o mapeamento de accounts para domínios
+                # Este mapeamento pode ser armazenado na configuração ou em um serviço externo
+                account_domain_mapping = self.config.get("account_domain_mapping", {})
+                domain_name = account_domain_mapping.get(account_id)
+                
+                if domain_name:
+                    logger.info(f"Domínio determinado a partir do account_id: {domain_name}")
+            except Exception as e:
+                logger.warning(f"Erro ao determinar domínio a partir do account_id: {str(e)}")
+        
+        # 2. Se não encontrou pelo account_id, tentar pelo inbox_id
+        if not domain_name and inbox_id:
+            try:
+                # Consultar o mapeamento de inboxes para domínios
+                inbox_domain_mapping = self.config.get("inbox_domain_mapping", {})
+                domain_name = inbox_domain_mapping.get(inbox_id)
+                
+                if domain_name:
+                    logger.info(f"Domínio determinado a partir do inbox_id: {domain_name}")
+            except Exception as e:
+                logger.warning(f"Erro ao determinar domínio a partir do inbox_id: {str(e)}")
+        
+        # 3. Se ainda não encontrou, tentar obter informações adicionais da API do Chatwoot
+        if not domain_name and self.chatwoot_client:
+            try:
+                # Obter detalhes da account/inbox via API do Chatwoot
+                if account_id and inbox_id:
+                    try:
+                        # Converter para inteiros conforme esperado pelo método get_inbox
+                        account_id_int = int(account_id)
+                        inbox_id_int = int(inbox_id)
+                        
+                        # Obter detalhes do inbox
+                        inbox_details = self.chatwoot_client.get_inbox(account_id_int, inbox_id_int)
+                        
+                        # Extrair o domínio de metadados personalizados do inbox
+                        if inbox_details and "meta" in inbox_details:
+                            domain_name = inbox_details["meta"].get("domain")
+                            if domain_name:
+                                logger.info(f"Domínio determinado a partir dos metadados do inbox: {domain_name}")
+                    except ValueError:
+                        logger.warning(f"Erro ao converter account_id ou inbox_id para inteiro: {account_id}, {inbox_id}")
+            except Exception as e:
+                logger.warning(f"Erro ao consultar API do Chatwoot: {str(e)}")
+        
+        # Registrar a nova conversa no sistema de memória através do HubCrew
+        # Agora passando o domínio já determinado
         try:
             # O HubCrew é o ponto central e tem acesso ao sistema de memória
             self.hub_crew.register_conversation(
                 conversation_id=conversation_id,
-                customer_id=contact_id
+                customer_id=contact_id,
+                domain_name=domain_name  # Passamos o domínio já determinado
             )
-            logger.info(f"Conversa {conversation_id} inicializada via HubCrew")
+            logger.info(f"Conversa {conversation_id} inicializada via HubCrew com domínio: {domain_name or 'padrão'}")
         except Exception as e:
             logger.error(f"Erro ao inicializar conversa: {str(e)}")
         
         return {
             "status": "processed",
             "conversation_id": conversation_id,
+            "domain_name": domain_name,
             "has_response": False
         }
     

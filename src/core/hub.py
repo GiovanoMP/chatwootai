@@ -15,6 +15,7 @@ The hub-and-spoke architecture follows these principles:
 import logging
 from typing import Dict, List, Any, Optional, Union
 import json
+import datetime
 
 from crewai import Agent, Task, Crew
 # Importamos nossa própria implementação de RedisAgentCache
@@ -26,6 +27,9 @@ from src.core.memory import MemorySystem
 # Nova estrutura com componentes centralizados em src/core
 from src.core.data_proxy_agent import DataProxyAgent
 from src.core.data_service_hub import DataServiceHub
+from src.core.domain.domain_manager import DomainManager
+from src.core.crews.crew_factory import CrewFactory, get_crew_factory
+from src.plugins.core.plugin_manager import PluginManager
 
 logger = logging.getLogger(__name__)
 
@@ -237,9 +241,9 @@ class OrchestratorAgent(Agent):
         # This is a simplified routing logic - in a real system, this would be more complex
         
         # Default values
-        selected_crew = "SalesCrew"
+        selected_crew = "sales"
         confidence = 0.5
-        reasoning = "Default routing to SalesCrew"
+        reasoning = "Default routing to sales crew"
         
         # Check for sales-related keywords
         sales_keywords = ["buy", "price", "cost", "purchase", "order", "discount"]
@@ -670,6 +674,9 @@ class HubCrew(Crew):
     def __init__(self, 
                  memory_system: MemorySystem,
                  data_service_hub: Optional['DataServiceHub'] = None,
+                 domain_manager: Optional[DomainManager] = None,
+                 crew_factory: Optional[CrewFactory] = None,
+                 plugin_manager: Optional[PluginManager] = None,
                  additional_tools: Optional[Dict[str, List[BaseTool]]] = None,
                  agent_cache: Optional[RedisAgentCache] = None,
                  **kwargs):
@@ -755,6 +762,26 @@ class HubCrew(Crew):
         self.__dict__["_context_manager"] = context_manager
         self.__dict__["_data_proxy"] = data_proxy
         self.__dict__["_data_service_hub"] = data_service_hub
+        
+        # Armazenar componentes de multi-tenancy
+        self.__dict__["_domain_manager"] = domain_manager
+        
+        # Inicializar ou armazenar o crew_factory
+        if crew_factory:
+            self.__dict__["_crew_factory"] = crew_factory
+        else:
+            # Criar uma nova instância do CrewFactory se não for fornecida
+            self.__dict__["_crew_factory"] = get_crew_factory(
+                data_proxy_agent=data_proxy,
+                memory_system=memory_system,
+                domain_manager=domain_manager
+            )
+            
+        # Armazenar o plugin_manager
+        self.__dict__["_plugin_manager"] = plugin_manager
+        
+        # Cache para crews funcionais por domínio
+        self.__dict__["_functional_crews_cache"] = {}
     
     @property
     def memory_system(self):
@@ -779,6 +806,18 @@ class HubCrew(Crew):
     @property
     def data_service_hub(self):
         return self.__dict__["_data_service_hub"]
+        
+    @property
+    def domain_manager(self):
+        return self.__dict__["_domain_manager"]
+        
+    @property
+    def crew_factory(self):
+        return self.__dict__["_crew_factory"]
+        
+    @property
+    def plugin_manager(self):
+        return self.__dict__["_plugin_manager"]
     
     def _route_message(self, message: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -874,9 +913,9 @@ class HubCrew(Crew):
         # This is a simplified routing logic - in a real system, this would be more complex
         
         # Default values
-        selected_crew = "SalesCrew"
+        selected_crew = "sales"
         confidence = 0.5
-        reasoning = "Default routing to SalesCrew"
+        reasoning = "Default routing to sales crew"
         
         # Check for sales-related keywords
         sales_keywords = ["buy", "price", "cost", "purchase", "order", "discount"]
@@ -925,7 +964,7 @@ class HubCrew(Crew):
         logger.info(f"Roteamento da mensagem {message.get('id', '')} para a crew funcional")
         return routing_result
     
-    def register_conversation(self, conversation_id: str, customer_id: str) -> None:
+    def register_conversation(self, conversation_id: str, customer_id: str, domain_name: str = None) -> Dict[str, Any]:
         """
         Registra uma nova conversa no sistema de memória.
         
@@ -936,20 +975,61 @@ class HubCrew(Crew):
         Args:
             conversation_id: ID único da conversa
             customer_id: ID do cliente/contato
+            domain_name: Nome do domínio para a conversa (opcional)
+            
+        Returns:
+            Dict[str, Any]: Informações sobre a conversa registrada, incluindo domínio
         """
+        domain_specific_plugins = None
+        domain_config = None
+        
         try:
+            # Determinar o domínio para a conversa
+            if domain_name is None and self.domain_manager:
+                # Tentar determinar o domínio com base no cliente
+                try:
+                    customer_data = self.get_customer_data(customer_id)
+                    domain_name = customer_data.get("domain") if customer_data else None
+                    logger.info(f"Domínio determinado a partir dos dados do cliente: {domain_name}")
+                except Exception as e:
+                    logger.warning(f"Erro ao obter dados do cliente para determinar domínio: {e}")
+                    
+                # Se ainda não tiver um domínio, usar o domínio ativo
+                if not domain_name and self.domain_manager:
+                    domain_name = self.domain_manager.get_active_domain()
+                    logger.info(f"Domínio padrão ativo utilizado: {domain_name}")
+            
+            # Obter configurações do domínio se disponível
+            if domain_name and self.domain_manager:
+                try:
+                    domain_config = self.domain_manager.get_domain_config(domain_name)
+                    logger.info(f"Configurações do domínio {domain_name} carregadas")
+                except Exception as e:
+                    logger.warning(f"Erro ao carregar configurações do domínio {domain_name}: {e}")
+            
             # Inicializa a conversa no sistema de memória
             self.memory_system.initialize_conversation(
                 conversation_id=conversation_id,
                 customer_id=customer_id
             )
             
-            # Prepara o contexto inicial da conversa
+            # Prepara o contexto inicial da conversa com informações de domínio
             initial_context = {
                 "customer_id": customer_id,
+                "domain_name": domain_name,
                 "start_time": self._get_current_timestamp(),
-                "interaction_count": 0
+                "interaction_count": 0,
+                "status": "active"
             }
+            
+            # Adicionar informações adicionais do domínio ao contexto
+            if domain_config:
+                initial_context["domain_config"] = {
+                    "name": domain_name,
+                    "display_name": domain_config.get("display_name", domain_name),
+                    "description": domain_config.get("description", ""),
+                    "version": domain_config.get("version", "1.0")
+                }
             
             # Armazena o contexto inicial
             self.memory_system.store_conversation_context(
@@ -957,12 +1037,47 @@ class HubCrew(Crew):
                 context=initial_context
             )
             
-            logger.info(f"Conversa {conversation_id} inicializada no HubCrew")
+            # Inicializar plugins para o domínio se necessário
+            if self.plugin_manager and domain_name:
+                try:
+                    domain_specific_plugins = self.plugin_manager.initialize_plugins_for_domain(domain_name)
+                    plugin_names = list(domain_specific_plugins.keys()) if domain_specific_plugins else []
+                    logger.info(f"Plugins inicializados para o domínio {domain_name}: {plugin_names}")
+                    
+                    # Adicionar informações de plugins ao contexto
+                    if plugin_names:
+                        updated_context = self.memory_system.retrieve_conversation_context(conversation_id) or {}
+                        updated_context["active_plugins"] = plugin_names
+                        self.memory_system.store_conversation_context(
+                            conversation_id=conversation_id,
+                            context=updated_context
+                        )
+                except Exception as plugin_error:
+                    logger.warning(f"Erro ao inicializar plugins para o domínio {domain_name}: {plugin_error}")
+                
+            logger.info(f"Conversa {conversation_id} inicializada no HubCrew para o domínio {domain_name}")
+            
+            # Retornar informações sobre a conversa registrada
+            return {
+                "conversation_id": conversation_id,
+                "customer_id": customer_id,
+                "domain_name": domain_name,
+                "plugins": list(domain_specific_plugins.keys()) if domain_specific_plugins else [],
+                "status": "active",
+                "start_time": initial_context["start_time"]
+            }
         except Exception as e:
             logger.error(f"Erro ao inicializar conversa no HubCrew: {str(e)}")
-            raise
+            # Retornar informações básicas mesmo em caso de erro
+            return {
+                "conversation_id": conversation_id,
+                "customer_id": customer_id,
+                "domain_name": domain_name,
+                "status": "error",
+                "error": str(e)
+            }
     
-    def finalize_conversation(self, conversation_id: str) -> None:
+    def finalize_conversation(self, conversation_id: str) -> Dict[str, Any]:
         """
         Finaliza uma conversa no sistema de memória.
         
@@ -971,13 +1086,19 @@ class HubCrew(Crew):
         
         Args:
             conversation_id: ID único da conversa
+            
+        Returns:
+            Contexto final da conversa com informações de domínio
         """
         try:
+            # Recupera o contexto atual para obter o domínio
+            context = self.memory_system.retrieve_conversation_context(conversation_id) or {}
+            domain_name = context.get("domain_name", "default")
+            
             # Finaliza a conversa no sistema de memória
             self.memory_system.finalize_conversation(conversation_id)
             
             # Atualiza o contexto com a finalização
-            context = self.memory_system.retrieve_conversation_context(conversation_id) or {}
             context["end_time"] = self._get_current_timestamp()
             context["status"] = "resolved"
             
@@ -987,10 +1108,31 @@ class HubCrew(Crew):
                 context=context
             )
             
-            logger.info(f"Conversa {conversation_id} finalizada no HubCrew")
+            # Desativar plugins específicos do domínio se necessário
+            if self.plugin_manager and domain_name:
+                try:
+                    self.plugin_manager.deactivate_plugins_for_domain(domain_name)
+                    logger.info(f"Plugins para o domínio {domain_name} desativados")
+                except Exception as plugin_error:
+                    logger.warning(f"Erro ao desativar plugins para o domínio {domain_name}: {str(plugin_error)}")
+            
+            logger.info(f"Conversa {conversation_id} finalizada no HubCrew para o domínio {domain_name}")
+            
+            # Retorna o contexto final com informações de domínio
+            return {
+                "conversation_id": conversation_id,
+                "domain_name": domain_name,
+                "status": "resolved",
+                "end_time": context["end_time"]
+            }
         except Exception as e:
             logger.error(f"Erro ao finalizar conversa no HubCrew: {str(e)}")
-            raise
+            # Retorna informações básicas mesmo em caso de erro
+            return {
+                "conversation_id": conversation_id,
+                "status": "error",
+                "error": str(e)
+            }
     
     def _get_current_timestamp(self) -> str:
         """
@@ -1006,7 +1148,8 @@ class HubCrew(Crew):
                        message: Dict[str, Any],
                        conversation_id: str,
                        channel_type: str,
-                       functional_crews: Dict[str, Any] = None) -> Dict[str, Any]:
+                       functional_crews: Dict[str, Any] = None,
+                       domain_name: str = None) -> Dict[str, Any]:
         """
         Processa uma mensagem e a encaminha para a crew funcional apropriada.
         
@@ -1019,6 +1162,7 @@ class HubCrew(Crew):
             conversation_id: Identificador único da conversa
             channel_type: Canal de origem (WhatsApp, Instagram, etc.)
             functional_crews: Dicionário de crews funcionais disponíveis (opcional)
+            domain_name: Nome do domínio para a conversa (opcional)
             
         Returns:
             Resultado do processamento com mensagem, contexto, roteamento e resposta
@@ -1033,25 +1177,55 @@ class HubCrew(Crew):
         # Incrementa o contador de interações
         context["interaction_count"] = context.get("interaction_count", 0) + 1
         
-        # Obtém o domínio ativo para esta conversa
-        # Se não estiver no contexto, consulta o DataProxyAgent
-        if "active_domain" not in context:
+        # Determinar o domínio para esta conversa
+        # Prioridade: 1) domínio fornecido como parâmetro, 2) domínio no contexto, 3) domínio do cliente, 4) domínio ativo no DomainManager
+        active_domain = None
+        
+        # 1. Verificar se o domínio foi fornecido como parâmetro
+        if domain_name:
+            active_domain = domain_name
+            logger.info(f"Usando domínio fornecido como parâmetro: {domain_name}")
+            
+        # 2. Verificar se o domínio já está no contexto
+        elif "domain_name" in context:
+            active_domain = context["domain_name"]
+            logger.info(f"Usando domínio do contexto: {active_domain}")
+            
+        # 3. Tentar determinar o domínio com base no cliente
+        elif not active_domain:
             try:
-                # Obter informações do cliente ou da conversa para determinar o domínio
                 customer_id = context.get("customer_id", None)
                 if customer_id:
                     customer_data = self.get_customer_data(customer_id)
-                    active_domain = customer_data.get("domain", "cosmetics")
-                else:
-                    # Se não tiver customer_id, usa o domínio padrão
-                    active_domain = "cosmetics"
-                
-                # Adiciona o domínio ativo ao contexto
-                context["active_domain"] = active_domain
-                logger.info(f"Domínio ativo para conversa {conversation_id}: {active_domain}")
+                    if customer_data and "domain" in customer_data:
+                        active_domain = customer_data["domain"]
+                        logger.info(f"Domínio determinado a partir dos dados do cliente: {active_domain}")
             except Exception as e:
-                logger.error(f"Erro ao obter domínio ativo: {str(e)}. Usando domínio padrão 'cosmetics'.")
-                context["active_domain"] = "cosmetics"
+                logger.warning(f"Erro ao obter domínio do cliente: {str(e)}")
+                
+        # 4. Usar o domínio ativo no DomainManager
+        if not active_domain and self.domain_manager:
+            try:
+                active_domain = self.domain_manager.get_active_domain()
+                logger.info(f"Usando domínio ativo do DomainManager: {active_domain}")
+            except Exception as e:
+                logger.warning(f"Erro ao obter domínio ativo do DomainManager: {str(e)}")
+                
+        # Se ainda não tiver um domínio, usar o padrão
+        if not active_domain:
+            active_domain = "default"
+            logger.warning(f"Nenhum domínio determinado, usando domínio padrão: {active_domain}")
+            
+        # Adicionar o domínio ao contexto
+        context["domain_name"] = active_domain
+        
+        # Inicializar plugins para o domínio se necessário
+        if self.plugin_manager:
+            try:
+                self.plugin_manager.initialize_plugins_for_domain(active_domain)
+                logger.info(f"Plugins inicializados para o domínio: {active_domain}")
+            except Exception as e:
+                logger.error(f"Erro ao inicializar plugins para o domínio {active_domain}: {str(e)}")
         
         # Atualiza o contexto com a nova mensagem
         updated_context = self.context_manager.update_context(
@@ -1060,9 +1234,9 @@ class HubCrew(Crew):
             current_context=context
         )
         
-        # Garante que o domínio ativo esteja no contexto atualizado
-        if "active_domain" not in updated_context and "active_domain" in context:
-            updated_context["active_domain"] = context["active_domain"]
+        # Garante que o domínio esteja no contexto atualizado
+        if "domain_name" not in updated_context and "domain_name" in context:
+            updated_context["domain_name"] = context["domain_name"]
         
         # Roteia a mensagem para a crew funcional apropriada
         routing = self._route_message(
@@ -1070,20 +1244,68 @@ class HubCrew(Crew):
             context=updated_context
         )
         
-        # Se não há crews funcionais disponíveis, apenas retorna o roteamento
+        # Obter o domínio da conversa
+        domain_name = updated_context.get("domain_name")
+        
+        # Se não há crews funcionais disponíveis, tentar criar usando o CrewFactory
         if not functional_crews:
-            logger.warning("Nenhuma crew funcional disponível para processar a mensagem")
-            result = {
-                "message": message,
-                "context": updated_context,
-                "routing": routing,
-                "response": None
-            }
-            return result
+            functional_crews = {}
+            
+            # Se temos um CrewFactory e um domínio, tentar criar as crews necessárias
+            if self.crew_factory and domain_name and routing.get("crew"):
+                try:
+                    crew_id = routing.get("crew")
+                    # Criar a crew usando o CrewFactory
+                    crew = self.crew_factory.get_crew_for_domain(crew_id, domain_name)
+                    if crew:
+                        functional_crews[crew_id] = crew
+                        logger.info(f"Crew {crew_id} criada dinamicamente para o domínio {domain_name}")
+                except Exception as e:
+                    logger.error(f"Erro ao criar crew dinamicamente: {str(e)}")
+            
+            # Se ainda não temos crews funcionais, retornar apenas o roteamento
+            if not functional_crews:
+                logger.warning("Nenhuma crew funcional disponível para processar a mensagem")
+                result = {
+                    "message": message,
+                    "context": updated_context,
+                    "routing": routing,
+                    "response": None,
+                    "domain_name": domain_name,
+                    "domain_specific_crew": False,
+                    "error": "Nenhuma crew funcional disponível para processar a mensagem"
+                }
+                return result
         
         # Processa a mensagem com a crew funcional apropriada
         selected_crew_name = routing.get("crew")
-        selected_crew = functional_crews.get(selected_crew_name)
+        
+        # Verificar se a crew já está no dicionário fornecido
+        if selected_crew_name in functional_crews:
+            selected_crew = functional_crews.get(selected_crew_name)
+        else:
+            # Tentar criar a crew usando o CrewFactory
+            try:
+                # Chave para o cache de crews
+                cache_key = f"{domain_name or 'default'}:{selected_crew_name}"
+                
+                # Verificar se já existe no cache
+                if cache_key in self.__dict__["_functional_crews_cache"]:
+                    selected_crew = self.__dict__["_functional_crews_cache"][cache_key]
+                    logger.info(f"Usando crew {selected_crew_name} do cache para o domínio {domain_name}")
+                else:
+                    # Criar a crew usando o CrewFactory
+                    selected_crew = self.crew_factory.get_crew_for_domain(selected_crew_name, domain_name)
+                    
+                    # Armazenar no cache
+                    self.__dict__["_functional_crews_cache"][cache_key] = selected_crew
+                    logger.info(f"Crew {selected_crew_name} criada para o domínio {domain_name}")
+                    
+                # Adicionar ao dicionário de crews funcionais
+                functional_crews[selected_crew_name] = selected_crew
+            except Exception as e:
+                logger.error(f"Erro ao criar crew {selected_crew_name}: {e}")
+                selected_crew = None
         
         if not selected_crew:
             logger.warning(f"Crew '{selected_crew_name}' não encontrada")
@@ -1091,7 +1313,10 @@ class HubCrew(Crew):
                 "message": message,
                 "context": updated_context,
                 "routing": routing,
-                "response": None
+                "response": None,
+                "domain_name": domain_name,
+                "domain_specific_crew": False,
+                "error": f"Crew '{selected_crew_name}' não encontrada"
             }
             return result
         
@@ -1111,7 +1336,9 @@ class HubCrew(Crew):
                 "message": message,
                 "context": updated_context,
                 "routing": routing,
-                "response": response
+                "response": response,
+                "domain_name": domain_name,
+                "domain_specific_crew": True
             }
             
             return result
@@ -1123,6 +1350,7 @@ class HubCrew(Crew):
                 "context": updated_context,
                 "routing": routing,
                 "response": None,
+                "domain_name": domain_name,
                 "error": str(e)
             }
             return result
@@ -1204,34 +1432,14 @@ class HubCrew(Crew):
         # Obtém o tipo de crew com base na intenção ou usa um default
         crew_type = intent_to_crew_map.get(intent.lower() if intent else "", "info")
         
-        # Obtém o domínio ativo para determinar o nome específico da crew
-        active_domain = context.get("active_domain", "cosmetics")
+        # Obtém o domínio para determinar o nome específico da crew
+        domain_name = context.get("domain_name", "default")
         
-        # Mapeia tipos de crew para nomes específicos de crew por domínio
-        domain_crew_map = {
-            "cosmetics": {
-                "sales": "CosmeticsSalesCrew",
-                "support": "CosmeticsSupportCrew",
-                "info": "CosmeticsInfoCrew",
-                "scheduling": "CosmeticsSchedulingCrew"
-            },
-            "health": {
-                "sales": "HealthSalesCrew",
-                "support": "HealthSupportCrew",
-                "info": "HealthInfoCrew",
-                "scheduling": "HealthSchedulingCrew"
-            },
-            "retail": {
-                "sales": "RetailSalesCrew",
-                "support": "RetailSupportCrew",
-                "info": "RetailInfoCrew",
-                "scheduling": "RetailSchedulingCrew"
-            }
-        }
+        # Com a abordagem GenericCrew, usamos diretamente o tipo da crew (sales, support, etc.)
+        # como identificador, independente do domínio
+        crew_name = crew_type
         
-        # Obtém o nome específico da crew para o domínio ativo
-        domain_specific_crews = domain_crew_map.get(active_domain, {})
-        crew_name = domain_specific_crews.get(crew_type, crew_type)
+        logger.info(f"Usando crew genérica do tipo '{crew_name}' para o domínio '{domain_name}'")
         
         # Tenta obter a crew pelo nome específico do domínio
         target_crew = functional_crews.get(crew_name)
@@ -1239,9 +1447,34 @@ class HubCrew(Crew):
         # Se não encontrar, tenta pelo tipo genérico como fallback
         if not target_crew:
             target_crew = functional_crews.get(crew_type)
+            
+        # Se ainda não encontrou e temos um CrewFactory, tenta criar dinamicamente
+        if not target_crew and self.crew_factory:
+            try:
+                # Chave para o cache de crews
+                cache_key = f"{domain_name}:{crew_name}"
+                
+                # Verificar se já existe no cache
+                if cache_key in self.__dict__["_functional_crews_cache"]:
+                    target_crew = self.__dict__["_functional_crews_cache"][cache_key]
+                    logger.info(f"Usando crew {crew_name} do cache para o domínio {domain_name}")
+                else:
+                    # Criar a crew usando o CrewFactory
+                    # Agora usamos o tipo genérico (sales, support, etc.) diretamente
+                    target_crew = self.crew_factory.get_crew_for_domain(crew_name, domain_name)
+                    
+                    # Armazenar no cache
+                    if target_crew:
+                        self.__dict__["_functional_crews_cache"][cache_key] = target_crew
+                        logger.info(f"GenericCrew do tipo '{crew_name}' criada para o domínio '{domain_name}'")
+                        
+                        # Adicionar ao dicionário de crews funcionais
+                        functional_crews[crew_name] = target_crew
+            except Exception as e:
+                logger.error(f"Erro ao criar crew {crew_name} para o domínio {domain_name}: {e}")
         
         # Registra a decisão de roteamento para debug
-        logger.info(f"Roteando mensagem para crew funcional: {crew_name} (tipo: {crew_type}, domínio: {active_domain})")
+        logger.info(f"Roteando mensagem para crew funcional: {crew_name} (tipo: {crew_type}, domínio: {domain_name})")
         
         # Se não encontrar a crew apropriada, usa uma resposta padrão
         if not target_crew:
@@ -1252,13 +1485,24 @@ class HubCrew(Crew):
                     "original_intent": intent,
                     "mapped_crew_type": crew_type,
                     "domain_specific_crew": crew_name,
-                    "active_domain": active_domain,
+                    "domain_name": domain_name,
                     "routing_error": "crew not found"
                 }
             }
         
         # Processa a mensagem na crew funcional
         try:
+            # Adicionar informações de domínio ao contexto se ainda não estiver presente
+            if "domain_name" not in context:
+                context["domain_name"] = domain_name
+                
+            # Inicializar plugins para o domínio se necessário
+            if self.plugin_manager:
+                try:
+                    self.plugin_manager.initialize_plugins_for_domain(domain_name)
+                except Exception as e:
+                    logger.warning(f"Erro ao inicializar plugins para o domínio {domain_name}: {e}")
+            
             # As crews funcionais esperam um método process(message, context)
             result = target_crew.process(message, context)
             
@@ -1267,6 +1511,8 @@ class HubCrew(Crew):
                 result["hub_metadata"] = {
                     "original_intent": intent,
                     "original_target_crew": crew_type,
+                    "domain_specific_crew": crew_name,
+                    "domain_name": domain_name,
                     "routing_successful": True
                 }
             else:
@@ -1276,6 +1522,8 @@ class HubCrew(Crew):
                     "hub_metadata": {
                         "original_intent": intent,
                         "original_target_crew": crew_type,
+                        "domain_specific_crew": crew_name,
+                        "domain_name": domain_name,
                         "routing_successful": True
                     }
                 }
@@ -1289,6 +1537,8 @@ class HubCrew(Crew):
                 "hub_metadata": {
                     "original_intent": intent,
                     "original_target_crew": crew_type,
+                    "domain_specific_crew": crew_name,
+                    "domain_name": domain_name,
                     "routing_error": str(e)
                 }
             }

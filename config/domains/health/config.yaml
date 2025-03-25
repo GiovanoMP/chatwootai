@@ -49,26 +49,42 @@ agents:
           diagnosis_depth: "detailed"
           include_recommendations: true
 
-# Configuração da crew para este domínio
+# Configuração das crews para este domínio
 crew:
-  name: HealthSalesCrew
-  description: "Equipe especializada em vendas de produtos de saúde"
-  agents:
-    - health_expert
-    - wellness_specialist
-  workflow:
-    - step: initial_contact
-      agent: health_expert
-      tools: [product_catalog]
-    - step: health_analysis
-      agent: wellness_specialist
-      tools: [health_analyzer]
-    - step: recommend_products
-      agent: health_expert
-      tools: [wellness_recommender, product_catalog]
-    - step: create_wellness_plan
-      agent: wellness_specialist
-      tools: [wellness_planner]
+  # Crew de vendas para produtos de saúde
+  sales_crew:
+    name: HealthSalesCrew
+    description: "Equipe especializada em vendas de produtos de saúde"
+    agents: [health_expert, wellness_specialist]
+    tasks:
+      - description: "Analisar a consulta do cliente e identificar necessidades de saúde"
+        agent: health_expert
+        expected_output: "Análise das necessidades de saúde do cliente"
+      - description: "Avaliar o perfil de saúde e condições específicas"
+        agent: wellness_specialist
+        expected_output: "Diagnóstico do perfil de saúde e recomendações"
+      - description: "Formular recomendações de produtos personalizadas"
+        agent: health_expert
+        expected_output: "Lista de produtos de saúde recomendados com justificativas"
+      - description: "Criar um plano de bem-estar personalizado"
+        agent: wellness_specialist
+        expected_output: "Plano de bem-estar detalhado com orientações"
+  
+  # Crew de suporte para produtos de saúde
+  support_crew:
+    name: HealthSupportCrew
+    description: "Equipe especializada em suporte técnico para produtos de saúde"
+    agents: [wellness_specialist, health_expert]
+    tasks:
+      - description: "Analisar problemas reportados com produtos de saúde"
+        agent: wellness_specialist
+        expected_output: "Diagnóstico do problema reportado"
+      - description: "Fornecer orientações de uso correto dos produtos"
+        agent: health_expert
+        expected_output: "Instruções detalhadas de uso"
+      - description: "Recomendar alternativas para casos de incompatibilidade"
+        agent: wellness_specialist
+        expected_output: "Recomendações de produtos alternativos"
 
 # Configurações de integração com serviços externos específicos para este domínio
 integrations:

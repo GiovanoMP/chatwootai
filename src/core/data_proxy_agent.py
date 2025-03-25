@@ -185,6 +185,55 @@ class DataProxyAgent:
         """Obtém o gerenciador de domínios."""
         return self._domain_manager
     
+    def set_domain_context(self, domain_name: str, domain_info: Dict[str, Any], agent_id: str = None) -> None:
+        """
+        Configura o contexto do domínio para o DataProxyAgent.
+        
+        Este método permite que o DataProxyAgent seja configurado com informações
+        específicas do domínio, permitindo que ele adapte seu comportamento e
+        consultas de acordo com o domínio de negócio ativo.
+        
+        Args:
+            domain_name: Nome do domínio ativo
+            domain_info: Dicionário com informações detalhadas do domínio
+            agent_id: ID do agente que está utilizando o DataProxyAgent (opcional)
+            
+        Returns:
+            None
+        """
+        try:
+            # Armazenar informações do domínio para uso em consultas
+            self._current_domain = domain_name
+            self._domain_info = domain_info
+            self._requesting_agent_id = agent_id
+            
+            # Registrar no log para depuração
+            logger.info(f"DataProxyAgent configurado para domínio: {domain_name} (display_name: {domain_info.get('display_name', domain_name)})")
+            
+            if agent_id:
+                logger.debug(f"Agente solicitante: {agent_id}")
+            
+            # Se o domínio tiver configurações específicas para o DataProxyAgent, aplicá-las
+            if 'data_proxy_settings' in domain_info.get('settings', {}):
+                proxy_settings = domain_info['settings']['data_proxy_settings']
+                logger.debug(f"Aplicando configurações específicas do domínio para o DataProxyAgent: {proxy_settings}")
+                
+                # Aqui podemos aplicar configurações específicas como estratégias de cache,
+                # formatação de dados, etc.
+                
+            # Inicializar ferramentas específicas do domínio se necessário
+            if self._domain_manager and self._domain_manager.get_active_domain() != domain_name:
+                # Temporariamente mudar o domínio ativo para inicializar ferramentas
+                previous_domain = self._domain_manager.get_active_domain()
+                self._domain_manager.set_active_domain(domain_name)
+                self._initialize_tools()
+                # Restaurar o domínio ativo anterior
+                self._domain_manager.set_active_domain(previous_domain)
+                
+        except Exception as e:
+            logger.error(f"Erro ao configurar contexto de domínio para o DataProxyAgent: {str(e)}")
+            # Não propagar a exceção para não interromper o fluxo
+    
     def is_ready(self) -> bool:
         """
         Verifica se o agente está pronto para uso.
@@ -401,20 +450,76 @@ class DataProxyAgent:
         """
         start_time = time.time()
         try:
+            # Determinar o domínio a ser usado (prioridade: parâmetro > contexto configurado > domínio ativo)
+            active_domain = domain
+            domain_info = {}
+            
+            if not active_domain and hasattr(self, '_current_domain'):
+                active_domain = self._current_domain
+                domain_info = getattr(self, '_domain_info', {})
+                logger.debug(f"Usando domínio do contexto configurado: {active_domain}")
+                
+            if not active_domain and self._domain_manager:
+                active_domain = self._domain_manager.get_active_domain()
+                logger.debug(f"Usando domínio ativo do DomainManager: {active_domain}")
+            
+            # Enriquecer filtros com informações do domínio se disponíveis
+            enriched_filters = filters.copy() if filters else {}
+            
+            # Adicionar informações do domínio aos filtros se houver configurações específicas
+            if domain_info and 'settings' in domain_info:
+                product_settings = domain_info.get('settings', {}).get('product_settings', {})
+                if product_settings:
+                    # Aplicar configurações específicas do domínio para produtos
+                    # Por exemplo, categorias prioritárias, marcas preferenciais, etc.
+                    if 'default_filters' in product_settings:
+                        for key, value in product_settings['default_filters'].items():
+                            # Apenas adicionar filtros padrão se não estiverem já especificados
+                            if key not in enriched_filters:
+                                enriched_filters[key] = value
+                                logger.debug(f"Adicionado filtro padrão do domínio: {key}={value}")
+            
             # Usar o serviço de dados de produtos para realizar a consulta
             if self.data_service_hub:
                 service = self.data_service_hub.get_service('ProductDataService')
                 if service:
-                    # Incluir o contexto de domínio na consulta se fornecido
-                    context = {"domain": domain} if domain else None
-                    results = service.search_products(query_text, filters, context=context)
+                    # Construir contexto enriquecido com informações do domínio
+                    context = {
+                        "domain": active_domain,
+                        "domain_info": domain_info,
+                        "requesting_agent_id": getattr(self, '_requesting_agent_id', None)
+                    }
+                    
+                    # Realizar a consulta com contexto enriquecido
+                    results = service.search_products(query_text, enriched_filters, context=context)
+                    
+                    # Formatar a resposta com informações do domínio
+                    response = {
+                        "success": True,
+                        "query": query_text,
+                        "domain": active_domain,
+                        "results": results,
+                        "count": len(results) if isinstance(results, list) else 0,
+                        "filters_applied": enriched_filters
+                    }
+                    
+                    # Adicionar informações do domínio à resposta se disponíveis
+                    if domain_info:
+                        response["domain_info"] = {
+                            "name": domain_info.get('name'),
+                            "display_name": domain_info.get('display_name'),
+                            "description": domain_info.get('description')
+                        }
+                    
                     # Atualizar estatísticas de acesso
                     self._update_access_stats('products', time.time() - start_time)
-                    return results
-            return {"error": "Serviço de dados de produtos não disponível"}
+                    return response
+                else:
+                    return {"error": "Serviço de dados de produtos não disponível", "domain": active_domain}
+            return {"error": "DataServiceHub não disponível", "domain": active_domain}
         except Exception as e:
             logger.error(f"Erro ao consultar dados de produtos: {str(e)}")
-            return {"error": f"Falha na consulta de produtos: {str(e)}"}
+            return {"error": f"Falha na consulta de produtos: {str(e)}", "query": query_text}
     
     def query_customer_data(self, query_text: str, filters: dict = None, domain: str = None):
         """
@@ -430,20 +535,76 @@ class DataProxyAgent:
         """
         start_time = time.time()
         try:
+            # Determinar o domínio a ser usado (prioridade: parâmetro > contexto configurado > domínio ativo)
+            active_domain = domain
+            domain_info = {}
+            
+            if not active_domain and hasattr(self, '_current_domain'):
+                active_domain = self._current_domain
+                domain_info = getattr(self, '_domain_info', {})
+                logger.debug(f"Usando domínio do contexto configurado: {active_domain}")
+                
+            if not active_domain and self._domain_manager:
+                active_domain = self._domain_manager.get_active_domain()
+                logger.debug(f"Usando domínio ativo do DomainManager: {active_domain}")
+            
+            # Enriquecer filtros com informações do domínio se disponíveis
+            enriched_filters = filters.copy() if filters else {}
+            
+            # Adicionar informações do domínio aos filtros se houver configurações específicas
+            if domain_info and 'settings' in domain_info:
+                customer_settings = domain_info.get('settings', {}).get('customer_settings', {})
+                if customer_settings:
+                    # Aplicar configurações específicas do domínio para clientes
+                    # Por exemplo, segmentos prioritários, perfis de cliente, etc.
+                    if 'default_filters' in customer_settings:
+                        for key, value in customer_settings['default_filters'].items():
+                            # Apenas adicionar filtros padrão se não estiverem já especificados
+                            if key not in enriched_filters:
+                                enriched_filters[key] = value
+                                logger.debug(f"Adicionado filtro padrão do domínio para clientes: {key}={value}")
+            
             # Usar o serviço de dados de clientes para realizar a consulta
             if self.data_service_hub:
                 service = self.data_service_hub.get_service('CustomerDataService')
                 if service:
-                    # Incluir o contexto de domínio na consulta se fornecido
-                    context = {"domain": domain} if domain else None
-                    results = service.search_customers(query_text, filters, context=context)
+                    # Construir contexto enriquecido com informações do domínio
+                    context = {
+                        "domain": active_domain,
+                        "domain_info": domain_info,
+                        "requesting_agent_id": getattr(self, '_requesting_agent_id', None)
+                    }
+                    
+                    # Realizar a consulta com contexto enriquecido
+                    results = service.search_customers(query_text, enriched_filters, context=context)
+                    
+                    # Formatar a resposta com informações do domínio
+                    response = {
+                        "success": True,
+                        "query": query_text,
+                        "domain": active_domain,
+                        "results": results,
+                        "count": len(results) if isinstance(results, list) else 0,
+                        "filters_applied": enriched_filters
+                    }
+                    
+                    # Adicionar informações do domínio à resposta se disponíveis
+                    if domain_info:
+                        response["domain_info"] = {
+                            "name": domain_info.get('name'),
+                            "display_name": domain_info.get('display_name'),
+                            "description": domain_info.get('description')
+                        }
+                    
                     # Atualizar estatísticas de acesso
                     self._update_access_stats('customers', time.time() - start_time)
-                    return results
-            return {"error": "Serviço de dados de clientes não disponível"}
+                    return response
+                else:
+                    return {"error": "Serviço de dados de clientes não disponível", "domain": active_domain}
+            return {"error": "DataServiceHub não disponível", "domain": active_domain}
         except Exception as e:
             logger.error(f"Erro ao consultar dados de clientes: {str(e)}")
-            return {"error": f"Falha na consulta de clientes: {str(e)}"}
+            return {"error": f"Falha na consulta de clientes: {str(e)}", "query": query_text}
     
     def query_business_rules(self, query_text: str, category: str = None, domain: str = None):
         """
@@ -459,22 +620,61 @@ class DataProxyAgent:
         """
         start_time = time.time()
         try:
+            # Determinar o domínio a ser usado (prioridade: parâmetro > contexto configurado > domínio ativo)
+            active_domain = domain
+            domain_info = {}
+            
+            if not active_domain and hasattr(self, '_current_domain'):
+                active_domain = self._current_domain
+                domain_info = getattr(self, '_domain_info', {})
+                logger.debug(f"Usando domínio do contexto configurado: {active_domain}")
+                
+            if not active_domain and self._domain_manager:
+                active_domain = self._domain_manager.get_active_domain()
+                logger.debug(f"Usando domínio ativo do DomainManager: {active_domain}")
+            
             # Usar o serviço de regras de domínio para realizar a consulta
             if self.data_service_hub:
                 service = self.data_service_hub.get_service('DomainRulesService')
                 if service:
-                    # Se nenhum domínio for especificado, usar o domínio ativo
-                    if domain is None and self._domain_manager:
-                        domain = self._domain_manager.get_active_domain_name()
+                    # Construir contexto enriquecido com informações do domínio
+                    context = {
+                        "domain": active_domain,
+                        "domain_info": domain_info,
+                        "category": category,
+                        "requesting_agent_id": getattr(self, '_requesting_agent_id', None)
+                    }
                     
-                    rules = service.get_domain_rules(query_text, domain, category)
+                    # Realizar a consulta com contexto enriquecido
+                    rules = service.get_domain_rules(query_text, active_domain, category, context=context)
+                    
+                    # Formatar a resposta com informações do domínio
+                    response = {
+                        "success": True,
+                        "query": query_text,
+                        "domain": active_domain,
+                        "category": category,
+                        "results": rules,
+                        "count": len(rules) if isinstance(rules, list) else 0
+                    }
+                    
+                    # Adicionar informações do domínio à resposta se disponíveis
+                    if domain_info:
+                        response["domain_info"] = {
+                            "name": domain_info.get('name'),
+                            "display_name": domain_info.get('display_name'),
+                            "description": domain_info.get('description')
+                        }
+                    
                     # Atualizar estatísticas de acesso
                     self._update_access_stats('business_rules', time.time() - start_time)
-                    return rules
-            return {"error": "Serviço de regras de domínio não disponível"}
+                    return response
+                else:
+                    return {"error": "Serviço de regras de domínio não disponível", "domain": active_domain}
+            return {"error": "DataServiceHub não disponível", "domain": active_domain}
         except Exception as e:
             logger.error(f"Erro ao consultar regras de negócio: {str(e)}")
-            return {"error": f"Falha na consulta de regras de negócio: {str(e)}"}
+            return {"error": f"Falha na consulta de regras de negócio: {str(e)}", "query": query_text}
     
     def vector_search(self, query_text: str, collection_name: str = None, limit: int = 5, domain: str = None):
         """
@@ -491,26 +691,83 @@ class DataProxyAgent:
         """
         start_time = time.time()
         try:
-            # Se domínio for especificado, ajustar a coleção
-            if domain and not collection_name:
-                collection_name = f"{domain}_documents"
+            # Determinar o domínio a ser usado (prioridade: parâmetro > contexto configurado > domínio ativo)
+            active_domain = domain
+            domain_info = {}
+            
+            if not active_domain and hasattr(self, '_current_domain'):
+                active_domain = self._current_domain
+                domain_info = getattr(self, '_domain_info', {})
+                logger.debug(f"Usando domínio do contexto configurado: {active_domain}")
+                
+            if not active_domain and self._domain_manager:
+                active_domain = self._domain_manager.get_active_domain()
+                logger.debug(f"Usando domínio ativo do DomainManager: {active_domain}")
+            
+            # Determinar a coleção a ser usada
+            target_collection = collection_name
+            
+            # Se não houver coleção especificada mas houver domínio, usar a coleção do domínio
+            if not target_collection and active_domain:
+                # Verificar se há configuração específica de coleção no domínio
+                if domain_info and 'settings' in domain_info:
+                    vector_settings = domain_info.get('settings', {}).get('vector_settings', {})
+                    if vector_settings and 'default_collection' in vector_settings:
+                        target_collection = vector_settings['default_collection']
+                        logger.debug(f"Usando coleção padrão do domínio: {target_collection}")
+                
+                # Se não houver configuração específica, usar o padrão baseado no nome do domínio
+                if not target_collection:
+                    target_collection = f"{active_domain}_documents"
+                    logger.debug(f"Usando coleção padrão baseada no domínio: {target_collection}")
                 
             # Usar o DataServiceHub para realizar a consulta
             if self.data_service_hub:
                 vector_service = self.data_service_hub.get_service('VectorSearchService')
                 if vector_service:
+                    # Construir contexto enriquecido com informações do domínio
+                    context = {
+                        "domain": active_domain,
+                        "domain_info": domain_info,
+                        "requesting_agent_id": getattr(self, '_requesting_agent_id', None)
+                    }
+                    
+                    # Realizar a consulta com contexto enriquecido
                     results = vector_service.search(
                         query_text,
-                        collection_name=collection_name,
-                        limit=limit
+                        collection_name=target_collection,
+                        limit=limit,
+                        context=context
                     )
+                    
+                    # Formatar a resposta com informações do domínio
+                    response = {
+                        "success": True,
+                        "query": query_text,
+                        "domain": active_domain,
+                        "collection": target_collection,
+                        "results": results,
+                        "count": len(results) if isinstance(results, list) else 0,
+                        "limit": limit
+                    }
+                    
+                    # Adicionar informações do domínio à resposta se disponíveis
+                    if domain_info:
+                        response["domain_info"] = {
+                            "name": domain_info.get('name'),
+                            "display_name": domain_info.get('display_name'),
+                            "description": domain_info.get('description')
+                        }
+                    
                     # Atualizar estatísticas de acesso
                     self._update_access_stats('vector_search', time.time() - start_time)
-                    return {"results": results}
-            return {"error": "Serviço de busca vetorial não disponível"}
+                    return response
+                else:
+                    return {"error": "Serviço de busca vetorial não disponível", "domain": active_domain}
+            return {"error": "DataServiceHub não disponível", "domain": active_domain}
         except Exception as e:
             logger.error(f"Erro ao realizar busca semântica: {str(e)}")
-            return {"error": f"Falha na busca semântica: {str(e)}"}
+            return {"error": f"Falha na busca semântica: {str(e)}", "query": query_text}
     
     def memory_query(self, query_text: str, limit: int = 5, agent_id: str = None):
         """
@@ -526,19 +783,89 @@ class DataProxyAgent:
         """
         start_time = time.time()
         try:
+            # Determinar o domínio a ser usado (prioridade: contexto configurado > domínio ativo)
+            active_domain = None
+            domain_info = {}
+            
+            if hasattr(self, '_current_domain'):
+                active_domain = self._current_domain
+                domain_info = getattr(self, '_domain_info', {})
+                logger.debug(f"Usando domínio do contexto configurado para busca na memória: {active_domain}")
+                
+            if not active_domain and self._domain_manager:
+                active_domain = self._domain_manager.get_active_domain()
+                logger.debug(f"Usando domínio ativo do DomainManager para busca na memória: {active_domain}")
+            
+            # Determinar o ID do agente a ser usado
+            target_agent_id = agent_id
+            if not target_agent_id and hasattr(self, '_requesting_agent_id'):
+                target_agent_id = self._requesting_agent_id
+                logger.debug(f"Usando agent_id do contexto: {target_agent_id}")
+            
+            # Construir filtros para a busca
+            filters = {}
+            if target_agent_id:
+                filters["agent_id"] = target_agent_id
+            
+            # Adicionar filtro de domínio se disponível
+            if active_domain:
+                filters["domain"] = active_domain
+            
+            # Verificar configurações específicas de memória no domínio
+            memory_settings = {}
+            if domain_info and 'settings' in domain_info:
+                memory_settings = domain_info.get('settings', {}).get('memory_settings', {})
+            
+            # Ajustar limite conforme configurações do domínio, se disponível
+            target_limit = limit
+            if memory_settings and 'default_limit' in memory_settings and not limit:
+                target_limit = memory_settings['default_limit']
+                logger.debug(f"Usando limite padrão do domínio para busca na memória: {target_limit}")
+            
+            # Realizar a busca na memória
             if self._memory_system:
+                # Construir contexto enriquecido com informações do domínio
+                context = {
+                    "domain": active_domain,
+                    "domain_info": domain_info,
+                    "requesting_agent_id": getattr(self, '_requesting_agent_id', None)
+                }
+                
+                # Realizar a consulta com contexto enriquecido
                 results = self._memory_system.search(
                     query_text,
-                    limit=limit,
-                    filter_by={"agent_id": agent_id} if agent_id else None
+                    limit=target_limit,
+                    filter_by=filters if filters else None,
+                    context=context
                 )
+                
+                # Formatar a resposta com informações do domínio
+                response = {
+                    "success": True,
+                    "query": query_text,
+                    "domain": active_domain,
+                    "agent_id": target_agent_id,
+                    "results": results,
+                    "count": len(results) if isinstance(results, list) else 0,
+                    "limit": target_limit
+                }
+                
+                # Adicionar informações do domínio à resposta se disponíveis
+                if domain_info:
+                    response["domain_info"] = {
+                        "name": domain_info.get('name'),
+                        "display_name": domain_info.get('display_name'),
+                        "description": domain_info.get('description')
+                    }
+                
                 # Atualizar estatísticas de acesso
                 self._update_access_stats('memory', time.time() - start_time)
-                return {"results": results}
-            return {"error": "Sistema de memória não disponível"}
+                return response
+            else:
+                return {"error": "Sistema de memória não disponível", "domain": active_domain}
         except Exception as e:
             logger.error(f"Erro ao realizar busca na memória: {str(e)}")
-            return {"error": f"Falha na busca de memória: {str(e)}"}
+            return {"error": f"Falha na busca de memória: {str(e)}", "query": query_text}
     
     def fetch_data(self, data_type: str, query_params: Dict[str, Any] = None) -> Any:
         """

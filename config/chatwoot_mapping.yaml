@@ -1,0 +1,31 @@
+# Configuração de mapeamento para o ChatwootAI
+# Este arquivo define como as contas (accounts) e caixas de entrada (inboxes) do Chatwoot
+# são mapeadas para domínios específicos no sistema.
+
+# Mapeamento de account_id para domínio
+# Quando uma mensagem chega de uma conta específica, o sistema usará o domínio correspondente
+account_domain_mapping:
+  "1": "cosmetics"  # Exemplo: A empresa de ID 1 usa o domínio de cosméticos
+  "2": "health"     # Exemplo: A empresa de ID 2 usa o domínio de saúde
+  "3": "retail"     # Exemplo: A empresa de ID 3 usa o domínio de varejo
+  # Adicione novos mapeamentos conforme necessário
+
+# Mapeamento de inbox_id para domínio
+# Usado quando o account_id não resolve para um domínio específico
+inbox_domain_mapping:
+  "101": "cosmetics"  # Exemplo: A caixa de entrada 101 usa o domínio de cosméticos
+  "102": "cosmetics"  # Exemplo: A caixa de entrada 102 também usa cosméticos
+  "201": "health"     # Exemplo: A caixa de entrada 201 usa o domínio de saúde
+  "301": "retail"     # Exemplo: A caixa de entrada 301 usa o domínio de varejo
+  # Adicione novos mapeamentos conforme necessário
+
+# Configurações adicionais para o webhook handler
+webhook_settings:
+  # Tempo máximo (em segundos) para processar um webhook antes de timeout
+  processing_timeout: 30
+  
+  # Número máximo de tentativas para processar um webhook em caso de falha
+  max_retries: 3
+  
+  # Habilitar log detalhado para webhooks (true/false)
+  detailed_logging: true

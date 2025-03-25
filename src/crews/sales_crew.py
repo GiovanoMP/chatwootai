@@ -48,7 +48,7 @@ class SalesCrew(FunctionalCrew):
             List[Agent]: Lista de agentes
         """
         # Obtém as configurações do domínio ativo
-        domain_config = self.domain_manager.get_active_domain()
+        domain_config = self.domain_manager.get_active_domain_config()
         agent_config = domain_config.get("agents", {}).get("sales_agent", {})
         
         logger.info(f"Criando SalesAgent com configuração do domínio: {self.domain_manager.get_active_domain_name()}")

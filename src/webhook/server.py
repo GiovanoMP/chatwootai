@@ -10,6 +10,7 @@ import sys
 import logging
 import json
 import traceback
+import yaml
 import uvicorn
 from fastapi import FastAPI, Request, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
@@ -71,71 +72,131 @@ def get_webhook_handler():
 
 def initialize_system():
     """
-    Inicializa o sistema completo usando a mesma abordagem 
-    que funcionou nos testes manuais
+    Inicializa o sistema completo seguindo a nova arquitetura hub-and-spoke
+    com configuração dinâmica de domínios baseada na empresa do Chatwoot.
+    
+    Na nova arquitetura, o domínio é determinado dinamicamente para cada conversa
+    com base nas configurações da empresa no Chatwoot, não mais fixado no código.
     """
+    logger.info("🚀 Iniciando servidor webhook...")
     logger.info("🚀 Inicializando sistema para receber webhooks do Chatwoot...")
     
-    # Sistema de memória
+    # Sistema de memória para persistência de contexto
     memory_system = MemorySystem()
     logger.info("✅ Sistema de memória inicializado")
     
-    # Gerenciador de domínio
+    # Gerenciador de domínio - Carrega todos os domínios disponíveis
+    # Não define um domínio fixo, pois será determinado dinamicamente por conversa
     domain_manager = DomainManager()
-    domain_manager.switch_domain("cosmetics")
-    logger.info(f"✅ Domínio 'cosmetics' carregado com sucesso")
     
-    # Gerenciador de plugins
+    # Carrega todos os domínios disponíveis no sistema
+    available_domains = domain_manager.loader.list_available_domains()
+    logger.info(f"✅ Domínios disponíveis carregados: {available_domains}")
+    
+    # Configuração do domínio padrão (fallback) caso não seja possível determinar o domínio
+    # Este domínio será usado apenas como fallback, não como padrão para todas as conversas
+    default_domain = os.getenv('DEFAULT_DOMAIN', 'cosmetics')
+    domain_manager.set_active_domain(default_domain)
+    logger.info(f"✅ Domínio padrão (fallback) configurado: {default_domain}")
+    
+    # Gerenciador de plugins - Carrega plugins base conforme configuração
+    # Plugins específicos de domínio serão carregados dinamicamente por conversa
     plugin_config = {
-        "enabled_plugins": ["sentiment_analysis_plugin", "faq_knowledge_plugin", "response_enhancer_plugin"]
+        "enabled_plugins": ["sentiment_analysis_plugin", "faq_knowledge_plugin", "response_enhancer_plugin"],
+        "dynamic_loading": True  # Habilita carregamento dinâmico de plugins por domínio
     }
     plugin_manager = PluginManager(config=plugin_config)
     logger.info("✅ Gerenciador de plugins inicializado")
     
-    # DataServiceHub
+    # DataServiceHub - Ponto central de acesso a dados
+    # Configurado para suportar múltiplos domínios e empresas
     data_service_hub = DataServiceHub()
     logger.info("✅ DataServiceHub inicializado")
     
-    # HubCrew (centro da arquitetura hub-and-spoke)
+    # HubCrew - Centro da arquitetura hub-and-spoke
+    # Configurado com todos os componentes necessários para determinar domínios dinamicamente
     hub_crew = HubCrew(
         memory_system=memory_system,
-        data_service_hub=data_service_hub
+        data_service_hub=data_service_hub,
+        domain_manager=domain_manager,
+        plugin_manager=plugin_manager
     )
     logger.info("✅ HubCrew inicializado")
     
-    # SalesCrew
-    sales_crew = SalesCrew(
-        memory_system=memory_system,
-        domain_manager=domain_manager,
-        data_service_hub=data_service_hub,
-        plugin_manager=plugin_manager
-    )
-    logger.info("✅ SalesCrew inicializada")
+    # Na nova arquitetura, não inicializamos crews específicas aqui
+    # As crews serão instanciadas dinamicamente pelo HubCrew para cada conversa
+    # com base no domínio determinado a partir dos dados da empresa no Chatwoot
     
-    # Registra a SalesCrew no HubCrew (como no test_message_manually.py)
-    functional_crews = {
-        "sales": sales_crew
-    }
+    # Configuração do webhook handler com informações do Chatwoot
+    chatwoot_base_url = os.getenv('CHATWOOT_BASE_URL')
+    chatwoot_api_key = os.getenv('CHATWOOT_API_KEY')
     
-    # Adiciona as crews funcionais ao HubCrew
-    setattr(hub_crew, "_functional_crews", functional_crews)
-    logger.info("✅ Crews funcionais registradas no HubCrew")
+    if not chatwoot_base_url or not chatwoot_api_key:
+        logger.warning("⚠️ Variáveis de ambiente CHATWOOT_BASE_URL ou CHATWOOT_API_KEY não definidas!")
     
-    # Configuração do webhook handler
+    # Carrega o arquivo de mapeamento YAML
+    mapping_file_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 
+                                    'config', 'chatwoot_mapping.yaml')
+    
+    # Inicializa as configurações de mapeamento
+    account_domain_mapping = {}
+    inbox_domain_mapping = {}
+    webhook_settings = {}
+    
+    # Tenta carregar o arquivo de mapeamento
+    try:
+        if os.path.exists(mapping_file_path):
+            with open(mapping_file_path, 'r') as file:
+                mapping_config = yaml.safe_load(file)
+                
+                # Extrai os mapeamentos
+                account_domain_mapping = mapping_config.get('account_domain_mapping', {})
+                inbox_domain_mapping = mapping_config.get('inbox_domain_mapping', {})
+                webhook_settings = mapping_config.get('webhook_settings', {})
+                
+                logger.info(f"✅ Arquivo de mapeamento carregado: {mapping_file_path}")
+                logger.info(f"✅ Accounts mapeados: {len(account_domain_mapping)}")
+                logger.info(f"✅ Inboxes mapeados: {len(inbox_domain_mapping)}")
+        else:
+            logger.warning(f"⚠️ Arquivo de mapeamento não encontrado: {mapping_file_path}")
+    except Exception as e:
+        logger.error(f"❌ Erro ao carregar arquivo de mapeamento: {str(e)}")
+    
     webhook_config = {
-        "chatwoot_base_url": os.getenv('CHATWOOT_BASE_URL'),
-        "chatwoot_api_key": os.getenv('CHATWOOT_API_KEY'),
-        "channel_mapping": {"1": "whatsapp"}
+        "chatwoot_base_url": chatwoot_base_url,
+        "chatwoot_api_key": chatwoot_api_key,
+        # Mapeamento dinâmico de canais - será expandido conforme necessário
+        "channel_mapping": json.loads(os.getenv('CHANNEL_MAPPING', '{"1": "whatsapp"}')),
+        # Adiciona os mapeamentos de domínio carregados do YAML
+        "account_domain_mapping": account_domain_mapping,
+        "inbox_domain_mapping": inbox_domain_mapping,
+        # Adiciona configurações adicionais do webhook
+        **webhook_settings
     }
     
-    # Inicializa o webhook handler
+    # Inicializa o webhook handler com o HubCrew central
     webhook_handler = ChatwootWebhookHandler(
         hub_crew=hub_crew,
         config=webhook_config
     )
     logger.info("✅ ChatwootWebhookHandler inicializado")
     
+    # Inicializa o cliente Chatwoot para comunicação com a API
+    chatwoot_client = ChatwootClient(
+        base_url=chatwoot_base_url,
+        api_token=chatwoot_api_key
+    )
+    
+    # Verifica a conexão com o Chatwoot
+    try:
+        # Tenta obter informações básicas para verificar a conexão
+        chatwoot_client.check_connection()
+        logger.info("✅ Conexão com Chatwoot verificada com sucesso")
+    except Exception as e:
+        logger.warning(f"⚠️ Não foi possível verificar a conexão com o Chatwoot: {str(e)}")
+    
     logger.info("🎉 Sistema inicializado com sucesso para receber webhooks!")
+    logger.info("🔄 Sistema configurado para determinar domínios dinamicamente por conversa")
     return webhook_handler
 
 @app.on_event("startup")

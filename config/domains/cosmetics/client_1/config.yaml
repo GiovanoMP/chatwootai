@@ -1,12 +1,12 @@
-## Configuração Template para o Domínio de Cosméticos
-## Este arquivo define configurações base compartilhadas por todos os clientes no domínio de cosméticos
-## Ele serve como template para novos clientes, mas cada cliente tem sua própria configuração específica
+## Configuração para o Cliente 1 - Domínio de Cosméticos
+## Este arquivo define todas as configurações específicas para o Cliente 1 no domínio de cosméticos
 
 version: "2.1"
 metadata:
   domain: cosmetics
-  description: "Domínio de vendas para produtos de beleza"
-  is_template: true
+  client_id: "client_1"
+  client_name: "Beleza Natural Ltda."
+  description: "Loja especializada em produtos de beleza naturais e orgânicos"
   inherit: "_base"  # Herda configurações base
 
 # Configurações específicas dos agentes para o domínio de cosméticos

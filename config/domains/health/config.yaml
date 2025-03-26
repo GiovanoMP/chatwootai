@@ -1,10 +1,12 @@
-## Configuração para o Domínio de Saúde
-## Este arquivo define todas as configurações específicas para o domínio de saúde
+## Configuração Template para o Domínio de Saúde
+## Este arquivo define configurações base compartilhadas por todos os clientes no domínio de saúde
+## Ele serve como template para novos clientes, mas cada cliente tem sua própria configuração específica
 
 version: "2.1"
 metadata:
   domain: health
   description: "Domínio de vendas para produtos de saúde e bem-estar"
+  is_template: true
   inherit: "_base"  # Herda configurações base
 
 # Configurações específicas dos agentes para o domínio de saúde

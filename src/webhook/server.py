@@ -85,22 +85,41 @@ def initialize_system():
     memory_system = MemorySystem()
     logger.info("✅ Sistema de memória inicializado")
     
-    # Gerenciador de domínio - Carrega todos os domínios disponíveis
-    # Não define um domínio fixo, pois será determinado dinamicamente por conversa
-    domain_manager = DomainManager()
+    # Diretório de configurações
+    config_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'config')
+    domains_dir = os.path.join(config_dir, 'domains')
     
-    # Carrega todos os domínios disponíveis no sistema
+    # Determinação do domínio padrão para fallback
+    default_domain = os.getenv('DEFAULT_DOMAIN', 'cosmetics')
+    logger.info(f"Domínio padrão (fallback) configurado: {default_domain}")
+    
+    # Inicialização do DomainManager com o diretório de domínios
+    domain_manager = DomainManager(domains_dir=domains_dir, default_domain=default_domain)
+    
+    # IMPORTANTE: Explicitamente inicializar o DomainManager para carregar configurações
+    try:
+        domain_manager.initialize()
+        logger.info("✅ DomainManager inicializado com sucesso")
+    except Exception as e:
+        logger.error(f"❌ Erro ao inicializar DomainManager: {str(e)}")
+        # Garantimos que pelo menos o domínio padrão será carregado
+        try:
+            domain_manager.set_active_domain(default_domain)
+            logger.info(f"✅ Domínio padrão {default_domain} configurado manualmente")
+        except Exception as e2:
+            logger.critical(f"❌ ERRO CRÍTICO: Não foi possível configurar domínio padrão: {str(e2)}")
+    
+    # Carrega todos os domínios disponíveis no sistema e seus clientes
     available_domains = domain_manager.loader.list_available_domains()
     logger.info(f"✅ Domínios disponíveis carregados: {available_domains}")
     
-    # Configuração do domínio padrão (fallback) caso não seja possível determinar o domínio
-    # Este domínio será usado apenas como fallback, não como padrão para todas as conversas
-    default_domain = os.getenv('DEFAULT_DOMAIN', 'cosmetics')
-    domain_manager.set_active_domain(default_domain)
-    logger.info(f"✅ Domínio padrão (fallback) configurado: {default_domain}")
+    # Para cada domínio, listar os clientes disponíveis
+    for domain in available_domains:
+        clients = domain_manager.loader.list_available_clients(domain)
+        if clients:
+            logger.info(f"✅ Clientes para o domínio {domain}: {clients}")
     
     # Gerenciador de plugins - Carrega plugins base conforme configuração
-    # Plugins específicos de domínio serão carregados dinamicamente por conversa
     plugin_config = {
         "enabled_plugins": ["sentiment_analysis_plugin", "faq_knowledge_plugin", "response_enhancer_plugin"],
         "dynamic_loading": True  # Habilita carregamento dinâmico de plugins por domínio
@@ -109,12 +128,10 @@ def initialize_system():
     logger.info("✅ Gerenciador de plugins inicializado")
     
     # DataServiceHub - Ponto central de acesso a dados
-    # Configurado para suportar múltiplos domínios e empresas
     data_service_hub = DataServiceHub()
     logger.info("✅ DataServiceHub inicializado")
     
     # HubCrew - Centro da arquitetura hub-and-spoke
-    # Configurado com todos os componentes necessários para determinar domínios dinamicamente
     hub_crew = HubCrew(
         memory_system=memory_system,
         data_service_hub=data_service_hub,
@@ -123,53 +140,65 @@ def initialize_system():
     )
     logger.info("✅ HubCrew inicializado")
     
-    # Na nova arquitetura, não inicializamos crews específicas aqui
-    # As crews serão instanciadas dinamicamente pelo HubCrew para cada conversa
-    # com base no domínio determinado a partir dos dados da empresa no Chatwoot
-    
-    # Configuração do webhook handler com informações do Chatwoot
-    chatwoot_base_url = os.getenv('CHATWOOT_BASE_URL')
-    chatwoot_api_key = os.getenv('CHATWOOT_API_KEY')
-    
-    if not chatwoot_base_url or not chatwoot_api_key:
-        logger.warning("⚠️ Variáveis de ambiente CHATWOOT_BASE_URL ou CHATWOOT_API_KEY não definidas!")
-    
     # Carrega o arquivo de mapeamento YAML
-    mapping_file_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 
-                                    'config', 'chatwoot_mapping.yaml')
+    mapping_file_path = os.path.join(config_dir, 'chatwoot_mapping.yaml')
     
     # Inicializa as configurações de mapeamento
     account_domain_mapping = {}
     inbox_domain_mapping = {}
+    client_mapping = {}
     webhook_settings = {}
     
     # Tenta carregar o arquivo de mapeamento
     try:
         if os.path.exists(mapping_file_path):
             with open(mapping_file_path, 'r') as file:
-                mapping_config = yaml.safe_load(file)
+                mapping_config = yaml.safe_load(file) or {}
                 
                 # Extrai os mapeamentos
-                account_domain_mapping = mapping_config.get('account_domain_mapping', {})
-                inbox_domain_mapping = mapping_config.get('inbox_domain_mapping', {})
+                account_domain_mapping = mapping_config.get('accounts', {})
+                inbox_domain_mapping = mapping_config.get('inboxes', {})
+                client_mapping = mapping_config.get('clients', {})
                 webhook_settings = mapping_config.get('webhook_settings', {})
                 
                 logger.info(f"✅ Arquivo de mapeamento carregado: {mapping_file_path}")
                 logger.info(f"✅ Accounts mapeados: {len(account_domain_mapping)}")
                 logger.info(f"✅ Inboxes mapeados: {len(inbox_domain_mapping)}")
+                logger.info(f"✅ Clientes mapeados: {len(client_mapping)}")
+                
+                # Pré-carga de configurações de clientes para melhor desempenho
+                for account_id, mapping in account_domain_mapping.items():
+                    domain = mapping.get('domain')
+                    client_id = mapping.get('client_id')
+                    if domain and client_id:
+                        try:
+                            # Carrega a configuração do cliente para o cache
+                            client_config = domain_manager.loader.load_client_config(domain, client_id)
+                            if client_config:
+                                logger.info(f"✅ Configuração pré-carregada para cliente {client_id} do domínio {domain}")
+                        except Exception as e:
+                            logger.warning(f"⚠️ Não foi possível pré-carregar cliente {client_id}: {str(e)}")
         else:
             logger.warning(f"⚠️ Arquivo de mapeamento não encontrado: {mapping_file_path}")
     except Exception as e:
         logger.error(f"❌ Erro ao carregar arquivo de mapeamento: {str(e)}")
+    
+    # Configuração do Chatwoot
+    chatwoot_base_url = os.getenv('CHATWOOT_BASE_URL')
+    chatwoot_api_key = os.getenv('CHATWOOT_API_KEY')
+    
+    if not chatwoot_base_url or not chatwoot_api_key:
+        logger.warning("⚠️ Variáveis de ambiente CHATWOOT_BASE_URL ou CHATWOOT_API_KEY não definidas!")
     
     webhook_config = {
         "chatwoot_base_url": chatwoot_base_url,
         "chatwoot_api_key": chatwoot_api_key,
         # Mapeamento dinâmico de canais - será expandido conforme necessário
         "channel_mapping": json.loads(os.getenv('CHANNEL_MAPPING', '{"1": "whatsapp"}')),
-        # Adiciona os mapeamentos de domínio carregados do YAML
+        # Adiciona os mapeamentos carregados do YAML
         "account_domain_mapping": account_domain_mapping,
         "inbox_domain_mapping": inbox_domain_mapping,
+        "client_mapping": client_mapping,
         # Adiciona configurações adicionais do webhook
         **webhook_settings
     }

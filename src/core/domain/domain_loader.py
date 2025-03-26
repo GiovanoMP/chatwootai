@@ -29,6 +29,15 @@ class ConfigurationError(Exception):
 
 
 @dataclass
+class ClientMetadata:
+    """Metadados de um cliente específico."""
+    client_id: str
+    client_name: str
+    domain: str
+    path: str
+    available: bool = True
+
+@dataclass
 class DomainMetadata:
     """Metadados de um domínio carregado."""
     name: str
@@ -36,7 +45,13 @@ class DomainMetadata:
     version: str
     description: str
     inherit: Optional[str] = None
+    is_template: bool = False
     available: bool = True
+    clients: Dict[str, ClientMetadata] = None
+    
+    def __post_init__(self):
+        if self.clients is None:
+            self.clients = {}
 
 
 class DomainConfig(BaseModel):
@@ -185,6 +200,41 @@ class DomainLoader:
             logger.error(f"Erro ao listar domínios disponíveis: {str(e)}")
         
         return available_domains
+        
+    def list_available_clients(self, domain_name: str) -> List[str]:
+        """
+        Lista os clientes disponíveis para um domínio específico.
+        
+        Args:
+            domain_name: Nome do domínio
+            
+        Returns:
+            List[str]: Lista de IDs de clientes disponíveis
+        """
+        available_clients = []
+        
+        try:
+            domain_dir = os.path.join(self.domains_dir, domain_name)
+            
+            # Verifica se o domínio existe
+            if not os.path.exists(domain_dir) or not os.path.isdir(domain_dir):
+                logger.warning(f"Domínio não encontrado: {domain_name}")
+                return []
+            
+            # Lista os diretórios dentro do domínio
+            for item in os.listdir(domain_dir):
+                client_dir = os.path.join(domain_dir, item)
+                
+                # Verifica se é um diretório de cliente (começa com "client_")
+                if os.path.isdir(client_dir) and item.startswith('client_'):
+                    # Verifica se existe o arquivo config.yaml do cliente
+                    config_file = os.path.join(client_dir, CONFIG_FILE)
+                    if os.path.exists(config_file):
+                        available_clients.append(item)
+        except Exception as e:
+            logger.error(f"Erro ao listar clientes para o domínio {domain_name}: {str(e)}")
+        
+        return available_clients
     
     def load_domain(self, domain_name: str, force_reload: bool = False) -> Optional[Dict[str, Any]]:
         """
@@ -323,6 +373,123 @@ class DomainLoader:
             inherit=metadata.get("inherit"),
             available=True
         )
+    
+    def get_client_info(self, domain_name: str, client_id: str) -> Optional[ClientMetadata]:
+        """
+        Obtém metadados sobre um cliente específico sem carregar a configuração completa.
+        
+        Args:
+            domain_name: Nome do domínio
+            client_id: ID do cliente
+            
+        Returns:
+            Optional[ClientMetadata]: Metadados do cliente ou None se não encontrado
+        """
+        try:
+            # Verifica se o domínio existe e está disponível
+            domain_info = self.get_domain_info(domain_name)
+            if not domain_info.available:
+                logger.warning(f"Domínio não disponível para obter informações do cliente: {domain_name}")
+                return None
+            
+            # Verifica se o cliente existe
+            client_dir = os.path.join(self.domains_dir, domain_name, client_id)
+            if not os.path.exists(client_dir):
+                logger.warning(f"Diretório do cliente não encontrado: {client_dir}")
+                return None
+            
+            # Verifica se existe o arquivo de configuração do cliente
+            client_config_file = os.path.join(client_dir, CONFIG_FILE)
+            client_name = client_id
+            
+            # Tenta carregar o nome do cliente do arquivo de configuração
+            if os.path.exists(client_config_file):
+                client_config = self._load_yaml_file(client_config_file)
+                if client_config and "metadata" in client_config:
+                    client_name = client_config["metadata"].get("name", client_id)
+            
+            return ClientMetadata(
+                client_id=client_id,
+                client_name=client_name,
+                domain=domain_name,
+                path=client_dir
+            )
+            
+        except Exception as e:
+            logger.error(f"Erro ao obter informações do cliente {client_id} no domínio {domain_name}: {str(e)}")
+            return None
+    
+    def load_client_config(self, domain_name: str, client_id: str, force_reload: bool = False) -> Optional[Dict[str, Any]]:
+        """
+        Carrega a configuração completa de um cliente específico, mesclando com as configurações do domínio.
+        
+        Args:
+            domain_name: Nome do domínio
+            client_id: ID do cliente
+            force_reload: Se True, ignora o cache e força o recarregamento
+            
+        Returns:
+            Optional[Dict[str, Any]]: Configuração completa do cliente ou None se não encontrado
+        """
+        try:
+            # Construímos um identificador único para o cache de configurações de clientes
+            cache_key = f"{domain_name}::{client_id}"
+            
+            # Se o cliente já foi carregado e não é forçado o recarregamento, retorna do cache
+            if cache_key in self.domains_cache and not force_reload:
+                return self.domains_cache[cache_key]
+            
+            # Verifica se temos informações do cliente
+            client_info = self.get_client_info(domain_name, client_id)
+            if not client_info:
+                logger.warning(f"Cliente não encontrado: {client_id} no domínio {domain_name}")
+                return None
+            
+            # Carrega a configuração base do domínio primeiro
+            domain_config = self.load_domain(domain_name, force_reload)
+            if not domain_config:
+                logger.error(f"Não foi possível carregar a configuração do domínio: {domain_name}")
+                return None
+            
+            # Verifica se o domínio é um template
+            is_template = domain_config.get("metadata", {}).get("is_template", False)
+            if not is_template:
+                logger.warning(f"O domínio {domain_name} não é um template. Isto pode causar problemas de configuração para clientes.")
+            
+            # Clona a configuração do domínio para não modificá-la
+            client_config = copy.deepcopy(domain_config)
+            
+            # Caminho para o arquivo de configuração do cliente
+            client_config_file = os.path.join(client_info.path, CONFIG_FILE)
+            
+            # Se existir um arquivo de configuração específico do cliente, mescla com a configuração do domínio
+            if os.path.exists(client_config_file):
+                client_override = self._load_yaml_file(client_config_file)
+                if client_override:
+                    # Mescla as configurações, com o cliente tendo precedência
+                    client_config = self._merge_configs(client_config, client_override)
+            
+            # Adiciona metadados importantes do cliente
+            if "metadata" not in client_config:
+                client_config["metadata"] = {}
+                
+            client_config["metadata"]["client_id"] = client_id
+            client_config["metadata"]["client_name"] = client_info.client_name
+            client_config["metadata"]["domain"] = domain_name
+            client_config["metadata"]["path"] = client_info.path
+            client_config["metadata"]["is_template"] = False  # Configurações de cliente nunca são templates
+            
+            # Armazena a configuração em cache
+            self.domains_cache[cache_key] = client_config
+            
+            logger.info(f"Configuração de cliente carregada com sucesso: {client_id} no domínio {domain_name}")
+            return client_config
+            
+        except Exception as e:
+            logger.error(f"Erro ao carregar a configuração do cliente {client_id} no domínio {domain_name}: {str(e)}")
+            import traceback
+            logger.debug(f"Traceback: {traceback.format_exc()}")
+            return None
     
     def reload_domain(self, domain_name: str) -> Optional[Dict[str, Any]]:
         """

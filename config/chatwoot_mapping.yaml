@@ -1,23 +1,32 @@
 # Configuração de mapeamento para o ChatwootAI
 # Este arquivo define como as contas (accounts) e caixas de entrada (inboxes) do Chatwoot
-# são mapeadas para domínios específicos no sistema.
+# são mapeadas para domínios e clientes específicos no sistema.
 
-# Mapeamento de account_id para domínio
-# Quando uma mensagem chega de uma conta específica, o sistema usará o domínio correspondente
-account_domain_mapping:
-  "1": "cosmetics"  # Exemplo: A empresa de ID 1 usa o domínio de cosméticos
-  "2": "health"     # Exemplo: A empresa de ID 2 usa o domínio de saúde
-  "3": "retail"     # Exemplo: A empresa de ID 3 usa o domínio de varejo
+# Mapeamento de account_id para domínio e cliente
+# Formato: "account_id": {"domain": "nome_do_domínio", "client_id": "id_do_cliente"}
+# Quando uma mensagem chega de uma conta específica, o sistema identifica exatamente qual cliente e domínio usar
+accounts:
+  "1": {"domain": "cosmetics", "client_id": "client_1"}  # Beleza Natural Ltda.
+  "2": {"domain": "cosmetics", "client_id": "client_2"}  # Glamour Cosméticos S.A.
+  "3": {"domain": "health", "client_id": "client_3"}     # Vida Saudável Farmácias
+  "4": {"domain": "retail", "client_id": "client_4"}     # SuperCompras Varejo
   # Adicione novos mapeamentos conforme necessário
 
-# Mapeamento de inbox_id para domínio
-# Usado quando o account_id não resolve para um domínio específico
-inbox_domain_mapping:
-  "101": "cosmetics"  # Exemplo: A caixa de entrada 101 usa o domínio de cosméticos
-  "102": "cosmetics"  # Exemplo: A caixa de entrada 102 também usa cosméticos
-  "201": "health"     # Exemplo: A caixa de entrada 201 usa o domínio de saúde
-  "301": "retail"     # Exemplo: A caixa de entrada 301 usa o domínio de varejo
+# Mapeamento de inbox_id para domínio e cliente (fallback)
+# Usado quando o account_id não resolve para um cliente específico
+inboxes:
+  "101": {"domain": "cosmetics", "client_id": "client_1"}  # Inbox do WhatsApp da Beleza Natural
+  "102": {"domain": "cosmetics", "client_id": "client_2"}  # Inbox do Instagram da Glamour Cosméticos
+  "201": {"domain": "health", "client_id": "client_3"}     # Inbox do WhatsApp da Vida Saudável
+  "301": {"domain": "retail", "client_id": "client_4"}     # Inbox do Facebook do SuperCompras
   # Adicione novos mapeamentos conforme necessário
+
+# Lista de clientes para referência fácil
+clients:
+  "client_1": {"name": "Beleza Natural Ltda.", "domain": "cosmetics"} 
+  "client_2": {"name": "Glamour Cosméticos S.A.", "domain": "cosmetics"}
+  "client_3": {"name": "Vida Saudável Farmácias", "domain": "health"}
+  "client_4": {"name": "SuperCompras Varejo", "domain": "retail"}
 
 # Configurações adicionais para o webhook handler
 webhook_settings:

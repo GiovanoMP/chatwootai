@@ -1,10 +1,12 @@
-## Configuração para o Domínio de Varejo
-## Este arquivo define todas as configurações específicas para o domínio de varejo
+## Configuração Template para o Domínio de Varejo
+## Este arquivo define configurações base compartilhadas por todos os clientes no domínio de varejo
+## Ele serve como template para novos clientes, mas cada cliente tem sua própria configuração específica
 
 version: "2.1"
 metadata:
   domain: retail
   description: "Domínio de vendas para produtos de varejo geral"
+  is_template: true
   inherit: "_base"  # Herda configurações base
 
 # Configurações específicas dos agentes para o domínio de varejo

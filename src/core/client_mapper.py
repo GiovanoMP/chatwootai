@@ -9,6 +9,10 @@ do sistema ChatwootAI.
 O mapeamento é carregado a partir do arquivo config/chatwoot_mapping.yaml
 e permite identificar qual cliente e domínio devem ser usados para
 processar uma mensagem com base no account_id ou inbox_id do Chatwoot.
+
+NOTA: Este arquivo foi criado apenas para fins de teste e monitoramento.
+Ele não é utilizado pelo sistema principal e deve ser integrado ao
+webhook_handler.py ou excluído no futuro.
 """
 
 import os
@@ -93,7 +97,7 @@ class ClientMapper:
             account_id: ID da conta do Chatwoot
             
         Returns:
-            Dict[str, str]: Dicionário com 'domain' e 'client_id', ou None se não encontrado
+            Dict[str, str]: Dicionário com 'domain' e 'account_id', ou None se não encontrado
         """
         if not self.is_loaded:
             logger.warning("Mapeamento de clientes não foi carregado")
@@ -118,7 +122,7 @@ class ClientMapper:
             inbox_id: ID da caixa de entrada do Chatwoot
             
         Returns:
-            Dict[str, str]: Dicionário com 'domain' e 'client_id', ou None se não encontrado
+            Dict[str, str]: Dicionário com 'domain' e 'account_id', ou None se não encontrado
         """
         if not self.is_loaded:
             logger.warning("Mapeamento de clientes não foi carregado")
@@ -134,12 +138,12 @@ class ClientMapper:
             logger.warning(f"Nenhum cliente encontrado para inbox_id: {inbox_id}")
             return None
     
-    def get_client_details(self, client_id: str) -> Optional[Dict[str, Any]]:
+    def get_client_details(self, account_id: str) -> Optional[Dict[str, Any]]:
         """
         Obtém informações detalhadas sobre um cliente específico.
         
         Args:
-            client_id: ID do cliente
+            account_id: ID da conta
             
         Returns:
             Dict[str, Any]: Informações detalhadas do cliente, ou None se não encontrado
@@ -148,10 +152,10 @@ class ClientMapper:
             logger.warning("Mapeamento de clientes não foi carregado")
             return None
         
-        if client_id in self.clients_info:
-            return self.clients_info[client_id]
+        if account_id in self.clients_info:
+            return self.clients_info[account_id]
         else:
-            logger.warning(f"Nenhuma informação detalhada encontrada para o cliente: {client_id}")
+            logger.warning(f"Nenhuma informação detalhada encontrada para a conta: {account_id}")
             return None
     
     def get_webhook_settings(self) -> Dict[str, Any]:
@@ -172,7 +176,7 @@ class ClientMapper:
             webhook_data: Dados do webhook do Chatwoot
             
         Returns:
-            Dict[str, str]: Dicionário com 'domain' e 'client_id', ou None se não encontrado
+            Dict[str, str]: Dicionário com 'domain' e 'account_id', ou None se não encontrado
         """
         if not self.is_loaded:
             logger.warning("Mapeamento de clientes não foi carregado")
@@ -223,5 +227,5 @@ if __name__ == "__main__":
     for account_id in ["1", "2", "3", "4"]:
         client_info = mapper.get_client_by_account_id(account_id)
         if client_info:
-            client_details = mapper.get_client_details(client_info.get("client_id"))
-            print(f"Account {account_id} -> Domain: {client_info.get('domain')}, Client: {client_info.get('client_id')} ({client_details.get('name')})")
+            client_details = mapper.get_client_details(client_info.get("account_id"))
+            print(f"Account {account_id} -> Domain: {client_info.get('domain')}, Account: {client_info.get('account_id')} ({client_details.get('name')})")

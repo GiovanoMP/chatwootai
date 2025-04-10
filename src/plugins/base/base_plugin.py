@@ -24,11 +24,18 @@ class BasePlugin:
         self.enabled = config.get("enabled", True)
         self.initialize()
     
-    def initialize(self):
+    def initialize(self, **kwargs):
         """
         Método para inicialização adicional do plugin.
         Deve ser sobrescrito pelas classes filhas se necessário.
+        
+        Args:
+            **kwargs: Argumentos adicionais para a inicialização
+                - domain_name (str): Nome do domínio para o qual o plugin está sendo inicializado
+                - account_id (str): ID da conta para a qual o plugin está sendo inicializado
         """
+        # Implementação padrão que não faz nada
+        # As classes filhas devem sobrescrever este método se precisarem de inicialização específica
         pass
     
     def validate_config(self) -> bool:

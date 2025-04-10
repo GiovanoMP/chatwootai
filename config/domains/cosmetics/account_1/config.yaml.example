@@ -1,0 +1,55 @@
+# Configuração de exemplo para o domínio de cosméticos, account_1
+name: "Beleza Natural"
+description: "Loja de produtos de beleza natural"
+domain: "cosmetics"
+account_id: "account_1"
+
+# Configurações de integração
+integrations:
+  # Configuração do MCP (Message Control Program)
+  mcp:
+    type: "odoo-mcp"  # Tipo de MCP a ser usado
+    config:
+      url: "https://odoo.belezanatural.com"
+      db: "beleza_natural_prod"
+      username: "api_user"
+      password: "api_password"
+      timeout: 30
+      verify_ssl: true
+  
+  # Configuração do Qdrant (para busca semântica)
+  qdrant:
+    collection: "account_1_products"
+    embedding_model: "text-embedding-3-small"
+    similarity_threshold: 0.7
+    max_results: 10
+    
+  # Configuração do Redis (para cache)
+  redis:
+    host: "localhost"
+    port: 6379
+    db: 0
+    password: "chatwoot_redis_password"
+    ttl: 3600  # Tempo de vida padrão em segundos
+
+# Configurações específicas do domínio
+settings:
+  language: "pt_BR"
+  currency: "BRL"
+  timezone: "America/Sao_Paulo"
+  
+  # Configurações de produtos
+  products:
+    default_category: "Todos"
+    featured_categories:
+      - "Cabelo"
+      - "Pele"
+      - "Maquiagem"
+    
+  # Configurações de atendimento
+  customer_service:
+    business_hours:
+      - "Segunda a Sexta: 09:00 - 18:00"
+      - "Sábado: 09:00 - 13:00"
+    contact_email: "atendimento@belezanatural.com"
+    contact_phone: "+55 11 1234-5678"

@@ -1,0 +1,15 @@
+FROM python:3.10-slim
+
+WORKDIR /app
+
+# Instalar dependências
+RUN pip install --no-cache-dir mcp-server fastapi uvicorn pydantic
+
+# Copiar o código fonte
+COPY src/mcp_odoo /app/mcp_odoo
+
+# Expor a porta
+EXPOSE 8080
+
+# Comando para iniciar o servidor
+CMD ["python", "-m", "mcp_odoo"]

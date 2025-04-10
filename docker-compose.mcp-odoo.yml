@@ -1,0 +1,24 @@
+version: '3.8'
+
+services:
+  mcp-odoo:
+    build:
+      context: .
+      dockerfile: Dockerfile.mcp-odoo
+    container_name: mcp-odoo
+    restart: unless-stopped
+    environment:
+      - ODOO_URL=${ODOO_URL}
+      - ODOO_DB=${ODOO_DB}
+      - ODOO_USERNAME=${ODOO_USERNAME}
+      - ODOO_PASSWORD=${ODOO_PASSWORD}
+      - ODOO_TIMEOUT=30
+      - ODOO_VERIFY_SSL=1
+    ports:
+      - "8080:8080"
+    networks:
+      - chatwoot-network
+
+networks:
+  chatwoot-network:
+    external: true

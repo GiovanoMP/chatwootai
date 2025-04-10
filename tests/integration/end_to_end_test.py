@@ -37,9 +37,9 @@ from tests.integration.chatwoot_simulator import ChatwootSimulator
 try:
     from src.webhook.webhook_handler import ChatwootWebhookHandler
     from src.core.hub import HubCrew
-    from src.core.data_proxy import DataProxyAgent
+    from src.core.data_proxy_agent import DataProxyAgent
     from src.core.context_manager import ContextManagerAgent
-    from src.core.domain_manager import DomainManager
+    from src.core.domain.domain_manager import DomainManager
     from src.core.client_mapper import ClientMapper
 except ImportError as e:
     print(f"Erro ao importar componentes do sistema: {e}")

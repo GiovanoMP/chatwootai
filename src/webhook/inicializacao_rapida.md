@@ -5,7 +5,7 @@ Este guia fornece instruções passo a passo para inicializar o sistema de webho
 ## Visão Geral do Processo
 
 1. Configurar o sistema de logs
-2. Iniciar o servidor webhook local
+2. Iniciar o servidor webhook local com o DomainManager corretamente inicializado
 3. Iniciar o Ngrok para criar um túnel
 4. Monitorar os logs
 5. Atualizar a URL do Ngrok na VPS
@@ -20,10 +20,12 @@ Este guia fornece instruções passo a passo para inicializar o sistema de webho
 cd /home/giovano/Projetos/Chatwoot\ V4
 python scripts/webhook/setup_logging.py
 
-# Passo 2: Iniciar o servidor webhook
+# Passo 2: Iniciar o servidor webhook com o DomainManager corretamente inicializado
 cd /home/giovano/Projetos/Chatwoot\ V4
-python src/webhook/server.py
+python scripts/webhook/start_webhook_server.py
 ```
+
+> **IMPORTANTE**: Use o script `start_webhook_server.py` em vez de `server.py` diretamente. Este script garante que o DomainManager seja inicializado corretamente antes de iniciar o servidor webhook, evitando o erro "DomainManager não disponível".
 
 ### Terminal 2: Iniciar o Ngrok
 
@@ -52,6 +54,7 @@ docker ps | grep webhook
 
 # Passo 7: Atualizar a URL no arquivo de configuração
 # O nome do container atual é webhook-proxy
+# IMPORTANTE: Substitua a URL abaixo pela URL gerada pelo Ngrok e mantenha tudo em uma única linha
 docker exec webhook-proxy sed -i "s|FORWARD_URL *= *[\"'][^\"']*[\"']|FORWARD_URL = 'https://sua-url-do-ngrok.ngrok-free.app/webhook'|g" /app/simple_webhook.py
 
 # Passo 8: Verificar se a atualização foi bem-sucedida
@@ -80,7 +83,7 @@ tail -f logs/webhook.log
 
 # Verificar os logs do servidor webhook
 cd /home/giovano/Projetos/Chatwoot\ V4
-tail -f logs/20250325_webhook_server.log  # Substitua a data conforme necessário
+tail -f logs/20250326_webhook_server.log  # Substitua a data conforme necessário
 ```
 
 ### Verificar se as Mensagens estão sendo Processadas
@@ -93,12 +96,27 @@ tail -f logs/hub.log
 
 ## Solução de Problemas Comuns
 
+### Problema: O comando sed não funciona corretamente
+
+Se o comando sed apresentar erro, certifique-se de que:
+1. A URL está em uma única linha sem quebras
+2. As aspas simples estão sendo usadas corretamente
+3. O caminho `/webhook` está incluído no final da URL
+
 ### Problema: DomainManager não disponível
 
 Se você ver mensagens como "DomainManager não disponível, ferramentas não serão inicializadas" nos logs, verifique:
 
 1. Se o diretório `config/domains/default` existe
 2. Se os arquivos de configuração YAML estão presentes nesse diretório
+
+### Problema: Mensagens não estão sendo processadas
+
+Se as mensagens chegam ao webhook mas não são processadas corretamente, verifique:
+
+1. Se o `account_id` está sendo corretamente identificado nos logs
+2. Se o domínio está sendo determinado corretamente com base no `account_id`
+3. Se as configurações do domínio estão carregadas corretamente
 3. Se as permissões dos arquivos estão corretas
 
 ### Problema: URL do Ngrok Desatualizada na VPS

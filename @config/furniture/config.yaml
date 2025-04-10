@@ -1,0 +1,46 @@
+# Configuração do domínio furniture
+name: "furniture"
+description: "Domínio para lojas de móveis"
+version: "1.0"
+
+# Configuração da crew padrão do domínio
+crew:
+  domain_crew:
+    name: "Furniture Domain Crew"
+    description: "Crew especializada em atendimento para lojas de móveis"
+    agents:
+      - id: "intent_agent"
+        name: "Intent Agent"
+        role: "Identificar a intenção do cliente e direcionar para o agente apropriado"
+        goal: "Entender corretamente a intenção do cliente e garantir o melhor atendimento"
+        backstory: "Especialista em entender as necessidades dos clientes de lojas de móveis"
+        verbose: true
+        memory: true
+      - id: "product_agent"
+        name: "Product Agent"
+        role: "Especialista em produtos e catálogo de móveis"
+        goal: "Fornecer informações precisas sobre produtos, preços e disponibilidade"
+        backstory: "Conhecedor profundo do catálogo de produtos e especificações técnicas"
+        verbose: true
+        memory: true
+      - id: "sales_agent"
+        name: "Sales Agent"
+        role: "Especialista em vendas e finalização de pedidos"
+        goal: "Auxiliar o cliente a finalizar a compra com sucesso"
+        backstory: "Vendedor experiente com habilidade em entender as necessidades do cliente"
+        verbose: true
+        memory: true
+    tasks:
+      - description: "Identificar a intenção do cliente"
+        agent: "intent_agent"
+      - description: "Fornecer informações sobre produtos"
+        agent: "product_agent"
+      - description: "Auxiliar na finalização da compra"
+        agent: "sales_agent"
+    process:
+      - agent: "intent_agent"
+        expected_output: "Intenção identificada"
+      - agent: "product_agent"
+        expected_output: "Informações sobre produtos"
+      - agent: "sales_agent"
+        expected_output: "Pedido finalizado"

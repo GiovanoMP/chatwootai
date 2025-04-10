@@ -237,9 +237,9 @@ class PluginManager:
         """
         return plugin_name in self.plugins or self.load_plugin(plugin_name) is not None
         
-    def initialize_plugins_for_domain(self, domain_name: str) -> Dict[str, BasePlugin]:
+    def initialize_plugins_for_domain(self, domain_name: str, account_id: str = None) -> Dict[str, BasePlugin]:
         """
-        Inicializa os plugins específicos para um domínio.
+        Inicializa os plugins específicos para um domínio e conta.
         
         Este método é chamado quando uma conversa é iniciada ou quando
         o domínio de uma conversa é determinado, garantindo que todos os
@@ -247,6 +247,7 @@ class PluginManager:
         
         Args:
             domain_name: Nome do domínio
+            account_id: ID da conta (opcional, mas fortemente recomendado)
             
         Returns:
             Dict[str, BasePlugin]: Dicionário com os plugins inicializados para o domínio
@@ -293,11 +294,34 @@ class PluginManager:
                     domain_specific_plugins[plugin_name] = self.plugins[plugin_name]
         
         # 3. Inicializar cada plugin (chamar método initialize se existir)
+        logger.info(f"DIAGNÓSTICO: Inicializando {len(domain_specific_plugins)} plugins com account_id={account_id} para domínio={domain_name}")
         for plugin_name, plugin in domain_specific_plugins.items():
             try:
                 if hasattr(plugin, "initialize"):
-                    plugin.initialize(domain_name=domain_name)
-                    logger.info(f"Plugin {plugin_name} inicializado para o domínio {domain_name}")
+                    # LOG DIAGNÓSTICO: verificando se o account_id está sendo passado corretamente
+                    if account_id:
+                        logger.info(f"DIAGNÓSTICO: Passando account_id={account_id} para o plugin {plugin_name}")
+                    else:
+                        logger.warning(f"DIAGNÓSTICO: ATENÇÃO! account_id NÃO DEFINIDO para plugin {plugin_name}")
+                    
+                    # Verificar quais parâmetros o método initialize aceita usando inspeção
+                    import inspect
+                    params = inspect.signature(plugin.initialize).parameters
+                    logger.info(f"DIAGNÓSTICO: Parâmetros aceitos pelo plugin {plugin_name}: {list(params.keys())}")
+                    
+                    # Criar dicionário de argumentos com base nos parâmetros aceitos
+                    kwargs = {}
+                    if 'domain_name' in params:
+                        kwargs['domain_name'] = domain_name
+                    if 'account_id' in params:
+                        kwargs['account_id'] = account_id
+                    
+                    # Chamar o método com os parâmetros que ele aceita
+                    logger.info(f"DIAGNÓSTICO: Chamando plugin {plugin_name}.initialize com kwargs: {kwargs}")
+                    plugin.initialize(**kwargs)
+                    logger.info(f"Plugin {plugin_name} inicializado para o domínio {domain_name} e conta {account_id}")
+                else:
+                    logger.warning(f"DIAGNÓSTICO: Plugin {plugin_name} não possui método initialize")
             except Exception as e:
                 logger.error(f"Erro ao inicializar plugin {plugin_name} para o domínio {domain_name}: {e}")
         

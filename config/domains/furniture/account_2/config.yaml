@@ -1,0 +1,56 @@
+# Configuração para o domínio de móveis, account_2
+name: "Móveis Elegantes"
+description: "Loja de móveis elegantes e modernos"
+domain: "furniture"
+account_id: "account_2"
+
+# Configurações de integração
+integrations:
+  # Configuração do MCP (Message Control Program)
+  mcp:
+    type: "odoo-mcp"  # Tipo de MCP a ser usado
+    config:
+      url: "http://localhost:8069"
+      db: "account_2"
+      username: "giovano@sprintia.com.br"
+      password: "0701Gio***"
+      timeout: 30
+      verify_ssl: false
+
+  # Configuração do Qdrant (para busca semântica)
+  qdrant:
+    collection: "account_2_products"
+    embedding_model: "text-embedding-3-small"
+    similarity_threshold: 0.7
+    max_results: 10
+
+  # Configuração do Redis (para cache)
+  redis:
+    host: "localhost"
+    port: 6379
+    db: 0
+    password: "chatwoot_redis_password"
+    ttl: 3600  # Tempo de vida padrão em segundos
+
+# Configurações específicas do domínio
+settings:
+  language: "pt_BR"
+  currency: "BRL"
+  timezone: "America/Sao_Paulo"
+
+  # Configurações de produtos
+  products:
+    default_category: "Todos"
+    featured_categories:
+      - "Sala"
+      - "Quarto"
+      - "Cozinha"
+      - "Escritório"
+
+  # Configurações de atendimento
+  customer_service:
+    business_hours:
+      - "Segunda a Sexta: 09:00 - 18:00"
+      - "Sábado: 09:00 - 13:00"
+    contact_email: "atendimento@moveiselegantes.com"
+    contact_phone: "+55 11 9876-5432"

@@ -88,6 +88,17 @@ class DataServiceHub:
         # Registrar serviços padrão
         self._register_default_services()
         
+        # Registrar VectorSearchService
+        try:
+            from src.tools.vector_tools import QdrantVectorSearchTool
+            # Obter a URL do Qdrant das variáveis de ambiente ou usar um valor padrão
+            qdrant_url = os.environ.get('QDRANT_URL', 'http://localhost:6333')
+            logger.info(f"Conectando ao Qdrant em: {qdrant_url}")
+            self.register_service('VectorSearchService', QdrantVectorSearchTool(qdrant_url=qdrant_url))
+            logger.info("Serviço VectorSearchService registrado com sucesso")
+        except Exception as e:
+            logger.warning(f"Não foi possível registrar VectorSearchService: {str(e)}. A funcionalidade de busca vetorial estará indisponível.")
+        
         logger.info("DataServiceHub inicializado com sucesso")
     
     def _load_config_from_env(self) -> Dict[str, Any]:
@@ -747,14 +758,20 @@ class DataServiceHub:
         então este método apenas verifica e inicializa os serviços necessários.
         """
         try:
+            # Adicionando logs diagnósticos
+            logger.info("DIAGNÓSTICO: Iniciando registro de serviços padrão no DataServiceHub")
+            
             # Lista de serviços que devem ser carregados
             services_to_register = {
                 'ProductDataService': ('product_data_service', 'ProductDataService'),
                 'CustomerDataService': ('customer_data_service', 'CustomerDataService'),
                 'ConversationContextService': ('conversation_context_service', 'ConversationContextService'),
                 'ConversationAnalyticsService': ('conversation_analytics_service', 'ConversationAnalyticsService'),
-                'DomainRulesService': ('domain_rules_service', 'DomainRulesService')
+                'DomainRulesService': ('domain_rules_service', 'DomainRulesService'),
+                'VectorSearchService': ('vector_search_service', 'VectorSearchService')
             }
+            
+            logger.info(f"DIAGNÓSTICO: Serviços a serem registrados: {list(services_to_register.keys())}")
             
             # Verificar quais serviços já estão registrados
             missing_services = {}
@@ -769,14 +786,47 @@ class DataServiceHub:
                     # Importar dinamicamente usando path relativo ao pacote atual
                     import importlib
                     full_module_name = f"src.services.data.{module_name}"
-                    module = importlib.import_module(full_module_name)
-                    service_class = getattr(module, class_name)
+                    
+                    # Log detalhado da tentativa de importação
+                    logger.info(f"DIAGNÓSTICO: Tentando importar módulo {full_module_name} para serviço {service_name}")
+                    
+                    try:
+                        module = importlib.import_module(full_module_name)
+                        logger.info(f"DIAGNÓSTICO: Módulo {full_module_name} importado com sucesso")
+                    except ImportError as ie:
+                        logger.error(f"DIAGNÓSTICO: Erro ao importar módulo {full_module_name}: {str(ie)}")
+                        raise
+                    
+                    # Verificar se a classe existe no módulo
+                    if hasattr(module, class_name):
+                        service_class = getattr(module, class_name)
+                        logger.info(f"DIAGNÓSTICO: Classe {class_name} encontrada no módulo {full_module_name}")
+                    else:
+                        logger.error(f"DIAGNÓSTICO: Classe {class_name} não encontrada no módulo {full_module_name}")
+                        raise AttributeError(f"Módulo {full_module_name} não contém a classe {class_name}")
+                    
+                    # Verificar se a classe herda de BaseDataService
+                    from src.services.data.base_data_service import BaseDataService
+                    if not issubclass(service_class, BaseDataService):
+                        logger.warning(f"DIAGNÓSTICO: A classe {class_name} não herda de BaseDataService")
                     
                     # Instanciar e registrar (o serviço se auto-registrará via BaseDataService)
-                    service_class(self)
+                    logger.info(f"DIAGNÓSTICO: Tentando instanciar {class_name} para serviço {service_name}")
+                    service_instance = service_class(self)
+                    
+                    # Verificar se o serviço foi registrado corretamente
+                    if service_name in self.services or service_name.replace('Service', '') in self.services:
+                        logger.info(f"DIAGNÓSTICO: Serviço {service_name} registrado com sucesso!")
+                    else:
+                        logger.warning(f"DIAGNÓSTICO: Serviço {service_name} criado mas não foi registrado automaticamente!")
+                        # Registrar manualmente se não foi feito automaticamente
+                        self.register_service(service_name, service_instance)
+                    
                     logger.info(f"Serviço {service_name} inicializado")
                 except (ImportError, AttributeError) as e:
-                    logger.warning(f"Não foi possível carregar o serviço {service_name}: {str(e)}")
+                    logger.error(f"Não foi possível carregar o serviço {service_name}: {str(e)}")
+                except Exception as e:
+                    logger.error(f"Erro inesperado ao inicializar {service_name}: {str(e)}")
         except Exception as e:
             logger.error(f"Erro ao registrar serviços padrão: {str(e)}")
     

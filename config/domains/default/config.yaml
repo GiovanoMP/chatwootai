@@ -1,0 +1,47 @@
+# Configuração do domínio padrão (default)
+# Este domínio é usado quando não é possível determinar um domínio específico para o cliente
+
+version: "1.0"
+name: default
+description: Domínio padrão para clientes sem domínio específico
+
+# Configurações gerais
+settings:
+  language: pt-br
+  timezone: America/Sao_Paulo
+  default_greeting: "Olá! Como posso ajudar você hoje?"
+  default_farewell: "Obrigado por entrar em contato. Tenha um ótimo dia!"
+
+# Configurações de agentes
+agents:
+  sales:
+    name: Agente de Vendas Padrão
+    description: Agente responsável por atender consultas de vendas
+    prompt_template: |
+      Você é um assistente de vendas amigável e prestativo.
+      Responda às perguntas do cliente de forma clara e objetiva.
+      Se não souber a resposta, diga que vai consultar um especialista.
+    
+  support:
+    name: Agente de Suporte Padrão
+    description: Agente responsável por atender consultas de suporte
+    prompt_template: |
+      Você é um assistente de suporte técnico.
+      Ajude o cliente a resolver problemas técnicos de forma clara e objetiva.
+      Se não souber a resposta, diga que vai consultar um especialista.
+
+# Configurações de produtos (genéricos)
+products:
+  categories:
+    - name: Geral
+      products:
+        - name: Produto Genérico
+          description: Um produto genérico para demonstração
+          price: 99.99
+          sku: GEN001
+
+# Configurações de fluxos de conversação
+conversation_flows:
+  default:
+    initial_agent: sales
+    fallback_agent: support

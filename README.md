@@ -90,7 +90,12 @@ A `GenericCrew` é uma classe base que permite a criação dinâmica de crews a 
    - Quando um webhook é recebido do Chatwoot, o `ChatwootWebhookHandler` extrai informações críticas
    - São extraídos: account_id, inbox_id, conversation_id e customer_id
 
-2. **Determinação do Domínio no Webhook Handler**:
+2. **Identificação do Cliente via ClientMapper**:
+   - O `ClientMapper` (src/core/client_mapper.py) identifica o cliente com base no account_id do Chatwoot
+   - Utiliza o arquivo `config/chatwoot_mapping.yaml` para mapear account_id → cliente/domínio
+   - Permite uma identificação precisa e configurável de clientes sem modificar o código
+
+3. **Determinação do Domínio no Webhook Handler**:
    - O `ChatwootWebhookHandler` determina o domínio seguindo uma hierarquia de fontes:
      1. Primeiro tenta pelo account_id (nível da empresa)
      2. Se não encontrar, tenta pelo inbox_id (nível do canal)
@@ -274,6 +279,68 @@ O sistema implementa um mecanismo de fallback para garantir que todas as mensage
 1. **Domínio Fallback**: Configurado via variável de ambiente `DEFAULT_DOMAIN` (padrão: "cosmetics")
 2. **Uso do Fallback**: O domínio fallback é usado apenas quando:
    - O account_id não está mapeado em `chatwoot_mapping.yaml`
+   - Ocorre um erro ao carregar o mapeamento de clientes
+
+## Estrutura de Configuração
+
+O ChatwootAI utiliza uma estrutura de configuração baseada em YAML para definir comportamentos específicos por domínio e cliente:
+
+### Mapeamento de Clientes
+
+```
+config/chatwoot_mapping.yaml
+```
+
+Este arquivo mapeia os account_ids e inbox_ids do Chatwoot para clientes e domínios específicos:
+
+```yaml
+mappings:
+  # Mapeamento por account_id (preferencial)
+  accounts:
+    "1":
+      client_id: "client_1"
+      domain: "cosmetics"
+    "2":
+      client_id: "client_2"
+      domain: "cosmetics"
+    "3":
+      client_id: "client_3"
+      domain: "health"
+  
+  # Mapeamento por inbox_id (fallback)
+  inboxes:
+    "101":
+      client_id: "client_1"
+      domain: "cosmetics"
+```
+
+### Estrutura de Domínios
+
+```
+config/domains/
+```
+
+A estrutura de diretórios segue o padrão:
+
+```
+config/domains/
+  ├── _base/                # Configurações base para todos os domínios
+  ├── cosmetics/            # Domínio de cosméticos
+  │   ├── config.yaml       # Configuração geral do domínio
+  │   ├── client_1/         # Cliente específico no domínio
+  │   │   └── config.yaml   # Configuração específica do cliente
+  │   └── client_2/
+  │       └── config.yaml
+  └── health/               # Domínio de saúde
+      ├── config.yaml
+      └── client_3/
+          └── config.yaml
+```
+
+Esta estrutura permite:
+1. Configurações compartilhadas em `_base/`
+2. Configurações específicas por domínio
+3. Customizações por cliente dentro de cada domínio
    - O inbox_id não está mapeado em `chatwoot_mapping.yaml`
    - Não foi possível obter metadados adicionais via API do Chatwoot
 
@@ -285,31 +352,46 @@ O sistema inclui testes automatizados para validar o funcionamento correto de to
 
 1. **Testes Unitários**: Validam o funcionamento isolado de cada componente
 2. **Testes de Integração**: Validam a interação entre componentes
-3. **Testes de Sistema**: Validam o fluxo completo de mensagens
+3. **Testes End-to-End**: Simulam o fluxo completo do sistema, incluindo a identificação de clientes
 
-### Testes de Fluxo Completo com GenericCrew
+### Testes de Identificação de Clientes
 
-Um aspecto crítico do sistema é o teste do fluxo completo de mensagens usando a GenericCrew, que implementa a arquitetura hub-and-spoke. O arquivo `tests/test_generic_crew_flow.py` contém testes que validam:
+Um aspecto crítico do sistema é a identificação correta dos clientes com base no `account_id` do Chatwoot. O arquivo `tests/integration/end_to_end_test.py` contém testes que validam:
 
-1. A criação correta da GenericCrew a partir de configurações YAML
-2. O roteamento de mensagens do HubCrew para a GenericCrew apropriada
-3. O processamento assíncrono de mensagens pela GenericCrew
-4. A integração com o sistema de memória compartilhada
-5. A adaptação dinâmica a diferentes domínios de negócio
+1. A identificação correta do cliente via `ClientMapper` usando o `account_id`
+2. O carregamento da configuração específica do cliente e domínio
+3. O processamento da mensagem pelo `HubCrew` e roteamento para a crew especializada
+4. A consulta de dados via `DataProxyAgent`
+5. A geração e envio da resposta de volta ao cliente
 
-Esses testes são fundamentais para garantir que o sistema funcione corretamente em diferentes cenários e domínios de negócio.
+Esses testes são fundamentais para garantir que o sistema identifique corretamente os clientes e processe as mensagens de acordo com as configurações específicas de cada domínio e cliente.
 
 Para executar os testes:
 
 ```bash
-pytest -v tests/
+# Testes unitários
+python -m pytest tests/unit
+
+# Testes de integração
+python -m pytest tests/integration
+
+# Testes end-to-end (fluxo completo com identificação de cliente)
+python tests/integration/end_to_end_test.py
 ```
 
-Para executar apenas os testes de fluxo da GenericCrew:
+### Ferramentas de Monitoramento
+
+O sistema inclui ferramentas para monitoramento e diagnóstico:
 
 ```bash
-pytest -v tests/test_generic_crew_flow.py
+# Monitor de mapeamento de clientes (verifica logs em tempo real)
+python scripts/monitoring/client_mapping_monitor.py
+
+# Executor de testes com monitoramento detalhado
+python scripts/testing/run_e2e_test.py
 ```
+
+Estas ferramentas ajudam a verificar se o sistema está identificando corretamente os clientes e processando as mensagens conforme esperado.
 
 ## Próximos Passos
 

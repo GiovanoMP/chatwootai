@@ -45,7 +45,6 @@ from src.core.data_service_hub import DataServiceHub
 from src.core.memory import MemorySystem
 from src.core.domain import DomainManager
 from src.plugins.core.plugin_manager import PluginManager
-from src.crews.sales_crew import SalesCrew
 from src.api.chatwoot.client import ChatwootClient  # Usando a implementação da arquitetura hub-and-spoke
 
 # Cria a aplicação FastAPI
@@ -146,7 +145,6 @@ def initialize_system():
     # Inicializa as configurações de mapeamento
     account_domain_mapping = {}
     inbox_domain_mapping = {}
-    client_mapping = {}
     webhook_settings = {}
     
     # Tenta carregar o arquivo de mapeamento
@@ -158,26 +156,24 @@ def initialize_system():
                 # Extrai os mapeamentos
                 account_domain_mapping = mapping_config.get('accounts', {})
                 inbox_domain_mapping = mapping_config.get('inboxes', {})
-                client_mapping = mapping_config.get('clients', {})
                 webhook_settings = mapping_config.get('webhook_settings', {})
                 
                 logger.info(f"✅ Arquivo de mapeamento carregado: {mapping_file_path}")
                 logger.info(f"✅ Accounts mapeados: {len(account_domain_mapping)}")
                 logger.info(f"✅ Inboxes mapeados: {len(inbox_domain_mapping)}")
-                logger.info(f"✅ Clientes mapeados: {len(client_mapping)}")
                 
                 # Pré-carga de configurações de clientes para melhor desempenho
                 for account_id, mapping in account_domain_mapping.items():
                     domain = mapping.get('domain')
-                    client_id = mapping.get('client_id')
-                    if domain and client_id:
+                    account_id_value = mapping.get('account_id')
+                    if domain and account_id_value:
                         try:
                             # Carrega a configuração do cliente para o cache
-                            client_config = domain_manager.loader.load_client_config(domain, client_id)
+                            client_config = domain_manager.loader.load_client_config(domain, account_id_value)
                             if client_config:
-                                logger.info(f"✅ Configuração pré-carregada para cliente {client_id} do domínio {domain}")
+                                logger.info(f"✅ Configuração pré-carregada para account {account_id_value} do domínio {domain}")
                         except Exception as e:
-                            logger.warning(f"⚠️ Não foi possível pré-carregar cliente {client_id}: {str(e)}")
+                            logger.warning(f"⚠️ Não foi possível pré-carregar account {account_id_value}: {str(e)}")
         else:
             logger.warning(f"⚠️ Arquivo de mapeamento não encontrado: {mapping_file_path}")
     except Exception as e:
@@ -198,7 +194,6 @@ def initialize_system():
         # Adiciona os mapeamentos carregados do YAML
         "account_domain_mapping": account_domain_mapping,
         "inbox_domain_mapping": inbox_domain_mapping,
-        "client_mapping": client_mapping,
         # Adiciona configurações adicionais do webhook
         **webhook_settings
     }

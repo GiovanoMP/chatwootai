@@ -354,3 +354,21 @@ class MemorySystem:
         )
         
         return updated_context
+    
+    def get_functional_crews(self) -> Dict[str, Any]:
+        """
+        Carrega as crews disponíveis a partir das configurações YAML.
+        
+        Returns:
+            Um dicionário contendo as crews disponíveis.
+        """
+        # Aqui você deve implementar a lógica para carregar as crews do YAML
+        # Por exemplo, você pode usar uma função que lê o arquivo YAML e retorna as crews
+        # Para fins de exemplo, vamos retornar um dicionário vazio por enquanto.
+        return {
+            "SalesCrew": {},
+            "SupportCrew": {},
+            "SchedulingCrew": {},
+            "DeliveryCrew": {},
+            "MarketingCrew": {}
+        }

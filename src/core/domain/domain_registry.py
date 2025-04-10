@@ -97,6 +97,39 @@ class DomainRegistry:
         
         return config
         
+    def get_account_domain_mapping(self) -> Dict[str, Any]:
+        """
+        Obtém o mapeamento de account_id para domínio a partir do arquivo de configuração.
+        
+        Returns:
+            Dict[str, Any]: Mapeamento de account_id para informações de domínio
+        """
+        # Carregar o arquivo de mapeamento
+        import os
+        import yaml
+        
+        mapping_file_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))), 
+                                        'config', 'chatwoot_mapping.yaml')
+        
+        account_domain_mapping = {}
+        
+        if os.path.exists(mapping_file_path):
+            try:
+                with open(mapping_file_path, 'r') as file:
+                    mapping_config = yaml.safe_load(file) or {}
+                    
+                # Extrair o mapeamento de account_id para domínio
+                accounts = mapping_config.get('accounts', {})
+                account_domain_mapping = accounts
+                
+                logger.info(f"Mapeamento de account_id para domínio carregado: {len(accounts)} contas")
+            except Exception as e:
+                logger.error(f"Erro ao carregar mapeamento de account_id para domínio: {e}")
+        else:
+            logger.warning(f"Arquivo de mapeamento não encontrado: {mapping_file_path}")
+            
+        return account_domain_mapping
+    
     def update_domain_config(self, domain_name: str, new_config: Dict[str, Any]):
         """
         Atualiza a configuração de um domínio em cache e persistência.

@@ -88,10 +88,8 @@ class ChatwootWebhookHandler:
             # Incrementa contador de mensagens recebidas
             self.stats["messages_received"] += 1
             
-            # Registra a estrutura completa do webhook para diagnóstico
-            # Limita a 1000 caracteres para evitar logs muito grandes
-            webhook_str = json.dumps(webhook_data, default=str)[:1000] if webhook_data else "None"
-            logger.debug(f"Webhook recebido: {webhook_str}...")
+            # Log único de processamento
+            logger.info("Processando mensagem ID %s", webhook_data.get('id'))
             
             # Verifica se o webhook tem uma estrutura válida
             if not webhook_data:
@@ -204,6 +202,9 @@ class ChatwootWebhookHandler:
         Returns:
             Dict[str, Any]: Resultado do processamento
         """
+        # Log completo da estrutura do webhook para diagnóstico
+        logger.info(f"Webhook completo recebido: {json.dumps(webhook_data, indent=2)}")
+        
         # Extrai informações relevantes
         message_data = webhook_data.get("message", {})
         conversation_data = webhook_data.get("conversation", {})
@@ -217,7 +218,22 @@ class ChatwootWebhookHandler:
             # Registra informações adicionais para diagnóstico
             account_id = webhook_data.get("account", {}).get("id", "unknown")
             logger.info(f"Detalhes do evento sem mensagem - account_id: {account_id}")
-            return {"status": "ignored", "reason": "No message data"}
+            
+            # Tenta encontrar a mensagem em outros lugares da estrutura do webhook
+            # Muitas vezes o Chatwoot pode enviar a mensagem em uma estrutura diferente
+            messages = conversation_data.get("messages", [])
+            if messages and len(messages) > 0:
+                logger.info(f"Encontrada mensagem na lista de mensagens da conversa")
+                message_data = messages[0]
+                logger.info(f"Usando a primeira mensagem da lista: {json.dumps(message_data)}")
+            else:
+                # Tenta encontrar a mensagem no campo content diretamente na conversa
+                content = conversation_data.get("content")
+                if content:
+                    logger.info(f"Encontrado conteúdo diretamente na conversa: {content}")
+                    message_data = {"content": content, "message_type": "incoming"}
+                else:
+                    return {"status": "ignored", "reason": "No message data"}
         
         # Verifica se a mensagem tem conteúdo
         message_content = message_data.get("content")
@@ -233,10 +249,13 @@ class ChatwootWebhookHandler:
         # Registra informações detalhadas sobre a mensagem
         logger.info(f"Mensagem recebida - tipo: {message_type}, sender: {sender_type}:{sender_id}, conteúdo: {message_content[:50]}...")
         
-        # Se a mensagem não for do tipo 'incoming', ignoramos
-        if message_type != "incoming":
+        # Verifica se a mensagem é do tipo 'incoming' (string) ou '0' (numérico)
+        # O Chatwoot pode enviar o tipo como string "incoming" ou como número 0
+        if message_type != "incoming" and message_type != 0 and str(message_type) != "0":
             logger.info(f"Ignorando mensagem não-recebida (tipo: {message_type}, sender_type: {sender_type}, sender_id: {sender_id})")
             return {"status": "ignored", "reason": "Not an incoming message"}
+            
+        logger.info(f"Processando mensagem recebida (tipo: {message_type}, sender_type: {sender_type}, sender_id: {sender_id})")
         
         # Obtém dados importantes
         conversation_id = str(conversation_data.get("id", ""))
@@ -294,13 +313,40 @@ class ChatwootWebhookHandler:
             # Log detalhado para diagnóstico
             logger.info(f"Processando mensagem para account_id: {account_id}, inbox_id: {inbox_id}")
             
+            # Determinar o domínio e o account_id interno com base no account_id do Chatwoot
+            domain_name = None
+            internal_account_id = None
+            domain_manager = getattr(self.hub_crew, "_domain_manager", None)
+            
+            if domain_manager and account_id:
+                try:
+                    # Obter o domínio
+                    domain_name = domain_manager.get_domain_by_account_id(account_id)
+                    if domain_name:
+                        logger.info(f"Domínio determinado para account_id {account_id}: {domain_name}")
+                    else:
+                        logger.warning(f"Nenhum domínio encontrado para account_id {account_id}, usando padrão")
+                        
+                    # Obter o account_id interno
+                    internal_account_id = domain_manager.get_internal_account_id(account_id)
+                    if internal_account_id:
+                        logger.info(f"Account ID interno determinado: {internal_account_id}")
+                        # Adicionar o account_id interno aos metadados da mensagem normalizada
+                        normalized_message["internal_account_id"] = internal_account_id
+                    else:
+                        logger.warning(f"Nenhum account_id interno encontrado para account_id {account_id}")
+                except Exception as e:
+                    logger.error(f"Erro ao determinar domínio/account_id para account_id {account_id}: {str(e)}")
+            
             # Processar a mensagem pelo HubCrew central (hub-and-spoke model)
             # Não precisamos mais passar as crews funcionais, pois elas serão criadas dinamicamente
             # pelo CrewFactory com base no domínio determinado para a conversa
             hub_result = await self.hub_crew.process_message(
                 message=normalized_message,
                 conversation_id=conversation_id,
-                channel_type=channel_type
+                channel_type=channel_type,
+                domain_name=domain_name,  # Passamos o domínio determinado pelo account_id
+                account_id=internal_account_id  # Passamos o account_id interno
                 # Removemos o parâmetro functional_crews, pois agora é responsabilidade do HubCrew
                 # criar as crews dinamicamente usando o CrewFactory
             )
@@ -392,16 +438,28 @@ class ChatwootWebhookHandler:
         # Determinar o domínio com base nas informações da empresa/account
         domain_name = None
         
+        # Obter o DomainManager para determinar o domínio
+        from src.core.domain.domain_manager import DomainManager
+        from src.core.domain.domain_registry import get_domain_registry
+        
+        domain_registry = get_domain_registry()
+        domain_manager = DomainManager(redis_client=None, default_domain="cosmetics")
+        
         # 1. Primeiro, tentar determinar o domínio a partir do account_id
         if account_id:
             try:
-                # Consultar o mapeamento de accounts para domínios
-                # Este mapeamento pode ser armazenado na configuração ou em um serviço externo
-                account_domain_mapping = self.config.get("account_domain_mapping", {})
-                domain_name = account_domain_mapping.get(account_id)
+                # Usar o DomainManager para determinar o domínio
+                domain_name = domain_manager.get_domain_by_account_id(account_id)
                 
                 if domain_name:
-                    logger.info(f"Domínio determinado a partir do account_id: {domain_name}")
+                    logger.info(f"Domínio determinado a partir do account_id via DomainManager: {domain_name}")
+                else:
+                    # Fallback para o método antigo
+                    account_domain_mapping = self.config.get("account_domain_mapping", {})
+                    domain_name = account_domain_mapping.get(account_id)
+                    
+                    if domain_name:
+                        logger.info(f"Domínio determinado a partir do account_id via configuração: {domain_name}")
             except Exception as e:
                 logger.warning(f"Erro ao determinar domínio a partir do account_id: {str(e)}")
         

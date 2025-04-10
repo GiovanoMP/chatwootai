@@ -7,7 +7,8 @@ class VectorSearchService(BaseDataService):
     """Serviço para busca semântica em documentos e bases de conhecimento."""
     
     def __init__(self, data_service_hub, config=None):
-        super().__init__(data_service_hub, "VectorSearchService", config)
+        super().__init__(data_service_hub)
+        self.logger = logging.getLogger(__name__)  # Adicionando o logger
         self._connect_to_qdrant()
         
     def _connect_to_qdrant(self):
@@ -38,3 +39,9 @@ class VectorSearchService(BaseDataService):
     def _generate_embedding(self, text):
         # Implementar geração de embeddings (ex: usar modelo pré-treinado)
         return [0.1, 0.2, 0.3]  # Exemplo simplificado
+
+    def get_entity_type(self) -> str:
+        """
+        Retorna o tipo de entidade gerenciada por este serviço.
+        """
+        return "vector"

@@ -1,0 +1,166 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <!-- Formulário de Produto - Integração na aba Informações Gerais -->
+        <record id="product_template_form_view_semantic_inline" model="ir.ui.view">
+            <field name="name">product.template.form.semantic.inline</field>
+            <field name="model">product.template</field>
+            <field name="inherit_id" ref="product.product_template_form_view"/>
+            <field name="arch" type="xml">
+
+                <!-- Adicionar seção de Descrição Inteligente após a descrição de venda -->
+                <xpath expr="//field[@name='description_sale']" position="after">
+                    <separator string="Descrição Inteligente para IA"/>
+
+                    <!-- Alertas de Status -->
+                    <div class="alert alert-info" role="alert" attrs="{'invisible': [('semantic_description_verified', '=', True)]}">
+                        <p><strong>Dica:</strong> É importante verificar a descrição gerada por IA. Isso garante que seu cliente tenha informações precisas.</p>
+                    </div>
+                    <div class="alert alert-success" role="alert" attrs="{'invisible': [('semantic_description_verified', '=', False)]}">
+                        <p><strong>Verificado:</strong> Esta descrição foi verificada e está pronta para uso em buscas por IA.</p>
+                    </div>
+
+                    <!-- Status de Sincronização -->
+                    <div class="row mb-2">
+                        <div class="col-12">
+                            <field name="semantic_sync_status" widget="badge"
+                                   decoration-info="semantic_sync_status == 'not_synced'"
+                                   decoration-success="semantic_sync_status == 'synced'"
+                                   decoration-warning="semantic_sync_status == 'needs_update'"/>
+                            <field name="semantic_description_last_update" readonly="1"/>
+                            <field name="semantic_description_verified" invisible="1"/>
+                        </div>
+                    </div>
+
+                    <!-- Descrição Inteligente -->
+                    <div class="row">
+                        <div class="col-12">
+                            <label for="semantic_description" string="Descrição do Produto"/>
+                            <field name="semantic_description"
+                                   placeholder="Descreva brevemente o produto. Ex: Cadeira ergonômica de escritório com ajuste de altura e apoio lombar, ideal para longas horas de trabalho."
+                                   nolabel="1"
+                                   class="mb-3"/>
+                            <div class="text-muted">
+                                <small>Uma boa descrição ajuda os clientes a encontrarem seu produto através de buscas por IA</small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Características e Casos de Uso -->
+                    <div class="row">
+                        <div class="col-6">
+                            <label for="key_features" string="Principais Características"/>
+                            <field name="key_features"
+                                   placeholder="- Material resistente&#10;- Ajuste de altura&#10;- Apoio lombar&#10;- Rodízios silenciosos"
+                                   nolabel="1"
+                                   class="mb-3"/>
+                            <div class="text-muted">
+                                <small>Liste as características mais importantes, uma por linha</small>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <label for="use_cases" string="Como Este Produto Pode Ser Usado"/>
+                            <field name="use_cases"
+                                   placeholder="- Em escritórios corporativos&#10;- Home office&#10;- Salas de reunião&#10;- Espaços de coworking"
+                                   nolabel="1"
+                                   class="mb-3"/>
+                            <div class="text-muted">
+                                <small>Liste os cenários de uso mais comuns, um por linha</small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Tags Personalizadas -->
+                    <div class="row">
+                        <div class="col-12">
+                            <label for="product_tags" string="Variações e Características Adicionais"/>
+                            <field name="product_tags"
+                                   placeholder="preto, azul, couro, tecido, pequeno, médio, grande"
+                                   nolabel="1"
+                                   class="mb-3"/>
+                            <div class="text-muted">
+                                <small>Adicione características como cor, tamanho, material, etc. separadas por vírgula</small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Botões de Ação -->
+                    <div class="row mt-3">
+                        <div class="col-12">
+                            <button name="generate_semantic_description"
+                                    string="Gerar Descrição com IA"
+                                    type="object"
+                                    class="btn btn-primary"
+                                    icon="fa-magic"/>
+                            <button name="verify_semantic_description"
+                                    string="Verificar e Aprovar"
+                                    type="object"
+                                    class="btn btn-success"
+                                    attrs="{'invisible': [('semantic_description_verified', '=', True)]}"
+                                    icon="fa-check"/>
+                            <button name="sync_with_ai"
+                                    string="Sincronizar com Sistema de IA"
+                                    type="object"
+                                    class="btn btn-info"
+                                    icon="fa-refresh"/>
+                        </div>
+                    </div>
+
+                    <!-- Campo oculto para ID do vetor -->
+                    <field name="semantic_vector_id" invisible="1"/>
+                </xpath>
+            </field>
+        </record>
+
+        <!-- Vista de lista com indicador de descrição inteligente -->
+        <record id="product_template_tree_view_semantic_inline" model="ir.ui.view">
+            <field name="name">product.template.tree.semantic.inline</field>
+            <field name="model">product.template</field>
+            <field name="inherit_id" ref="product.product_template_tree_view"/>
+            <field name="arch" type="xml">
+                <field name="name" position="after">
+                    <field name="semantic_description_verified" widget="boolean_toggle"/>
+                    <field name="semantic_sync_status" widget="badge"
+                           decoration-info="semantic_sync_status == 'not_synced'"
+                           decoration-success="semantic_sync_status == 'synced'"
+                           decoration-warning="semantic_sync_status == 'needs_update'"/>
+                </field>
+            </field>
+        </record>
+
+        <!-- Vista de pesquisa com filtros para descrição inteligente -->
+        <record id="product_template_search_view_semantic_inline" model="ir.ui.view">
+            <field name="name">product.template.search.semantic.inline</field>
+            <field name="model">product.template</field>
+            <field name="inherit_id" ref="product.product_template_search_view"/>
+            <field name="arch" type="xml">
+                <!-- Adicionar filtros para descrição inteligente -->
+                <xpath expr="//filter[1]" position="after">
+                    <separator/>
+                    <filter string="Descrição Verificada" name="semantic_verified" domain="[('semantic_description_verified', '=', True)]"/>
+                    <filter string="Descrição Não Verificada" name="semantic_not_verified" domain="[('semantic_description_verified', '=', False)]"/>
+                    <separator/>
+                    <filter string="Não Sincronizado" name="not_synced" domain="[('semantic_sync_status', '=', 'not_synced')]"/>
+                    <filter string="Sincronizado" name="synced" domain="[('semantic_sync_status', '=', 'synced')]"/>
+                    <filter string="Atualização Necessária" name="needs_update" domain="[('semantic_sync_status', '=', 'needs_update')]"/>
+                </xpath>
+
+                <!-- Adicionar opções de agrupamento -->
+                <xpath expr="//filter[@name='categ_id']" position="after">
+                    <filter string="Status de Verificação" name="groupby_semantic_verified" context="{'group_by': 'semantic_description_verified'}"/>
+                    <filter string="Status de Sincronização" name="groupby_sync_status" context="{'group_by': 'semantic_sync_status'}"/>
+                </xpath>
+            </field>
+        </record>
+
+        <!-- Ação para gerar descrições inteligentes em massa -->
+        <record id="action_generate_all_semantic_descriptions_inline" model="ir.actions.server">
+            <field name="name">Gerar Descrições Inteligentes</field>
+            <field name="model_id" ref="product.model_product_template"/>
+            <field name="binding_model_id" ref="product.model_product_template"/>
+            <field name="binding_view_types">list</field>
+            <field name="state">code</field>
+            <field name="code">action = model.generate_all_semantic_descriptions()</field>
+        </record>
+    </data>
+</odoo>

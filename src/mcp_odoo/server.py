@@ -5,6 +5,9 @@ Provides MCP tools and resources for interacting with Odoo ERP systems
 """
 
 import json
+import os
+import sys
+import requests
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -205,6 +208,58 @@ class SearchHolidaysResponse(BaseModel):
     result: Optional[List[Holiday]] = Field(
         default=None, description="List of holidays found"
     )
+    error: Optional[str] = Field(default=None, description="Error message, if any")
+
+
+class ProductDescriptionRequest(BaseModel):
+    """Request model for the generate_product_description tool."""
+
+    account_id: str = Field(description="Account ID")
+    product_id: int = Field(description="Product ID in Odoo")
+
+
+class ProductDescriptionResponse(BaseModel):
+    """Response model for the generate_product_description tool."""
+
+    success: bool = Field(description="Indicates if the description generation was successful")
+    description: Optional[str] = Field(default=None, description="Generated description")
+    product_id: Optional[int] = Field(default=None, description="Product ID")
+    error: Optional[str] = Field(default=None, description="Error message, if any")
+
+
+class SyncProductRequest(BaseModel):
+    """Request model for the sync_product_to_vector_db tool."""
+
+    account_id: str = Field(description="Account ID")
+    product_id: int = Field(description="Product ID in Odoo")
+    description: Optional[str] = Field(default=None, description="Product description to use for vectorization")
+    skip_odoo_update: bool = Field(default=False, description="Skip updating Odoo with sync status")
+
+
+class SyncProductResponse(BaseModel):
+    """Response model for the sync_product_to_vector_db tool."""
+
+    success: bool = Field(description="Indicates if the synchronization was successful")
+    vector_id: Optional[str] = Field(default=None, description="Vector ID in Qdrant")
+    message: Optional[str] = Field(default=None, description="Success message")
+    error: Optional[str] = Field(default=None, description="Error message, if any")
+
+
+class SemanticSearchRequest(BaseModel):
+    """Request model for the semantic_search tool."""
+
+    account_id: str = Field(description="Account ID")
+    query: str = Field(description="Search query in natural language")
+    limit: int = Field(default=10, description="Maximum number of results to return")
+    filter: Optional[Dict[str, Any]] = Field(default=None, description="Additional filters")
+
+
+class SemanticSearchResponse(BaseModel):
+    """Response model for the semantic_search tool."""
+
+    success: bool = Field(description="Indicates if the search was successful")
+    results: Optional[List[Dict[str, Any]]] = Field(default=None, description="Search results")
+    count: Optional[int] = Field(default=None, description="Number of results")
     error: Optional[str] = Field(default=None, description="Error message, if any")
 
 
@@ -1252,3 +1307,675 @@ def get_payment_methods(
         )
     except Exception as e:
         return PaymentMethodResponse(success=False, error=str(e))
+
+
+# ----- Vector Service Integration Tools -----
+
+
+def get_product_metadata(odoo: OdooClient, account_id: str, product_id: int) -> Dict[str, Any]:
+    """
+    Get product metadata for description generation.
+
+    Args:
+        odoo: Odoo client
+        account_id: Account ID
+        product_id: Product ID
+
+    Returns:
+        Dict with product metadata
+    """
+    try:
+        # Log the request for debugging
+        print(f"Getting metadata for product {product_id} in account {account_id}")
+
+        # Get basic product data
+        product_data = odoo.execute(
+            'product.template',
+            'read',
+            [product_id],
+            ['name', 'categ_id', 'description_sale', 'description']
+        )[0]
+
+        # Get category name
+        category = {}
+        if product_data.get('categ_id'):
+            category = odoo.execute(
+                'product.category',
+                'read',
+                [product_data['categ_id'][0]],
+                ['name']
+            )[0]
+
+        # Get attributes and values
+        attribute_lines = odoo.execute(
+            'product.template.attribute.line',
+            'search_read',
+            [('product_tmpl_id', '=', product_id)],
+            ['attribute_id', 'value_ids']
+        )
+
+        attributes = []
+        for attr_line in attribute_lines:
+            attr_values = []
+            if attr_line.get('value_ids'):
+                attr_values = odoo.execute(
+                    'product.attribute.value',
+                    'read',
+                    attr_line['value_ids'],
+                    ['name']
+                )
+                attr_values = [v['name'] for v in attr_values]
+
+            attributes.append({
+                'name': attr_line['attribute_id'][1],
+                'values': attr_values
+            })
+
+        # Get semantic description fields if available
+        semantic_fields = odoo.execute(
+            'product.template',
+            'read',
+            [product_id],
+            ['semantic_description', 'key_features', 'use_cases', 'ai_generated_description', 'semantic_description_verified']
+        )[0]
+
+        # Prepare metadata
+        metadata = {
+            'id': product_id,
+            'name': product_data.get('name', ''),
+            'category': category.get('name', ''),
+            'description_sale': product_data.get('description_sale', ''),
+            'description': product_data.get('description', ''),
+            'attributes': attributes,
+            'semantic_description': semantic_fields.get('semantic_description', ''),
+            'key_features': semantic_fields.get('key_features', ''),
+            'use_cases': semantic_fields.get('use_cases', ''),
+            'ai_generated_description': semantic_fields.get('ai_generated_description', ''),
+            'verified': semantic_fields.get('semantic_description_verified', False)
+        }
+
+        return metadata
+    except Exception as e:
+        raise Exception(f"Error getting product metadata: {str(e)}")
+
+
+@mcp.tool(
+    "generate_product_description",
+    description="Generate a rich commercial description for a product based on its metadata",
+)
+def generate_product_description(
+    ctx: Context, request: ProductDescriptionRequest
+) -> ProductDescriptionResponse:
+    """
+    Generate a rich commercial description for a product based on its metadata
+
+    This tool uses an LLM to create compelling product descriptions that can be
+    reviewed and edited by users before being used for semantic search.
+    """
+    try:
+        # Get Odoo client from context
+        odoo = ctx.app.odoo
+
+        # Get product metadata
+        product_metadata = get_product_metadata(odoo, request.account_id, request.product_id)
+
+        # Import the description agent
+        sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+        from src.agents.product_description_agent import ProductDescriptionAgent
+
+        # Initialize the description agent
+        api_key = os.environ.get("OPENAI_API_KEY")
+        if not api_key:
+            return ProductDescriptionResponse(
+                success=False,
+                error="OpenAI API key not configured"
+            )
+
+        description_agent = ProductDescriptionAgent(api_key)
+
+        # Generate description
+        description = description_agent.generate_description(product_metadata)
+
+        return ProductDescriptionResponse(
+            success=True,
+            description=description,
+            product_id=request.product_id
+        )
+    except Exception as e:
+        return ProductDescriptionResponse(
+            success=False,
+            error=f"Error generating description: {str(e)}"
+        )
+
+
+@mcp.tool(
+    "sync_product_to_vector_db",
+    description="Synchronize a product to the vector database",
+)
+def sync_product_to_vector_db(
+    ctx: Context, request: SyncProductRequest
+) -> SyncProductResponse:
+    """
+    Synchronize a product to the vector database for semantic search
+
+    This tool generates embeddings and stores them in Qdrant for semantic search.
+    """
+    try:
+        # Get Odoo client from context
+        odoo = ctx.app.odoo
+
+        # Get product data from Odoo if description not provided
+        description = request.description
+        product_data = {}
+
+        if not description:
+            product_data = get_product_metadata(odoo, request.account_id, request.product_id)
+            description = product_data.get('ai_generated_description') or product_data.get('semantic_description')
+
+        if not description:
+            return SyncProductResponse(
+                success=False,
+                error="No description available for vectorization"
+            )
+
+        # Prepare metadata
+        if not product_data:
+            product_data = get_product_metadata(odoo, request.account_id, request.product_id)
+
+        metadata = {
+            "product_id": request.product_id,
+            "name": product_data.get("name", ""),
+            "category": product_data.get("category", ""),
+            "verified": product_data.get("verified", True)
+        }
+
+        # Call Vector Service API
+        vector_service_url = os.environ.get("VECTOR_SERVICE_URL", "http://localhost:8001")
+
+        response = requests.post(
+            f"{vector_service_url}/api/v1/vectors",
+            json={
+                "account_id": request.account_id,
+                "product_id": str(request.product_id),
+                "text": description,
+                "metadata": metadata
+            }
+        )
+
+        if response.status_code != 201:
+            return SyncProductResponse(
+                success=False,
+                error=f"Vector Service error: {response.text}"
+            )
+
+        result = response.json()
+
+        # Update product in Odoo with vector ID and sync status if needed
+        if not request.skip_odoo_update:
+            odoo.execute(
+                'product.template',
+                'write',
+                [request.product_id],
+                {
+                    'semantic_vector_id': result.get("vector_id"),
+                    'semantic_sync_status': 'synced'
+                }
+            )
+
+        return SyncProductResponse(
+            success=True,
+            vector_id=result.get("vector_id"),
+            message="Product successfully synchronized with vector database"
+        )
+    except Exception as e:
+        return SyncProductResponse(
+            success=False,
+            error=f"Error synchronizing product: {str(e)}"
+        )
+
+
+@mcp.tool(
+    "semantic_search",
+    description="Perform semantic search for products",
+)
+def semantic_search(
+    ctx: Context, request: SemanticSearchRequest
+) -> SemanticSearchResponse:
+    """
+    Perform semantic search for products
+
+    This tool searches for products using natural language queries.
+    """
+    try:
+        # Call Vector Service API
+        vector_service_url = os.environ.get("VECTOR_SERVICE_URL", "http://localhost:8001")
+
+        response = requests.post(
+            f"{vector_service_url}/api/v1/search",
+            json={
+                "account_id": request.account_id,
+                "query": request.query,
+                "limit": request.limit,
+                "filter": request.filter
+            }
+        )
+
+        if response.status_code != 200:
+            return SemanticSearchResponse(
+                success=False,
+                error=f"Vector Service error: {response.text}"
+            )
+
+        result = response.json()
+
+        # Enrich results with Odoo data if needed
+        odoo = ctx.app.odoo
+        enriched_results = []
+
+        for item in result.get("results", []):
+            product_id = item.get("metadata", {}).get("product_id")
+            if product_id:
+                try:
+                    product_data = odoo.execute(
+                        'product.template',
+                        'read',
+                        [int(product_id)],
+                        ['name', 'list_price', 'image_1920']
+                    )[0]
+
+                    # Add product data to result
+                    item["product_data"] = {
+                        "name": product_data.get("name"),
+                        "price": product_data.get("list_price"),
+                        "has_image": bool(product_data.get("image_1920"))
+                    }
+                except Exception as e:
+                    # If we can't get product data, just continue with the result as is
+                    pass
+
+            enriched_results.append(item)
+
+        return SemanticSearchResponse(
+            success=True,
+            results=enriched_results,
+            count=len(enriched_results)
+        )
+    except Exception as e:
+        return SemanticSearchResponse(
+            success=False,
+            error=f"Error performing semantic search: {str(e)}"
+        )
+
+
+# ----- Product Metadata Tools -----
+
+class ProductMetadataRequest(BaseModel):
+    """Request model for product metadata"""
+    product_id: int
+    include_variants: bool = True
+    include_attributes: bool = True
+    include_images: bool = False
+    include_categories: bool = True
+    lang: str = "pt_BR"
+
+
+class ProductAttributeValue(BaseModel):
+    """Product attribute value"""
+    id: int
+    name: str
+
+
+class ProductAttribute(BaseModel):
+    """Product attribute"""
+    id: int
+    name: str
+    values: List[ProductAttributeValue]
+
+
+class ProductCategory(BaseModel):
+    """Product category"""
+    id: int
+    name: str
+    parent_id: Optional[int] = None
+    parent_name: Optional[str] = None
+
+
+class ProductImage(BaseModel):
+    """Product image"""
+    id: int
+    name: Optional[str] = None
+    url: str
+
+
+class ProductVariant(BaseModel):
+    """Product variant"""
+    id: int
+    name: str
+    default_code: Optional[str] = None
+    barcode: Optional[str] = None
+    list_price: float
+    attributes: Dict[str, str] = Field(default_factory=dict)
+
+
+class ProductMetadata(BaseModel):
+    """Complete product metadata"""
+    product_id: int
+    name: str
+    description: Optional[str] = None
+    description_sale: Optional[str] = None
+    categ_id: Optional[int] = None
+    categ_name: Optional[str] = None
+    list_price: Optional[float] = None
+    default_code: Optional[str] = None
+    barcode: Optional[str] = None
+    active: bool = True
+    sale_ok: bool = True
+    purchase_ok: bool = True
+    type: str = "product"
+    category: Optional[ProductCategory] = None
+    attributes: List[ProductAttribute] = Field(default_factory=list)
+    variants: List[ProductVariant] = Field(default_factory=list)
+    images: List[ProductImage] = Field(default_factory=list)
+    tags: List[str] = Field(default_factory=list)
+
+
+@mcp.tool(
+    "get_product_metadata",
+    description="Get detailed product metadata including variants, attributes, and categories",
+)
+def get_product_metadata(ctx: Context, request: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Get detailed product metadata from Odoo.
+
+    This tool retrieves comprehensive product information including variants,
+    attributes, categories, and images if requested.
+    """
+    try:
+        # Get Odoo client from context
+        odoo = ctx.app.odoo
+
+        # Parse request
+        req = ProductMetadataRequest(**request)
+        product_id = req.product_id
+
+        # Get basic product data
+        product_data = odoo.execute(
+            'product.template',
+            'read',
+            [product_id],
+            [
+                'name', 'description', 'description_sale', 'categ_id',
+                'list_price', 'default_code', 'barcode', 'active',
+                'sale_ok', 'purchase_ok', 'type'
+            ]
+        )
+
+        if not product_data:
+            return {
+                "success": False,
+                "error": f"Product with ID {product_id} not found"
+            }
+
+        product_data = product_data[0]
+
+        # Initialize metadata
+        metadata = ProductMetadata(
+            product_id=product_id,
+            name=product_data.get('name', ''),
+            description=product_data.get('description', ''),
+            description_sale=product_data.get('description_sale', ''),
+            categ_id=product_data.get('categ_id', [False, ''])[0] if product_data.get('categ_id') else None,
+            categ_name=product_data.get('categ_id', [False, ''])[1] if product_data.get('categ_id') else None,
+            list_price=product_data.get('list_price', 0.0),
+            default_code=product_data.get('default_code', ''),
+            barcode=product_data.get('barcode', ''),
+            active=product_data.get('active', True),
+            sale_ok=product_data.get('sale_ok', True),
+            purchase_ok=product_data.get('purchase_ok', True),
+            type=product_data.get('type', 'product')
+        )
+
+        # Get category data if requested
+        if req.include_categories and metadata.categ_id:
+            category_data = odoo.execute(
+                'product.category',
+                'read',
+                [metadata.categ_id],
+                ['name', 'parent_id']
+            )
+
+            if category_data:
+                category = category_data[0]
+                parent_id = None
+                parent_name = None
+
+                if category.get('parent_id'):
+                    parent_id = category['parent_id'][0]
+                    parent_name = category['parent_id'][1]
+
+                metadata.category = ProductCategory(
+                    id=metadata.categ_id,
+                    name=category.get('name', ''),
+                    parent_id=parent_id,
+                    parent_name=parent_name
+                )
+
+        # Get product attributes if requested
+        if req.include_attributes:
+            # Get attribute lines
+            attr_lines = odoo.execute(
+                'product.template.attribute.line',
+                'search_read',
+                [('product_tmpl_id', '=', product_id)],
+                ['attribute_id', 'value_ids']
+            )
+
+            attributes = []
+            for line in attr_lines:
+                attr_id = line['attribute_id'][0]
+                attr_name = line['attribute_id'][1]
+                value_ids = line['value_ids']
+
+                # Get attribute values
+                if value_ids:
+                    values_data = odoo.execute(
+                        'product.attribute.value',
+                        'read',
+                        value_ids,
+                        ['name']
+                    )
+
+                    values = [
+                        ProductAttributeValue(id=val['id'], name=val['name'])
+                        for val in values_data
+                    ]
+
+                    attributes.append(ProductAttribute(
+                        id=attr_id,
+                        name=attr_name,
+                        values=values
+                    ))
+
+            metadata.attributes = attributes
+
+        # Get product variants if requested
+        if req.include_variants:
+            # Get product variants
+            variant_ids = odoo.execute(
+                'product.product',
+                'search',
+                [('product_tmpl_id', '=', product_id)]
+            )
+
+            if variant_ids:
+                variants_data = odoo.execute(
+                    'product.product',
+                    'read',
+                    variant_ids,
+                    ['name', 'default_code', 'barcode', 'list_price']
+                )
+
+                variants = []
+                for variant in variants_data:
+                    # Get variant attributes
+                    variant_attrs = {}
+                    attr_vals = odoo.execute(
+                        'product.template.attribute.value',
+                        'search_read',
+                        [('product_id', '=', variant['id'])],
+                        ['attribute_id', 'name']
+                    )
+
+                    for attr_val in attr_vals:
+                        attr_name = attr_val['attribute_id'][1]
+                        variant_attrs[attr_name] = attr_val['name']
+
+                    variants.append(ProductVariant(
+                        id=variant['id'],
+                        name=variant['name'],
+                        default_code=variant.get('default_code', ''),
+                        barcode=variant.get('barcode', ''),
+                        list_price=variant.get('list_price', 0.0),
+                        attributes=variant_attrs
+                    ))
+
+                metadata.variants = variants
+
+        # Get product images if requested
+        if req.include_images:
+            # Get product images
+            image_ids = odoo.execute(
+                'product.image',
+                'search',
+                [('product_tmpl_id', '=', product_id)]
+            )
+
+            if image_ids:
+                images_data = odoo.execute(
+                    'product.image',
+                    'read',
+                    image_ids,
+                    ['name']
+                )
+
+                base_url = odoo.get_base_url()
+                images = []
+
+                for image in images_data:
+                    image_url = f"{base_url}/web/image/product.image/{image['id']}/image_1920"
+                    images.append(ProductImage(
+                        id=image['id'],
+                        name=image.get('name', ''),
+                        url=image_url
+                    ))
+
+                # Add main product image
+                main_image_url = f"{base_url}/web/image/product.template/{product_id}/image_1920"
+                images.insert(0, ProductImage(
+                    id=0,
+                    name="Main Image",
+                    url=main_image_url
+                ))
+
+                metadata.images = images
+
+        # Return metadata
+        return {
+            "success": True,
+            "metadata": metadata.dict()
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+
+@mcp.tool(
+    "search_products_semantic",
+    description="Search products with semantic relevance and filtering",
+)
+def search_products_semantic(ctx: Context, request: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Search for products with semantic relevance and filtering.
+
+    This tool combines traditional filtering with semantic search capabilities,
+    allowing for more natural language queries while still respecting hard filters.
+    """
+    try:
+        # Get Odoo client from context
+        odoo = ctx.app.odoo
+
+        # Extract parameters
+        query = request.get("query", "")
+        filters = request.get("filters", [])
+        limit = request.get("limit", 10)
+        offset = request.get("offset", 0)
+        fields = request.get("fields", [
+            "id", "name", "description", "description_sale",
+            "list_price", "default_code", "categ_id"
+        ])
+
+        # Ensure id is always included
+        if "id" not in fields:
+            fields.append("id")
+
+        # Build domain
+        domain = [
+            ("active", "=", True),
+            ("sale_ok", "=", True)
+        ]
+
+        # Add custom filters
+        if filters:
+            domain.extend(filters)
+
+        # If query is provided, add basic text search
+        # Note: This is a simple implementation. In a real system,
+        # this would be integrated with the vector search service.
+        if query:
+            domain.append("|")  # OR operator
+            domain.append(("name", "ilike", query))
+            domain.append(("description", "ilike", query))
+
+        # Search for products
+        product_ids = odoo.execute(
+            "product.template",
+            "search",
+            domain,
+            limit=limit,
+            offset=offset
+        )
+
+        if not product_ids:
+            return {
+                "success": True,
+                "products": [],
+                "total": 0
+            }
+
+        # Read product data
+        products = odoo.execute(
+            "product.template",
+            "read",
+            product_ids,
+            fields
+        )
+
+        # Get total count (without limit/offset)
+        total_count = odoo.execute(
+            "product.template",
+            "search_count",
+            domain
+        )
+
+        return {
+            "success": True,
+            "products": products,
+            "total": total_count
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e)
+        }

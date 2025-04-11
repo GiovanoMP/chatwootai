@@ -10,11 +10,11 @@
                 <notebook position="inside">
                     <page string="Descrição do Produto para IA" name="semantic_description">
                         <!-- Alertas de Status -->
-                        <div class="alert alert-info" role="alert" attrs="{'invisible': [('semantic_description_verified', '=', True)]}">
-                            <p><strong>Dica:</strong> É importante verificar a descrição gerada por IA. Isso garante que seu cliente tenha informações precisas.</p>
+                        <div class="alert alert-info" role="alert" attrs="{'invisible': [('semantic_sync_status', '=', 'synced')]}">
+                            <p><strong>Dica:</strong> Após editar a descrição gerada por IA, clique em "Sincronizar com Sistema de IA" para disponibilizá-la para buscas semânticas.</p>
                         </div>
-                        <div class="alert alert-success" role="alert" attrs="{'invisible': [('semantic_description_verified', '=', False)]}">
-                            <p><strong>Verificado:</strong> Esta descrição foi verificada e está pronta para uso em buscas por IA.</p>
+                        <div class="alert alert-success" role="alert" attrs="{'invisible': [('semantic_sync_status', '!=', 'synced')]}">
+                            <p><strong>Sincronizado:</strong> Esta descrição está disponível para buscas semânticas.</p>
                         </div>
 
                         <!-- Status de Sincronização -->
@@ -98,17 +98,11 @@
                                         type="object"
                                         class="btn btn-primary"
                                         icon="fa-magic"/>
-                                <button name="verify_semantic_description"
-                                        string="Verificar e Aprovar"
-                                        type="object"
-                                        class="btn btn-success"
-                                        attrs="{'invisible': [('semantic_description_verified', '=', True)]}"
-                                        icon="fa-check"/>
-                                <button name="mark_for_sync"
+                                <button name="sync_with_ai"
                                         string="Sincronizar com Sistema de IA"
                                         type="object"
-                                        class="btn btn-info"
-                                        icon="fa-refresh"/>
+                                        class="btn btn-success"
+                                        icon="fa-cloud-upload"/>
                             </div>
                         </div>
 

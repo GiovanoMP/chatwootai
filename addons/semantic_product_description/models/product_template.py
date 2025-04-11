@@ -89,132 +89,39 @@ class ProductTemplate(models.Model):
 
     @api.model
     def generate_semantic_description(self):
-        """Gera automaticamente uma descrição inteligente baseada nos metadados do produto."""
+        """Gera automaticamente uma descrição inteligente baseada nos metadados do produto usando IA."""
         _logger.info(f"Iniciando geração de descrição inteligente para {len(self)} produtos")
         start_time = time.time()
 
         for product in self:
             try:
                 _logger.info(f"Processando produto ID {product.id}: {product.name}")
-                # Coletar metadados disponíveis
-                name = product.name
-                category = product.categ_id.name if product.categ_id else ""
 
-                # Iniciar a descrição
-                description_parts = [f"{name} é um produto da categoria {category}."]
+                # Chamar o MCP-Odoo para gerar a descrição
+                description = self._call_mcp_generate_description(product.id)
 
-                # Adicionar descrição de venda se disponível
-                if product.description_sale:
-                    # Limpar HTML se presente
-                    clean_description = re.sub(r'<.*?>', '', product.description_sale)
-                    description_parts.append(clean_description)
+                if description:
+                    # Gerar características principais automaticamente se o campo estiver vazio
+                    key_features_text = None
+                    if not product.key_features:
+                        key_features_text = self._generate_key_features(product)
 
-                # Adicionar informações de preço
-                if hasattr(product, 'list_price'):
-                    currency_symbol = product.currency_id.symbol if hasattr(product, 'currency_id') else 'R$'
-                    description_parts.append(f"Preço de venda: {currency_symbol} {product.list_price:.2f}.")
+                    # Atualizar o produto
+                    values = {
+                        'ai_generated_description': description,
+                        'semantic_description_last_update': fields.Datetime.now(),
+                        'semantic_description_verified': False,
+                        'semantic_sync_status': 'needs_update'
+                    }
 
-                # Adicionar informações de estoque se disponíveis
-                if hasattr(product, 'qty_available') and product.qty_available is not None:
-                    status = "Em estoque" if product.qty_available > 0 else "Fora de estoque"
-                    description_parts.append(f"Status de estoque: {status}.")
+                    # Adicionar características principais apenas se o campo estiver vazio
+                    if key_features_text:
+                        values['key_features'] = key_features_text
 
-                # Adicionar atributos e variantes
-                variant_descriptions = []
-                for attr_line in product.attribute_line_ids:
-                    attr_name = attr_line.attribute_id.name
-                    attr_values = ", ".join([v.name for v in attr_line.value_ids])
-                    variant_descriptions.append(f"{attr_name}: {attr_values}")
-
-                if variant_descriptions:
-                    description_parts.append("Disponível com as seguintes variações: " + "; ".join(variant_descriptions) + ".")
-
-                # Adicionar tags personalizadas
-                if product.product_tags:
-                    tags = [tag.strip() for tag in product.product_tags.split(',') if tag.strip()]
-                    if tags:
-                        description_parts.append("Tags: " + ", ".join(tags) + ".")
-
-                # Adicionar código de barras se disponível
-                if hasattr(product, 'barcode') and product.barcode:
-                    description_parts.append(f"Código de barras: {product.barcode}.")
-
-                # Adicionar código interno se disponível
-                if product.default_code:
-                    description_parts.append(f"Código interno: {product.default_code}.")
-
-                # Adicionar unidade de medida
-                if hasattr(product, 'uom_id') and product.uom_id:
-                    description_parts.append(f"Unidade de medida: {product.uom_id.name}.")
-
-                # Adicionar peso se disponível
-                if hasattr(product, 'weight') and product.weight:
-                    description_parts.append(f"Peso: {product.weight} kg.")
-
-                # Adicionar dimensões se disponíveis
-                dimensions = []
-                if hasattr(product, 'length') and product.length:
-                    dimensions.append(f"comprimento: {product.length} cm")
-                if hasattr(product, 'width') and product.width:
-                    dimensions.append(f"largura: {product.width} cm")
-                if hasattr(product, 'height') and product.height:
-                    dimensions.append(f"altura: {product.height} cm")
-
-                if dimensions:
-                    description_parts.append("Dimensões: " + ", ".join(dimensions) + ".")
-
-                # Juntar tudo em uma descrição coesa
-                semantic_description = " ".join(description_parts)
-
-                # Salvar a descrição gerada pela IA no campo específico
-                ai_description = semantic_description
-
-                # Gerar características principais automaticamente
-                key_features_list = []
-
-                # Adicionar categoria como característica
-                if category:
-                    key_features_list.append(f"Categoria: {category}")
-
-                # Adicionar preço como característica
-                if hasattr(product, 'list_price'):
-                    currency_symbol = product.currency_id.symbol if hasattr(product, 'currency_id') else 'R$'
-                    key_features_list.append(f"Preço: {currency_symbol} {product.list_price:.2f}")
-
-                # Adicionar disponibilidade como característica
-                if hasattr(product, 'qty_available') and product.qty_available is not None:
-                    status = "Em estoque" if product.qty_available > 0 else "Fora de estoque"
-                    key_features_list.append(f"Disponibilidade: {status}")
-
-                # Adicionar peso como característica
-                if hasattr(product, 'weight') and product.weight:
-                    key_features_list.append(f"Peso: {product.weight} kg")
-
-                # Adicionar variantes como características
-                for attr_line in product.attribute_line_ids:
-                    attr_name = attr_line.attribute_id.name
-                    attr_values = ", ".join([v.name for v in attr_line.value_ids])
-                    key_features_list.append(f"{attr_name}: {attr_values}")
-
-                # Formatar características principais
-                key_features_text = "\n".join([f"- {feature}" for feature in key_features_list])
-
-                # Atualizar o produto
-                values = {
-                    'semantic_description': semantic_description,
-                    'ai_generated_description': ai_description,
-                    'semantic_description_last_update': fields.Datetime.now(),
-                    'semantic_description_verified': False,
-                    'semantic_sync_status': 'needs_update'
-                }
-
-                # Adicionar características principais apenas se o campo estiver vazio
-                if not product.key_features:
-                    values['key_features'] = key_features_text
-
-                product.write(values)
-
-                _logger.info(f"Descrição semântica gerada com sucesso para o produto {product.id} - {product.name}")
+                    product.write(values)
+                    _logger.info(f"Descrição semântica gerada com sucesso para o produto {product.id} - {product.name}")
+                else:
+                    _logger.warning(f"Não foi possível gerar descrição para o produto {product.id} - {product.name}")
 
             except Exception as e:
                 _logger.error(f"Erro ao gerar descrição semântica para o produto {product.id} - {product.name}: {str(e)}")
@@ -222,6 +129,84 @@ class ProductTemplate(models.Model):
         # Calcular tempo total de processamento
         elapsed_time = time.time() - start_time
         _logger.info(f"Geração de descrições semânticas concluída em {elapsed_time:.2f} segundos")
+
+    def _call_mcp_generate_description(self, product_id):
+        """Chama o MCP-Odoo para gerar uma descrição para o produto."""
+        try:
+            import requests
+            import json
+
+            # Obter configurações do MCP-Odoo
+            mcp_url = self.env['ir.config_parameter'].sudo().get_param('mcp_odoo.url', 'http://localhost:8000')
+            mcp_token = self.env['ir.config_parameter'].sudo().get_param('mcp_odoo.token', '')
+            account_id = self.env['ir.config_parameter'].sudo().get_param('mcp_odoo.account_id', 'account_2')
+
+            # Preparar a requisição
+            headers = {
+                'Content-Type': 'application/json',
+                'Authorization': f'Bearer {mcp_token}' if mcp_token else ''
+            }
+
+            payload = {
+                'account_id': account_id,
+                'product_id': product_id
+            }
+
+            # Fazer a requisição ao MCP-Odoo
+            _logger.info(f"Chamando MCP-Odoo para gerar descrição para o produto {product_id}")
+            response = requests.post(
+                f"{mcp_url}/tools/generate_product_description",
+                headers=headers,
+                json=payload,
+                timeout=30  # Timeout de 30 segundos
+            )
+
+            # Verificar resposta
+            if response.status_code == 200:
+                result = response.json()
+                if result.get('success'):
+                    return result.get('description')
+                else:
+                    _logger.error(f"Erro do MCP-Odoo: {result.get('error')}")
+            else:
+                _logger.error(f"Erro na chamada ao MCP-Odoo: {response.status_code} - {response.text}")
+
+            return None
+        except Exception as e:
+            _logger.error(f"Exceção ao chamar MCP-Odoo: {str(e)}")
+            return None
+
+    def _generate_key_features(self, product):
+        """Gera características principais automaticamente."""
+        key_features_list = []
+
+        # Adicionar categoria como característica
+        category = product.categ_id.name if product.categ_id else ""
+        if category:
+            key_features_list.append(f"Categoria: {category}")
+
+        # Adicionar preço como característica
+        if hasattr(product, 'list_price'):
+            currency_symbol = product.currency_id.symbol if hasattr(product, 'currency_id') else 'R$'
+            key_features_list.append(f"Preço: {currency_symbol} {product.list_price:.2f}")
+
+        # Adicionar disponibilidade como característica
+        if hasattr(product, 'qty_available') and product.qty_available is not None:
+            status = "Em estoque" if product.qty_available > 0 else "Fora de estoque"
+            key_features_list.append(f"Disponibilidade: {status}")
+
+        # Adicionar peso como característica
+        if hasattr(product, 'weight') and product.weight:
+            key_features_list.append(f"Peso: {product.weight} kg")
+
+        # Adicionar variantes como características
+        for attr_line in product.attribute_line_ids:
+            attr_name = attr_line.attribute_id.name
+            attr_values = ", ".join([v.name for v in attr_line.value_ids])
+            key_features_list.append(f"{attr_name}: {attr_values}")
+
+        # Formatar características principais
+        return "\n".join([f"- {feature}" for feature in key_features_list])
 
     def verify_semantic_description(self):
         """Marca a descrição semântica como verificada."""
@@ -233,13 +218,77 @@ class ProductTemplate(models.Model):
         })
         _logger.info(f"Descrição semântica verificada para o produto {self.id} - {self.name}")
 
-    def mark_for_sync(self):
-        """Marca o produto para sincronização com o banco de dados vetorial."""
+    def sync_with_ai(self):
+        """Sincroniza o produto com o sistema de IA."""
         self.ensure_one()
-        self.write({
-            'semantic_sync_status': 'needs_update'
-        })
-        _logger.info(f"Produto {self.id} - {self.name} marcado para sincronização")
+        try:
+            # Marcar como verificado
+            self.write({
+                'semantic_description_verified': True,
+                'semantic_description_last_update': fields.Datetime.now()
+            })
+
+            # Chamar o MCP-Odoo para sincronizar
+            result = self._call_mcp_sync_product(self.id)
+
+            if result and result.get('success'):
+                # Atualizar o ID do vetor
+                self.write({
+                    'semantic_vector_id': result.get('vector_id'),
+                    'semantic_sync_status': 'synced'
+                })
+                _logger.info(f"Produto {self.id} - {self.name} sincronizado com sucesso")
+                return True
+            else:
+                error_msg = result.get('error') if result else "Erro desconhecido"
+                _logger.error(f"Erro ao sincronizar produto {self.id} - {self.name}: {error_msg}")
+                self.write({'semantic_sync_status': 'needs_update'})
+                return False
+        except Exception as e:
+            _logger.error(f"Exceção ao sincronizar produto {self.id} - {self.name}: {str(e)}")
+            self.write({'semantic_sync_status': 'needs_update'})
+            return False
+
+    def _call_mcp_sync_product(self, product_id):
+        """Chama o MCP-Odoo para sincronizar um produto com o banco de dados vetorial."""
+        try:
+            import requests
+
+            # Obter configurações do MCP-Odoo
+            mcp_url = self.env['ir.config_parameter'].sudo().get_param('mcp_odoo.url', 'http://localhost:8000')
+            mcp_token = self.env['ir.config_parameter'].sudo().get_param('mcp_odoo.token', '')
+            account_id = self.env['ir.config_parameter'].sudo().get_param('mcp_odoo.account_id', 'account_2')
+
+            # Preparar a requisição
+            headers = {
+                'Content-Type': 'application/json',
+                'Authorization': f'Bearer {mcp_token}' if mcp_token else ''
+            }
+
+            payload = {
+                'account_id': account_id,
+                'product_id': product_id,
+                'description': self.ai_generated_description or self.semantic_description
+            }
+
+            # Fazer a requisição ao MCP-Odoo
+            _logger.info(f"Chamando MCP-Odoo para sincronizar produto {product_id}")
+            response = requests.post(
+                f"{mcp_url}/tools/sync_product_to_vector_db",
+                headers=headers,
+                json=payload,
+                timeout=30  # Timeout de 30 segundos
+            )
+
+            # Verificar resposta
+            if response.status_code == 200:
+                return response.json()
+            else:
+                _logger.error(f"Erro na chamada ao MCP-Odoo: {response.status_code} - {response.text}")
+                return None
+        except Exception as e:
+            _logger.error(f"Exceção ao chamar MCP-Odoo: {str(e)}")
+            return None
 
     def get_tags_list(self):
         """Retorna lista de tags do produto."""

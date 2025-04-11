@@ -31,6 +31,7 @@ class ProductTemplate(models.Model):
     # Campos para controle de sincronização
     semantic_sync_status = fields.Selection([
         ('not_synced', 'Não Sincronizado'),
+        ('syncing', 'Sincronizando'),
         ('synced', 'Sincronizado'),
         ('needs_update', 'Atualização Necessária')
     ], string='Status de Sincronização',
@@ -49,6 +50,36 @@ class ProductTemplate(models.Model):
         help='Indica se a descrição semântica foi verificada por um humano'
     )
 
+    # Campo para qualidade da descrição
+    ai_description_quality = fields.Selection([
+        ('none', 'Sem Descrição'),
+        ('generated', 'Gerada (Não Verificada)'),
+        ('verified', 'Verificada')
+    ], string='Qualidade da Descrição',
+       compute='_compute_description_quality',
+       store=True,
+       help='Indica a qualidade da descrição no sistema de IA')
+
+    # Campo para status do preço
+    ai_price_status = fields.Selection([
+        ('none', 'Sem Preço IA'),
+        ('default', 'Igual ao Padrão'),
+        ('custom', 'Preço Personalizado')
+    ], string='Status do Preço',
+       compute='_compute_price_status',
+       store=True,
+       help='Indica o status do preço no sistema de IA')
+
+    # Campo para popularidade no sistema de IA
+    ai_popularity = fields.Selection([
+        ('new', 'Novo no Sistema'),
+        ('low', 'Baixa Popularidade'),
+        ('medium', 'Média Popularidade'),
+        ('high', 'Alta Popularidade')
+    ], string='Popularidade no Sistema de IA',
+       default='new',
+       help='Indica a popularidade do produto nas buscas do sistema de IA')
+
     @api.depends('list_price', 'ai_price')
     def _compute_price_difference(self):
         for product in self:
@@ -56,6 +87,26 @@ class ProductTemplate(models.Model):
                 product.ai_price_difference = ((product.ai_price - product.list_price) / product.list_price) * 100
             else:
                 product.ai_price_difference = 0
+
+    @api.depends('semantic_description_verified', 'semantic_description')
+    def _compute_description_quality(self):
+        for product in self:
+            if product.semantic_description_verified:
+                product.ai_description_quality = 'verified'
+            elif product.semantic_description:
+                product.ai_description_quality = 'generated'
+            else:
+                product.ai_description_quality = 'none'
+
+    @api.depends('list_price', 'ai_price')
+    def _compute_price_status(self):
+        for product in self:
+            if not product.ai_price:
+                product.ai_price_status = 'none'
+            elif abs(product.ai_price - product.list_price) < 0.01:  # Considera igual se a diferença for menor que 1 centavo
+                product.ai_price_status = 'default'
+            else:
+                product.ai_price_status = 'custom'
 
     # Os demais campos já estão definidos no módulo semantic_product_description
 

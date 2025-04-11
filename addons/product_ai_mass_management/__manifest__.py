@@ -2,8 +2,8 @@
 {
     'name': 'Gerenciamento em Massa de Produtos no Sistema de IA',
     'version': '1.0',
-    'category': 'Sales/Sales',
-    'summary': 'Interface de gerenciamento em massa para produtos no sistema de IA',
+    'category': 'Inventory/Sales',
+    'summary': 'Gerencie produtos no sistema de IA de forma eficiente e visual',
     'description': """
 Gerenciamento em Massa de Produtos no Sistema de IA
 ===================================================
@@ -12,12 +12,15 @@ permitindo sincronização em massa, ajustes de preço e visualização rápida 
 
 Principais funcionalidades:
 - Vista de lista com seleção múltipla
+- Badges coloridos para status visual rápido
 - Sincronização em massa de produtos com o sistema de IA
+- Geração e verificação de descrições
 - Ajustes de preço em massa (descontos, aumentos)
+- Monitoramento de popularidade de produtos
 - Indicadores visuais de status de sincronização
     """,
     'author': 'ChatwootAI',
-    'website': 'https://github.com/seu-repositorio/product_ai_mass_management',
+    'website': 'https://github.com/GiovanoMP/chatwootai',
     'depends': ['product', 'sale', 'stock', 'purchase', 'semantic_product_description'],
     'data': [
         'security/ir.model.access.csv',
@@ -25,8 +28,11 @@ Principais funcionalidades:
         'views/product_views.xml',
         'views/menu_views.xml',
     ],
+    'images': ['static/description/banner.png'],
     'installable': True,
     'application': True,
     'auto_install': False,
     'license': 'LGPL-3',
+    'maintainer': 'ChatwootAI Team',
+    'support': 'support@chatwootai.com',
 }

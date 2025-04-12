@@ -6,11 +6,13 @@ O ChatwootAI é um sistema avançado de atendimento ao cliente e integração co
 
 1. **Chatwoot** como hub central de mensagens para atendimento ao cliente
 2. **CrewAI** como framework para orquestração de agentes inteligentes
-3. **Odoo** como sistema ERP para regras de negócio e dados
+3. **MCP (Multi-Client Protocol)** como camada de abstração para comunicação com diferentes ERPs
 4. **Qdrant** como banco de dados vetorial para busca semântica
 5. **Redis** como cache distribuído, persistência de crews e gerenciamento de estado
 
 O sistema é projetado para ser **multi-tenant**, adaptando-se dinamicamente a diferentes domínios de negócio (móveis, cosméticos, saúde, etc.) através de configurações YAML, com foco no **account_id** como identificador principal.
+
+Uma característica fundamental do sistema é sua **flexibilidade de integração com ERPs**, podendo funcionar tanto como um ERP completo (com Odoo) quanto como uma plataforma que se integra a ERPs existentes dos clientes.
 
 ## Princípios Arquiteturais Fundamentais
 
@@ -772,6 +774,72 @@ def get_product_metadata(ctx: Context, request: Dict[str, Any]) -> Dict[str, Any
         }
 ```
 
+## Integração com Múltiplos ERPs
+
+O sistema foi projetado desde o início para ser agnóstico em relação ao ERP, com o MCP (Multi-Client Protocol) servindo como camada de abstração. Esta arquitetura permite duas abordagens principais:
+
+1. **Sistema Completo com Odoo**: Fornecendo uma solução end-to-end com Odoo como ERP integrado
+2. **Plataforma de Integração**: Conectando-se a ERPs existentes dos clientes
+
+### Estratégias de Integração com ERPs Externos
+
+#### 1. Adaptadores MCP Específicos
+
+Para cada ERP popular, podemos desenvolver um adaptador MCP específico:
+
+- **MCP-SAP**: Para integração com SAP
+- **MCP-Microsoft Dynamics**: Para integração com Dynamics
+- **MCP-Oracle NetSuite**: Para NetSuite
+- **MCP-Totvs**: Para sistemas brasileiros como Protheus
+
+```
+├── src/
+│   ├── mcp_odoo/        # Implementação MCP para Odoo
+│   ├── mcp_sap/         # Implementação MCP para SAP
+│   ├── mcp_dynamics/    # Implementação MCP para Microsoft Dynamics
+│   ├── mcp_netsuite/    # Implementação MCP para Oracle NetSuite
+│   └── mcp_totvs/       # Implementação MCP para Totvs
+```
+
+Cada implementação MCP fornece a mesma interface para o sistema, mas traduz as operações para o ERP específico.
+
+#### 2. API REST Genérica
+
+Para ERPs menos comuns ou personalizados, oferecemos uma API REST bem documentada que eles podem implementar do lado deles:
+
+```
+POST /api/v1/sync/products
+POST /api/v1/sync/customers
+POST /api/v1/sync/orders
+```
+
+#### 3. Webhooks Bidirecionais
+
+Implementamos webhooks para notificações em tempo real:
+
+```
+POST /webhook/product_updated
+POST /webhook/order_created
+```
+
+#### 4. Conectores ETL
+
+Para sincronização de dados em lote, desenvolvemos conectores ETL que funcionam com ferramentas como:
+
+- Pentaho Data Integration
+- Talend
+- Apache NiFi
+
+### Desafios e Considerações
+
+1. **Mapeamento de Dados**: Cada ERP tem seu próprio modelo de dados, exigindo mapeamentos flexíveis.
+
+2. **Autenticação e Segurança**: Diferentes ERPs têm diferentes mecanismos de autenticação.
+
+3. **Sincronização Bidirecional**: Garantir que as alterações em ambos os sistemas sejam sincronizadas corretamente.
+
+4. **Desempenho**: Garantir que a integração não afete o desempenho do ERP do cliente.
+
 ## Próximos Passos
 
 ### 1. Implementação da API REST para Odoo
@@ -830,15 +898,28 @@ def get_product_metadata(ctx: Context, request: Dict[str, Any]) -> Dict[str, Any
 - [ ] Implementar Analytics Crew usando CrewAI
 - [ ] Configurar ferramentas específicas para cada crew
 
-### 7. Testes e Documentação
+### 7. Desenvolvimento de Adaptadores MCP para Outros ERPs
+
+- [ ] Definir interface comum para todos os adaptadores MCP
+- [ ] Implementar adaptador MCP para SAP
+- [ ] Implementar adaptador MCP para Microsoft Dynamics
+- [ ] Implementar adaptador MCP para Oracle NetSuite
+- [ ] Implementar adaptador MCP para Totvs
+- [ ] Criar documentação de integração para cada adaptador
+- [ ] Desenvolver API REST genérica para ERPs personalizados
+- [ ] Implementar sistema de webhooks bidirecionais
+
+### 8. Testes e Documentação
 
 - [ ] Implementar testes unitários para cada componente
 - [ ] Implementar testes de integração para fluxos completos
 - [ ] Implementar testes de carga para verificar desempenho
 - [ ] Implementar testes específicos para busca híbrida
 - [ ] Implementar testes para persistência de crews com Redis
+- [ ] Implementar testes para integração com diferentes ERPs
 - [ ] Criar documentação detalhada para cada componente
 - [ ] Criar guias de uso para desenvolvedores
+- [ ] Criar guias de integração para clientes com ERPs existentes
 
 ## Considerações Futuras
 
@@ -881,8 +962,17 @@ Esta arquitetura fornece uma base sólida para um sistema completo de atendiment
 3. **Extensibilidade**: Facilidade para adicionar novos componentes e funcionalidades
 4. **Escalabilidade**: Capacidade de escalar horizontalmente para atender a demandas crescentes
 5. **Flexibilidade**: Adaptação a diferentes domínios de negócio e casos de uso
+6. **Interoperabilidade**: Capacidade de integração com diversos ERPs através da camada MCP
 
-A implementação desta arquitetura permitirá a criação de um assistente completo para ERPs, que ajuda tanto clientes quanto usuários do sistema, com funcionalidades avançadas de processamento de linguagem natural, busca semântica, análise de dados e automação de marketing.
+A implementação desta arquitetura permite duas abordagens principais:
+
+1. **Sistema Completo**: Fornecendo uma solução end-to-end com Odoo como ERP integrado para clientes que não possuem um ERP existente
+
+2. **Plataforma de Integração**: Conectando-se a ERPs existentes dos clientes (SAP, Microsoft Dynamics, Oracle NetSuite, Totvs, etc.) através de adaptadores MCP específicos
+
+Esta flexibilidade maximiza o mercado potencial, permitindo atender tanto empresas que buscam uma solução completa quanto aquelas que já possuem investimentos significativos em sistemas ERP existentes.
+
+O resultado final é uma plataforma que realmente integra IA profundamente nos processos de negócio, com funcionalidades avançadas de processamento de linguagem natural, busca semântica, análise de dados e automação de marketing, independentemente do ERP utilizado pelo cliente.
 
 
 ### Sugestões de Melhorias

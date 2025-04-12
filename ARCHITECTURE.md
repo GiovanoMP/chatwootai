@@ -923,31 +923,57 @@ Para sincronização de dados em lote, desenvolvemos conectores ETL que funciona
 
 ## Considerações Futuras
 
-### 1. Integração com Mercado Livre
+### 1. Agentes Executivos de IA
+
+Uma evolução fundamental do sistema será a transição de agentes puramente informativos para agentes executivos, capazes de realizar ações diretas no sistema com aprovação do usuário:
+
+#### Capacidades Planejadas
+
+- **Análise Contínua**: Monitoramento constante de dados relevantes (vendas, tendências, concorrentes)
+- **Identificação de Oportunidades**: Detecção proativa de oportunidades de negócio
+- **Recomendações Contextualizadas**: Sugestões baseadas em dados com justificativas claras
+- **Execução Assistida**: Capacidade de executar ações diretas no sistema após aprovação
+
+#### Exemplos de Funcionalidades
+
+- **Gestão de Produtos**: "Detectei um produto com alta demanda no mercado. Gostaria que eu o adicionasse ao catálogo?"
+- **Marketing Automático**: "Posso criar uma campanha no Instagram para o produto X que está em alta?"
+- **Precificação Dinâmica**: "O concorrente reduziu o preço do produto Y. Recomendo ajustarmos nosso preço para Z."
+- **Gestão de Estoque**: "O produto A está com estoque baixo e a demanda crescente. Devo criar um pedido de compra?"
+
+#### Requisitos Técnicos
+
+- Sistema de permissões granulares para ações de agentes
+- API de ações para cada operação no sistema
+- Interface de aprovação para usuários
+- Rastreamento detalhado de ações executadas por agentes
+- Integração com análise de dados em tempo real
+
+### 2. Integração com Mercado Livre
 
 - Adicionar adaptador específico para Mercado Livre
 - Implementar sincronização de produtos com Mercado Livre
 - Implementar processamento de pedidos do Mercado Livre
 
-### 2. Integração com Instagram/Facebook
+### 3. Integração com Instagram/Facebook
 
 - Adicionar adaptador específico para Instagram/Facebook
 - Implementar geração de conteúdo para Instagram/Facebook
 - Implementar processamento de interações do Instagram/Facebook
 
-### 3. Análise de Dados e Recomendações
+### 4. Análise de Dados e Recomendações
 
 - Implementar análise de dados de vendas, clientes, etc.
 - Implementar sistema de recomendação de produtos
 - Implementar previsão de demanda
 
-### 4. Escalabilidade
+### 5. Escalabilidade
 
 - Implementar sistema de filas para processamento assíncrono
 - Adicionar suporte para múltiplas instâncias de cada componente
 - Implementar balanceamento de carga
 
-### 5. Monitoramento e Observabilidade
+### 6. Monitoramento e Observabilidade
 
 - Implementar métricas de desempenho
 - Implementar rastreamento de requisições

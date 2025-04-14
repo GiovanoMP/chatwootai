@@ -164,6 +164,26 @@ Cada account_id pode ter múltiplas crews especializadas para diferentes funçõ
   - Validação de configurações
   - Cache de configurações com Redis
 
+#### 8. Gerenciamento de Credenciais
+
+- **Responsabilidade**: Gerenciar credenciais de forma segura para integrações externas
+- **Componentes**:
+  - **Módulo Odoo `ai_credentials_manager`**: Armazena e gerencia credenciais no Odoo
+  - **Webhook de Credenciais**: Recebe e processa credenciais do módulo Odoo
+  - **Sistema de Referências**: Armazena apenas referências a credenciais sensíveis nos arquivos YAML
+- **Funcionalidades**:
+  - Armazenamento seguro de credenciais sensíveis (senhas, tokens, chaves de API)
+  - Sincronização de credenciais entre o Odoo e o sistema de IA
+  - Verificação de token para autenticação de requisições
+  - Mesclagem inteligente de configurações para preservar estrutura existente
+  - Gerenciamento centralizado de credenciais para todas as integrações (Odoo, Facebook, Instagram, Mercado Livre, etc.)
+- **Fluxo de Dados**:
+  1. Credenciais são configuradas no módulo Odoo `ai_credentials_manager`
+  2. O módulo envia as credenciais para o webhook com um token de autenticação
+  3. O webhook verifica o token e processa as credenciais
+  4. Credenciais sensíveis são substituídas por referências no arquivo YAML
+  5. Agentes de IA usam as referências para solicitar credenciais reais quando necessário
+
 ## Fluxos de Trabalho
 
 ### 1. Atendimento ao Cliente (Chatwoot → Sistema)

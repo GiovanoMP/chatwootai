@@ -290,9 +290,20 @@ Além de processar mensagens do Chatwoot, o servidor webhook também suporta a s
 
 O webhook de credenciais é um endpoint seguro que permite sincronizar credenciais entre o módulo `ai_credentials_manager` do Odoo e o sistema de IA. Ele implementa:
 
-1. **Verificação de Token**: Garante que apenas requisições autenticadas sejam processadas.
-2. **Armazenamento Seguro**: Armazena apenas referências para credenciais sensíveis, não os valores reais.
-3. **Mesclagem Inteligente**: Preserva a estrutura existente do arquivo YAML enquanto atualiza apenas o necessário.
+1. **Verificação de Token**: Garante que apenas requisições autenticadas sejam processadas usando um token fixo configurado no módulo Odoo.
+2. **Armazenamento Seguro**: Armazena apenas referências para credenciais sensíveis, não os valores reais, aumentando a segurança do sistema.
+3. **Mesclagem Inteligente**: Preserva a estrutura existente do arquivo YAML enquanto atualiza apenas o necessário, mantendo configurações não afetadas.
+
+### Quando Usar a Sincronização de Credenciais
+
+A sincronização de credenciais é necessária principalmente nas seguintes situações:
+
+1. **Configuração Inicial**: Quando o módulo é configurado pela primeira vez.
+2. **Tokens Expirados**: Quando tokens de acesso para serviços como Facebook, Instagram e Mercado Livre expiram e precisam ser renovados.
+3. **Mudanças de Servidor**: Se a URL do Odoo ou outras configurações de conexão mudarem.
+4. **Novas Integrações**: Quando novas integrações são adicionadas ao sistema.
+
+Para credenciais estáticas como URLs, nomes de usuário e tokens de autenticação fixos, a sincronização geralmente é feita apenas uma vez durante a configuração inicial.
 
 ### Endpoint
 
@@ -345,22 +356,41 @@ POST /webhook
 
 Credenciais sensíveis (senhas, chaves de API, tokens de acesso) são armazenadas como referências, não como valores reais. As referências seguem o formato `*_ref` (ex: `credential_ref`, `app_secret_ref`, `access_token_ref`).
 
-Exemplo de como as credenciais são armazenadas no YAML:
+#### Por que usar referências?
+
+O uso de referências em vez dos valores reais oferece várias vantagens de segurança:
+
+1. **Proteção contra acesso não autorizado**: Mesmo que alguém tenha acesso ao sistema de arquivos e possa ler os arquivos YAML, não conseguirá obter as credenciais reais.
+
+2. **Centralização do gerenciamento de credenciais**: As credenciais reais são gerenciadas centralmente no módulo `ai_credentials_manager` do Odoo, facilitando a auditoria e o controle de acesso.
+
+3. **Facilidade de rotação de credenciais**: Quando um token expira ou precisa ser alterado, a mudança é feita em um único lugar, sem necessidade de atualizar múltiplos arquivos de configuração.
+
+#### Exemplo de como as credenciais são armazenadas no YAML:
 
 ```yaml
 integrations:
   mcp:
     type: "odoo-mcp"
     config:
-      url: "http://localhost:8069"
-      db: "account_1"
-      username: "admin"
-      credential_ref: "a1b2c3d4-e5f6-g7h8-i9j0"  # Referência, não a senha real
+      url: "http://localhost:8069"  # Informação não sensível, armazenada diretamente
+      db: "account_1"               # Informação não sensível, armazenada diretamente
+      username: "admin"             # Informação não sensível, armazenada diretamente
+      credential_ref: "a1b2c3d4-e5f6-g7h8-i9j0"  # Referência à senha, não a senha real
   facebook:
-    app_id: "123456789"
-    app_secret_ref: "fb_secret_account_1"  # Referência, não o segredo real
-    access_token_ref: "fb_token_account_1"  # Referência, não o token real
+    app_id: "123456789"            # ID público, pode ser armazenado diretamente
+    app_secret_ref: "fb_secret_account_1"  # Referência ao segredo, não o segredo real
+    access_token_ref: "fb_token_account_1"  # Referência ao token, não o token real
 ```
+
+#### Como as referências são usadas pelos agentes
+
+Quando um agente de IA precisa acessar um serviço externo:
+
+1. O agente lê o arquivo YAML e encontra a referência (ex: `access_token_ref: "fb_token_account_1"`).
+2. O agente solicita a credencial real ao módulo `ai_credentials_manager` do Odoo, fornecendo a referência.
+3. O módulo verifica a autenticidade do solicitante e retorna a credencial real.
+4. O agente usa a credencial real para acessar o serviço externo.
 
 ### Exemplo de Implementação no Módulo Odoo
 

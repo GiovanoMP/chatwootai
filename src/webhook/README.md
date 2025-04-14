@@ -11,7 +11,8 @@ Este documento explica como configurar, iniciar e testar o servidor webhook que 
 5. [Iniciando o Sistema](#iniciando-o-sistema)
 6. [Testando a Conexão](#testando-a-conexão)
 7. [Monitoramento e Logs](#monitoramento-e-logs)
-8. [Troubleshooting](#troubleshooting)
+8. [Webhook de Credenciais](#webhook-de-credenciais)
+9. [Troubleshooting](#troubleshooting)
 
 ## 🔍 Visão Geral
 
@@ -280,6 +281,90 @@ tail -f ngrok.log
 ```
 
 O script `monitor_webhook_logs.py` oferece opções avançadas para filtrar e destacar mensagens importantes. Execute com `--help` para ver todas as opções disponíveis.
+
+## 🔑 Webhook de Credenciais
+
+Além de processar mensagens do Chatwoot, o servidor webhook também suporta a sincronização de credenciais do módulo `ai_credentials_manager` do Odoo. Esta funcionalidade permite que as credenciais sejam armazenadas de forma segura e usadas pelos agentes de IA.
+
+### Visão Geral
+
+O webhook de credenciais é um endpoint seguro que permite sincronizar credenciais entre o módulo `ai_credentials_manager` do Odoo e o sistema de IA. Ele implementa:
+
+1. **Verificação de Token**: Garante que apenas requisições autenticadas sejam processadas.
+2. **Armazenamento Seguro**: Armazena apenas referências para credenciais sensíveis, não os valores reais.
+3. **Mesclagem Inteligente**: Preserva a estrutura existente do arquivo YAML enquanto atualiza apenas o necessário.
+
+### Endpoint
+
+O webhook de credenciais usa o mesmo endpoint do webhook do Chatwoot, mas com um parâmetro `source` diferente:
+
+```
+POST /webhook
+```
+
+### Payload
+
+```json
+{
+  "source": "credentials",
+  "event": "credentials_sync",
+  "account_id": "account_1",
+  "token": "a1b2c3d4-e5f6-g7h8-i9j0",  // Token de autenticação
+  "credentials": {
+    "domain": "cosmetics",
+    "name": "Cliente Teste",
+    "odoo_url": "http://localhost:8069",
+    "odoo_db": "account_1",
+    "odoo_username": "admin",
+    "token": "a1b2c3d4-e5f6-g7h8-i9j0",  // Token de referência
+    // ... outras credenciais
+  }
+}
+```
+
+### Campos Obrigatórios
+
+- `source`: Deve ser "credentials" para identificar a origem da requisição
+- `event`: Deve ser "credentials_sync" para identificar o tipo de evento
+- `account_id`: ID da conta no formato "account_X" (ex: "account_1")
+- `token`: Token de autenticação que deve corresponder ao token nas credenciais
+- `credentials`: Objeto contendo as credenciais a serem sincronizadas
+
+### Resposta
+
+```json
+{
+  "success": true,
+  "message": "Credenciais sincronizadas com sucesso",
+  "account_id": "account_1",
+  "config_path": "config/domains/cosmetics/account_1/config.yaml"
+}
+```
+
+### Armazenamento Seguro de Credenciais
+
+Credenciais sensíveis (senhas, chaves de API, tokens de acesso) são armazenadas como referências, não como valores reais. As referências seguem o formato `*_ref` (ex: `credential_ref`, `app_secret_ref`, `access_token_ref`).
+
+Exemplo de como as credenciais são armazenadas no YAML:
+
+```yaml
+integrations:
+  mcp:
+    type: "odoo-mcp"
+    config:
+      url: "http://localhost:8069"
+      db: "account_1"
+      username: "admin"
+      credential_ref: "a1b2c3d4-e5f6-g7h8-i9j0"  # Referência, não a senha real
+  facebook:
+    app_id: "123456789"
+    app_secret_ref: "fb_secret_account_1"  # Referência, não o segredo real
+    access_token_ref: "fb_token_account_1"  # Referência, não o token real
+```
+
+### Exemplo de Implementação no Módulo Odoo
+
+Um exemplo de como o módulo `ai_credentials_manager` do Odoo pode enviar credenciais para o webhook está disponível em `src/webhook/examples/ai_credentials_manager_example.py`.
 
 ## 🔧 Troubleshooting
 

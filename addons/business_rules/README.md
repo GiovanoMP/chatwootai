@@ -28,7 +28,7 @@ Este módulo permite configurar regras de negócio específicas para personaliza
 
 ### 4. Integração com Documentos
 
-- **Upload de Documentos**: Faça upload de documentos (PDF, DOCX) com informações do negócio
+- **Suporte ao Cliente**: Envie mensagens e arquivos para o suporte técnico
 - **Extração Automática**: O sistema extrai automaticamente regras e informações dos documentos
 
 ### 5. Sincronização com IA

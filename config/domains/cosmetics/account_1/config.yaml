@@ -5,8 +5,9 @@ version: "2.1"
 metadata:
   domain: cosmetics
   account_id: "account_1"
-  client_name: "Beleza Natural Ltda."
+  client_name: "Sandra Cosmeticos."
   description: "Loja especializada em produtos de beleza naturais e orgânicos"
+  business_area: "retail"
   inherit: "_base"  # Herda configurações base
 
 # Configurações específicas dos agentes para o domínio de cosméticos
@@ -98,11 +99,27 @@ integrations:
     type: "odoo-mcp"  # Tipo de MCP a ser usado
     config:
       url: "http://localhost:8069"
-      db: "odoo14"
+      db: "account_1"  # Nome do banco de dados Odoo
       username: "admin"
       password: "admin"
+      api_key: "odoo_api_key_account_1"  # Chave de API para autenticação
       timeout: 30
       verify_ssl: false
+
+  # Configuração do Qdrant (para busca semântica)
+  qdrant:
+    collection: "business_rules_account_1"  # Coleção para regras de negócio
+    embedding_model: "text-embedding-3-small"
+    similarity_threshold: 0.7
+    max_results: 10
+
+  # Configuração do Redis (para cache)
+  redis:
+    host: "localhost"
+    port: 6379
+    db: 0
+    password: ""
+    ttl: 86400  # 24 horas em segundos
 
   # Configuração legada do Odoo (mantida para compatibilidade)
   odoo:
@@ -135,14 +152,4 @@ memory:
     - "preferências de produtos"
     - "condições de pele"
 
-# Configurações de mensagens de saudação e opções
-greetings:
-  attendant_name: "{default_attendant_name}"
-  welcome_message: "Olá! Bem-vindo à {client_name}, meu nome é {attendant_name}."
-  options:
-    - option: "Vendas"
-      keyword: ["vendas", "1"]
-    - option: "Suporte"
-      keyword: ["suporte", "2"]
-  default_attendant_name: "Consultor de Beleza"
-  request_help_message: "Desculpe, não entendi a sua necessidade. Pode me dizer o que precisa?"
+

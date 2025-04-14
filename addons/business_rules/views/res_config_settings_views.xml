@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="res_config_settings_view_form" model="ir.ui.view">
+        <field name="name">res.config.settings.view.form.inherit.business.rules</field>
+        <field name="model">res.config.settings</field>
+        <field name="priority" eval="70"/>
+        <field name="inherit_id" ref="base.res_config_settings_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//div[hasclass('settings')]" position="inside">
+                <div class="app_settings_block" data-string="Regras de Negócio" string="Regras de Negócio" data-key="business_rules">
+                    <h2>Configurações da API</h2>
+                    <div class="row mt16 o_settings_container">
+                        <div class="col-12 col-lg-6 o_setting_box">
+                            <div class="o_setting_left_pane"/>
+                            <div class="o_setting_right_pane">
+                                <span class="o_form_label">URL da API</span>
+                                <div class="text-muted">
+                                    URL base da API para sincronização de regras
+                                </div>
+                                <div class="content-group">
+                                    <div class="mt16">
+                                        <field name="business_rules_api_url" class="o_field_widget oe_inline"/>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-12 col-lg-6 o_setting_box">
+                            <div class="o_setting_left_pane"/>
+                            <div class="o_setting_right_pane">
+                                <span class="o_form_label">Token de API</span>
+                                <div class="text-muted">
+                                    Token de autenticação para a API
+                                </div>
+                                <div class="content-group">
+                                    <div class="mt16">
+                                        <field name="business_rules_api_token" class="o_field_widget oe_inline" password="True"/>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="business_rules_config_settings_action" model="ir.actions.act_window">
+        <field name="name">Configurações</field>
+        <field name="type">ir.actions.act_window</field>
+        <field name="res_model">res.config.settings</field>
+        <field name="view_mode">form</field>
+        <field name="target">inline</field>
+        <field name="context">{'module' : 'business_rules'}</field>
+    </record>
+
+    <menuitem id="business_rules_config_settings_menu"
+              name="Configurações"
+              parent="menu_business_rules_root"
+              action="business_rules_config_settings_action"
+              sequence="100"/>
+</odoo>

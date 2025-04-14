@@ -6,22 +6,17 @@ from datetime import datetime, timedelta
 class BusinessTemporaryRule(models.Model):
     _name = 'business.temporary.rule'
     _description = 'Regra Temporária de Negócio'
-    _order = 'priority desc, date_start, id'
-    
+    _order = 'date_start desc, id'
+
     name = fields.Char(string='Nome da Regra', required=True)
     description = fields.Text(string='Descrição', required=True)
     business_rule_id = fields.Many2one('business.rules', string='Regra de Negócio', required=True, ondelete='cascade')
-    
+
     date_start = fields.Datetime(string='Data de Início', default=fields.Datetime.now)
     date_end = fields.Datetime(string='Data de Término')
-    
-    priority = fields.Selection([
-        ('0', 'Normal'),
-        ('1', 'Importante'),
-        ('2', 'Crítica'),
-        ('3', 'Emergência')
-    ], string='Prioridade', default='1', required=True)
-    
+
+    # Campo de prioridade removido conforme solicitado
+
     rule_type = fields.Selection([
         ('general', 'Geral'),
         ('product', 'Produto'),
@@ -32,7 +27,7 @@ class BusinessTemporaryRule(models.Model):
         ('schedule', 'Horário'),
         ('other', 'Outro')
     ], string='Tipo de Regra', default='general', required=True)
-    
+
     active = fields.Boolean(default=True, string='Ativo')
     state = fields.Selection([
         ('draft', 'Rascunho'),
@@ -40,13 +35,13 @@ class BusinessTemporaryRule(models.Model):
         ('expired', 'Expirada'),
         ('cancelled', 'Cancelada')
     ], string='Status', default='draft', compute='_compute_state', store=True)
-    
+
     # Campos para rastreamento
     create_date = fields.Datetime(string='Data de Criação', readonly=True)
     create_uid = fields.Many2one('res.users', string='Criado por', readonly=True)
     write_date = fields.Datetime(string='Última Atualização', readonly=True)
     write_uid = fields.Many2one('res.users', string='Atualizado por', readonly=True)
-    
+
     @api.depends('active', 'date_start', 'date_end')
     def _compute_state(self):
         now = fields.Datetime.now()
@@ -59,20 +54,20 @@ class BusinessTemporaryRule(models.Model):
                 rule.state = 'active'
             else:
                 rule.state = 'draft'
-    
+
     def toggle_active(self):
         """Alternar o status ativo/inativo da regra"""
         for record in self:
             record.active = not record.active
-    
+
     def action_activate(self):
         """Ativar a regra temporária"""
         self.write({'active': True})
-    
+
     def action_cancel(self):
         """Cancelar a regra temporária"""
         self.write({'active': False})
-    
+
     @api.model
     def create(self, vals):
         """Ao criar uma regra temporária, verificar se a data de término está definida"""
@@ -82,9 +77,9 @@ class BusinessTemporaryRule(models.Model):
             if isinstance(start_date, str):
                 start_date = fields.Datetime.from_string(start_date)
             vals['date_end'] = fields.Datetime.to_string(start_date + timedelta(days=7))
-        
+
         return super(BusinessTemporaryRule, self).create(vals)
-    
+
     @api.model
     def _expire_temporary_rules(self):
         """Método para ser chamado por agendador para expirar regras temporárias"""

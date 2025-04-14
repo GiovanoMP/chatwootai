@@ -1,0 +1,145 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Visualização de formulário para fila de sincronização -->
+    <record id="view_ai_sync_queue_form" model="ir.ui.view">
+        <field name="name">ai.sync.queue.form</field>
+        <field name="model">ai.sync.queue</field>
+        <field name="arch" type="xml">
+            <form string="Operação de Sincronização">
+                <header>
+                    <button name="action_retry" string="Tentar Novamente" type="object" 
+                            class="oe_highlight" attrs="{'invisible': [('state', 'not in', ['failed', 'pending'])]}"/>
+                    <button name="action_cancel" string="Cancelar" type="object" 
+                            class="btn btn-secondary" attrs="{'invisible': [('state', '!=', 'pending')]}"/>
+                    <field name="state" widget="statusbar" statusbar_visible="pending,processing,done,failed"/>
+                </header>
+                <sheet>
+                    <div class="oe_title">
+                        <h1>
+                            <field name="name"/>
+                        </h1>
+                    </div>
+                    <group>
+                        <group>
+                            <field name="credential_id"/>
+                            <field name="account_id"/>
+                            <field name="module"/>
+                            <field name="module_custom" attrs="{'invisible': [('module', '!=', 'custom')], 'required': [('module', '=', 'custom')]}"/>
+                            <field name="operation"/>
+                            <field name="operation_custom" attrs="{'invisible': [('operation', '!=', 'custom')], 'required': [('operation', '=', 'custom')]}"/>
+                        </group>
+                        <group>
+                            <field name="create_date" readonly="1"/>
+                            <field name="retry_count"/>
+                            <field name="max_retries"/>
+                            <field name="next_retry"/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page string="Dados" name="data">
+                            <field name="data" widget="ace" options="{'mode': 'json'}"/>
+                        </page>
+                        <page string="Resultado" name="result" attrs="{'invisible': [('state', '!=', 'done')]}">
+                            <field name="result" widget="ace" options="{'mode': 'json'}"/>
+                        </page>
+                        <page string="Erro" name="error" attrs="{'invisible': [('error_message', '=', False)]}">
+                            <field name="error_message"/>
+                        </page>
+                    </notebook>
+                </sheet>
+                <div class="oe_chatter">
+                    <field name="message_follower_ids"/>
+                    <field name="activity_ids"/>
+                    <field name="message_ids"/>
+                </div>
+            </form>
+        </field>
+    </record>
+    
+    <!-- Visualização de árvore para fila de sincronização -->
+    <record id="view_ai_sync_queue_tree" model="ir.ui.view">
+        <field name="name">ai.sync.queue.tree</field>
+        <field name="model">ai.sync.queue</field>
+        <field name="arch" type="xml">
+            <tree string="Fila de Sincronização" decoration-info="state == 'pending'" decoration-muted="state == 'processing'" decoration-success="state == 'done'" decoration-danger="state == 'failed'">
+                <field name="name"/>
+                <field name="credential_id"/>
+                <field name="account_id"/>
+                <field name="module"/>
+                <field name="operation"/>
+                <field name="create_date"/>
+                <field name="retry_count"/>
+                <field name="next_retry"/>
+                <field name="state"/>
+            </tree>
+        </field>
+    </record>
+    
+    <!-- Visualização de pesquisa para fila de sincronização -->
+    <record id="view_ai_sync_queue_search" model="ir.ui.view">
+        <field name="name">ai.sync.queue.search</field>
+        <field name="model">ai.sync.queue</field>
+        <field name="arch" type="xml">
+            <search string="Buscar Operações">
+                <field name="name"/>
+                <field name="credential_id"/>
+                <field name="account_id"/>
+                <field name="module"/>
+                <field name="operation"/>
+                <separator/>
+                <filter string="Pendentes" name="pending" domain="[('state', '=', 'pending')]"/>
+                <filter string="Processando" name="processing" domain="[('state', '=', 'processing')]"/>
+                <filter string="Concluídas" name="done" domain="[('state', '=', 'done')]"/>
+                <filter string="Falhas" name="failed" domain="[('state', '=', 'failed')]"/>
+                <separator/>
+                <filter string="Hoje" name="today" domain="[('create_date', '&gt;=', context_today().strftime('%Y-%m-%d'))]"/>
+                <filter string="Esta Semana" name="this_week" domain="[('create_date', '&gt;=', (context_today() - datetime.timedelta(days=7)).strftime('%Y-%m-%d'))]"/>
+                <group expand="0" string="Agrupar Por">
+                    <filter string="Credencial" name="group_by_credential" context="{'group_by': 'credential_id'}"/>
+                    <filter string="Conta" name="group_by_account" context="{'group_by': 'account_id'}"/>
+                    <filter string="Módulo" name="group_by_module" context="{'group_by': 'module'}"/>
+                    <filter string="Operação" name="group_by_operation" context="{'group_by': 'operation'}"/>
+                    <filter string="Estado" name="group_by_state" context="{'group_by': 'state'}"/>
+                    <filter string="Data de Criação" name="group_by_create_date" context="{'group_by': 'create_date:day'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+    
+    <!-- Ação para fila de sincronização -->
+    <record id="action_ai_sync_queue" model="ir.actions.act_window">
+        <field name="name">Fila de Sincronização</field>
+        <field name="res_model">ai.sync.queue</field>
+        <field name="view_mode">tree,form</field>
+        <field name="context">{'search_default_pending': 1}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Nenhuma operação de sincronização encontrada
+            </p>
+            <p>
+                As operações de sincronização são criadas automaticamente quando módulos Odoo
+                solicitam sincronização com o sistema de IA.
+            </p>
+        </field>
+    </record>
+    
+    <!-- Menu para fila de sincronização -->
+    <menuitem id="menu_ai_sync_queue" 
+              name="Fila de Sincronização" 
+              parent="menu_ai_credentials_root" 
+              action="action_ai_sync_queue" 
+              sequence="30"/>
+    
+    <!-- Agendador para processamento da fila -->
+    <record id="ir_cron_process_ai_sync_queue" model="ir.cron">
+        <field name="name">Processar Fila de Sincronização com IA</field>
+        <field name="model_id" ref="model_ai_sync_queue"/>
+        <field name="state">code</field>
+        <field name="code">model.process_queue()</field>
+        <field name="interval_number">5</field>
+        <field name="interval_type">minutes</field>
+        <field name="numbercall">-1</field>
+        <field name="doall" eval="False"/>
+        <field name="active" eval="True"/>
+    </record>
+</odoo>

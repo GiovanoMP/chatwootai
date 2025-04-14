@@ -7,10 +7,11 @@
         <field name="arch" type="xml">
             <form string="Regras de Negócio">
                 <header>
-                    <button name="action_sync_with_ai" string="Sincronizar com IA" type="object" class="oe_highlight"/>
+                    <button name="action_sync_with_ai" string="Sincronizar com IA" type="object" class="btn-success" attrs="{'invisible': [('sync_status', '=', 'syncing')]}"/>
+                    <field name="sync_status" widget="statusbar" statusbar_visible="not_synced,syncing,synced,error"/>
                     <button name="action_view_active_rules" string="Ver Regras Ativas" type="object"/>
                     <button name="action_scrape_website" string="Extrair do Website" type="object" attrs="{'invisible': [('website', '=', False)]}"/>
-                    <button name="action_upload_documents" string="Upload de Documentos" type="object"/>
+                    <button name="action_upload_documents" string="Suporte ao Cliente" type="object"/>
                 </header>
                 <sheet>
                     <div class="oe_button_box" name="button_box">
@@ -43,26 +44,47 @@
                             </group>
                         </page>
                         <page string="Configurações de Atendimento">
+                            <div class="alert alert-info" role="alert">
+                                <p>Configure aqui os horários de funcionamento e o estilo de comunicação que o agente de IA deve utilizar ao interagir com seus clientes.</p>
+                            </div>
                             <group>
                                 <group string="Comunicação">
                                     <field name="greeting_message" placeholder="Olá! Bem-vindo à [Nome da Empresa]. Como posso ajudar?"/>
                                     <field name="communication_style"/>
                                     <field name="emoji_usage"/>
-                                    <field name="response_time"/>
                                 </group>
                                 <group string="Horário de Funcionamento">
                                     <field name="business_hours_start" widget="float_time"/>
                                     <field name="business_hours_end" widget="float_time"/>
-                                    <field name="business_days"/>
+                                    <field name="has_lunch_break"/>
+                                    <field name="lunch_break_start" widget="float_time" attrs="{'invisible': [('has_lunch_break', '=', False)], 'required': [('has_lunch_break', '=', True)]}"/>
+                                    <field name="lunch_break_end" widget="float_time" attrs="{'invisible': [('has_lunch_break', '=', False)], 'required': [('has_lunch_break', '=', True)]}"/>
+                                </group>
+                            </group>
+                            <group string="Dias de Funcionamento">
+                                <group>
+                                    <field name="monday"/>
+                                    <field name="tuesday"/>
+                                    <field name="wednesday"/>
+                                    <field name="thursday"/>
+                                    <field name="friday"/>
+                                </group>
+                                <group>
+                                    <field name="saturday"/>
+                                    <field name="saturday_hours_start" widget="float_time" attrs="{'invisible': [('saturday', '=', False)], 'required': [('saturday', '=', True)]}"/>
+                                    <field name="saturday_hours_end" widget="float_time" attrs="{'invisible': [('saturday', '=', False)], 'required': [('saturday', '=', True)]}"/>
+                                    <field name="sunday"/>
                                 </group>
                             </group>
                         </page>
                         <page string="Regras Permanentes">
+                            <div class="alert alert-info" role="alert">
+                                <p>As regras permanentes definem o comportamento padrão do agente de IA. Estas regras estarão sempre ativas, a menos que sejam explicitamente desativadas.</p>
+                            </div>
                             <field name="rule_ids">
                                 <tree editable="bottom">
                                     <field name="name"/>
                                     <field name="rule_type"/>
-                                    <field name="priority"/>
                                     <field name="description"/>
                                     <field name="active" widget="boolean_toggle"/>
                                 </tree>
@@ -76,7 +98,6 @@
                                 <tree>
                                     <field name="name"/>
                                     <field name="rule_type"/>
-                                    <field name="priority"/>
                                     <field name="date_start"/>
                                     <field name="date_end"/>
                                     <field name="state" decoration-success="state == 'active'" decoration-warning="state == 'draft'" decoration-danger="state == 'expired'" decoration-muted="state == 'cancelled'"/>
@@ -93,7 +114,7 @@
             </form>
         </field>
     </record>
-    
+
     <!-- Vista de Árvore para Regras de Negócio -->
     <record id="view_business_rules_tree" model="ir.ui.view">
         <field name="name">business.rules.tree</field>
@@ -110,7 +131,7 @@
             </tree>
         </field>
     </record>
-    
+
     <!-- Vista de Pesquisa para Regras de Negócio -->
     <record id="view_business_rules_search" model="ir.ui.view">
         <field name="name">business.rules.search</field>
@@ -131,7 +152,7 @@
             </search>
         </field>
     </record>
-    
+
     <!-- Ação para Regras de Negócio -->
     <record id="action_business_rules" model="ir.actions.act_window">
         <field name="name">Regras de Negócio</field>

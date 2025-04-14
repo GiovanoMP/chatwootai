@@ -149,10 +149,11 @@ Cada account_id pode ter múltiplas crews especializadas para diferentes funçõ
 
 - **Responsabilidade**: Gerenciar embeddings e busca semântica
 - **Funcionalidades**:
-  - Gerar embeddings para descrições de produtos
+  - Gerar embeddings para descrições de produtos e regras de negócio
   - Armazenar embeddings no Qdrant
-  - Fornecer busca semântica
+  - Fornecer busca semântica para produtos e regras
   - Implementar busca híbrida (BM42)
+  - Manter persistência de regras de negócio para busca semântica
 
 #### 7. Gerenciamento de Domínios (`src/core/domain/`)
 
@@ -184,10 +185,12 @@ Cada account_id pode ter múltiplas crews especializadas para diferentes funçõ
    - Os agentes da crew consultam dados via DataProxyAgent
    - O DataProxyAgent direciona as consultas para o MCP-Odoo
    - O MCP-Odoo consulta o Odoo e retorna os resultados
-   - A Customer Service Crew gera uma resposta personalizada
+   - Os agentes realizam busca semântica de regras de negócio relevantes para a consulta
+   - O sistema consulta o Qdrant para encontrar regras semanticamente similares à consulta
+   - A Customer Service Crew gera uma resposta personalizada (considerando domínio, histórico e regras de negócio) Aqui, há uma possibilidade de redução de camada de processamento
 
 4. **Retorno da Resposta**
-   - A resposta é enviada de volta ao `HubCrew`
+   - A resposta é enviada de volta ao `HubCrew` (outra possibilidade de redução de camada)
    - O `HubCrew` a encaminha para o Chatwoot
    - O Chatwoot entrega a resposta ao cliente via canal original
 

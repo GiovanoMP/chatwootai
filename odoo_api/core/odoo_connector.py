@@ -1,0 +1,322 @@
+# -*- coding: utf-8 -*-
+
+"""
+Conector base para Odoo via XML-RPC.
+"""
+
+import logging
+import xmlrpc.client
+from typing import Dict, Any, List, Optional, Tuple, Union
+import os
+import yaml
+import json
+import asyncio
+from functools import lru_cache
+from tenacity import retry, stop_after_attempt, wait_exponential
+
+from odoo_api.config.settings import settings
+from odoo_api.core.exceptions import OdooConnectionError, OdooAuthenticationError, OdooOperationError
+
+logger = logging.getLogger(__name__)
+
+class OdooConnector:
+    """Conector base para Odoo via XML-RPC."""
+    
+    def __init__(
+        self,
+        host: str,
+        port: int,
+        database: str,
+        username: str,
+        password: str,
+        use_https: bool = True,
+    ):
+        """
+        Inicializa o conector Odoo.
+        
+        Args:
+            host: Hostname do servidor Odoo
+            port: Porta do servidor Odoo
+            database: Nome do banco de dados Odoo
+            username: Nome de usuário para autenticação
+            password: Senha para autenticação
+            use_https: Se True, usa HTTPS; caso contrário, usa HTTP
+        """
+        self.host = host
+        self.port = port
+        self.database = database
+        self.username = username
+        self.password = password
+        self.use_https = use_https
+        
+        # Construir URLs
+        protocol = "https" if use_https else "http"
+        self.common_url = f"{protocol}://{host}:{port}/xmlrpc/2/common"
+        self.object_url = f"{protocol}://{host}:{port}/xmlrpc/2/object"
+        
+        # Inicializar conexão
+        self.uid = None
+        self.common = xmlrpc.client.ServerProxy(self.common_url)
+        self.models = xmlrpc.client.ServerProxy(self.object_url)
+    
+    async def connect(self) -> int:
+        """
+        Estabelece conexão com o servidor Odoo.
+        
+        Returns:
+            ID do usuário autenticado
+        
+        Raises:
+            OdooConnectionError: Se não for possível conectar ao servidor
+            OdooAuthenticationError: Se a autenticação falhar
+        """
+        try:
+            # Executar em thread separada para não bloquear o event loop
+            loop = asyncio.get_event_loop()
+            uid = await loop.run_in_executor(
+                None,
+                lambda: self.common.authenticate(
+                    self.database, self.username, self.password, {}
+                ),
+            )
+            
+            if not uid:
+                raise OdooAuthenticationError(
+                    f"Authentication failed for user {self.username} on database {self.database}"
+                )
+            
+            self.uid = uid
+            logger.info(f"Connected to Odoo server {self.host}:{self.port} as {self.username} (uid: {self.uid})")
+            return uid
+        
+        except xmlrpc.client.Fault as e:
+            logger.error(f"Odoo XML-RPC fault: {e}")
+            raise OdooConnectionError(f"XML-RPC fault: {e}")
+        
+        except Exception as e:
+            logger.error(f"Failed to connect to Odoo server: {e}")
+            raise OdooConnectionError(f"Failed to connect to Odoo server: {e}")
+    
+    @retry(
+        stop=stop_after_attempt(settings.RETRY_MAX_ATTEMPTS),
+        wait=wait_exponential(
+            multiplier=1,
+            min=settings.RETRY_MIN_SECONDS,
+            max=settings.RETRY_MAX_SECONDS,
+        ),
+    )
+    async def execute_kw(
+        self,
+        model: str,
+        method: str,
+        args: List[Any] = None,
+        kwargs: Dict[str, Any] = None,
+    ) -> Any:
+        """
+        Executa um método no modelo Odoo.
+        
+        Args:
+            model: Nome do modelo Odoo
+            method: Nome do método a ser executado
+            args: Argumentos posicionais para o método
+            kwargs: Argumentos nomeados para o método
+        
+        Returns:
+            Resultado da execução do método
+        
+        Raises:
+            OdooConnectionError: Se não for possível conectar ao servidor
+            OdooOperationError: Se a operação falhar
+        """
+        if args is None:
+            args = []
+        
+        if kwargs is None:
+            kwargs = {}
+        
+        # Garantir que estamos conectados
+        if self.uid is None:
+            await self.connect()
+        
+        try:
+            # Executar em thread separada para não bloquear o event loop
+            loop = asyncio.get_event_loop()
+            result = await loop.run_in_executor(
+                None,
+                lambda: self.models.execute_kw(
+                    self.database,
+                    self.uid,
+                    self.password,
+                    model,
+                    method,
+                    args,
+                    kwargs,
+                ),
+            )
+            
+            return result
+        
+        except xmlrpc.client.Fault as e:
+            logger.error(f"Odoo XML-RPC fault: {e}")
+            raise OdooOperationError(f"XML-RPC fault: {e}")
+        
+        except Exception as e:
+            logger.error(f"Failed to execute method {method} on model {model}: {e}")
+            raise OdooOperationError(f"Failed to execute method {method} on model {model}: {e}")
+    
+    async def search_read(
+        self,
+        model: str,
+        domain: List[Tuple] = None,
+        fields: List[str] = None,
+        offset: int = 0,
+        limit: int = None,
+        order: str = None,
+    ) -> List[Dict[str, Any]]:
+        """
+        Busca e lê registros do modelo Odoo.
+        
+        Args:
+            model: Nome do modelo Odoo
+            domain: Domínio de busca
+            fields: Campos a serem retornados
+            offset: Offset para paginação
+            limit: Limite de registros
+            order: Ordenação
+        
+        Returns:
+            Lista de registros
+        """
+        if domain is None:
+            domain = []
+        
+        kwargs = {}
+        
+        if fields:
+            kwargs["fields"] = fields
+        
+        if offset:
+            kwargs["offset"] = offset
+        
+        if limit:
+            kwargs["limit"] = limit
+        
+        if order:
+            kwargs["order"] = order
+        
+        return await self.execute_kw(model, "search_read", [domain], kwargs)
+    
+    async def create(self, model: str, values: Dict[str, Any]) -> int:
+        """
+        Cria um novo registro no modelo Odoo.
+        
+        Args:
+            model: Nome do modelo Odoo
+            values: Valores para o novo registro
+        
+        Returns:
+            ID do registro criado
+        """
+        return await self.execute_kw(model, "create", [values])
+    
+    async def write(self, model: str, ids: List[int], values: Dict[str, Any]) -> bool:
+        """
+        Atualiza registros existentes no modelo Odoo.
+        
+        Args:
+            model: Nome do modelo Odoo
+            ids: IDs dos registros a serem atualizados
+            values: Valores a serem atualizados
+        
+        Returns:
+            True se a operação for bem-sucedida
+        """
+        return await self.execute_kw(model, "write", [ids, values])
+    
+    async def unlink(self, model: str, ids: List[int]) -> bool:
+        """
+        Remove registros do modelo Odoo.
+        
+        Args:
+            model: Nome do modelo Odoo
+            ids: IDs dos registros a serem removidos
+        
+        Returns:
+            True se a operação for bem-sucedida
+        """
+        return await self.execute_kw(model, "unlink", [ids])
+
+
+class OdooConnectorFactory:
+    """Fábrica para criar conectores Odoo."""
+    
+    @staticmethod
+    async def create_connector(account_id: str) -> OdooConnector:
+        """
+        Cria um conector Odoo para o account_id especificado.
+        
+        Args:
+            account_id: ID da conta
+        
+        Returns:
+            Instância de OdooConnector
+        
+        Raises:
+            ValueError: Se a configuração para o account_id não for encontrada
+        """
+        # Obter configuração do Redis (se disponível)
+        # TODO: Implementar cache Redis
+        
+        # Se não estiver no cache, carregar do arquivo YAML
+        config = await OdooConnectorFactory._load_config_from_yaml(account_id)
+        
+        if not config:
+            raise ValueError(f"Configuration for account_id {account_id} not found")
+        
+        # Criar conector
+        connector = OdooConnector(
+            host=config.get("host"),
+            port=config.get("port", 8069),
+            database=config.get("database"),
+            username=config.get("username"),
+            password=config.get("password"),
+            use_https=config.get("use_https", True),
+        )
+        
+        # Conectar
+        await connector.connect()
+        
+        return connector
+    
+    @staticmethod
+    @lru_cache(maxsize=32)
+    async def _load_config_from_yaml(account_id: str) -> Dict[str, Any]:
+        """
+        Carrega a configuração do arquivo YAML.
+        
+        Args:
+            account_id: ID da conta
+        
+        Returns:
+            Configuração do Odoo
+        """
+        config_dir = settings.MCP_CONFIG_DIR
+        config_file = os.path.join(config_dir, f"{account_id}.yaml")
+        
+        if not os.path.exists(config_file):
+            logger.error(f"Configuration file {config_file} not found")
+            return None
+        
+        try:
+            with open(config_file, "r") as f:
+                config = yaml.safe_load(f)
+            
+            # Extrair configuração do Odoo
+            if "database" in config:
+                return config["database"]
+            
+            return None
+        
+        except Exception as e:
+            logger.error(f"Failed to load configuration from {config_file}: {e}")
+            return None

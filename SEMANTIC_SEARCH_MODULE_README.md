@@ -5,6 +5,11 @@
 
 ## Visão Geral
 
+
+### Para deploy no ambiente docker: ./deploy_module.sh
+
+### Teste completo: ./test_module.sh
+
 Este documento detalha a arquitetura e implementação da integração de busca semântica entre o Odoo ERP e sistemas de IA, utilizando Qdrant para busca vetorial, OpenAI para embeddings, e Redis para cache. A solução é composta por dois componentes principais:
 
 1. **Módulo Odoo `semantic_product_description`**: Extensão para o Odoo que adiciona campos estruturados para descrições semânticas de produtos

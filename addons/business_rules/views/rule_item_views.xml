@@ -11,7 +11,6 @@
                         <field name="name"/>
                         <field name="business_rule_id"/>
                         <field name="rule_type"/>
-                        <field name="priority"/>
                         <field name="active"/>
                     </group>
                     <group string="Descrição">
@@ -21,7 +20,7 @@
             </form>
         </field>
     </record>
-    
+
     <!-- Vista de Árvore para Regras Permanentes -->
     <record id="view_business_rule_item_tree" model="ir.ui.view">
         <field name="name">business.rule.item.tree</field>
@@ -31,12 +30,11 @@
                 <field name="name"/>
                 <field name="business_rule_id"/>
                 <field name="rule_type"/>
-                <field name="priority"/>
                 <field name="active" widget="boolean_toggle"/>
             </tree>
         </field>
     </record>
-    
+
     <!-- Vista de Pesquisa para Regras Permanentes -->
     <record id="view_business_rule_item_search" model="ir.ui.view">
         <field name="name">business.rule.item.search</field>
@@ -51,12 +49,12 @@
                 <group expand="0" string="Agrupar Por">
                     <filter string="Regra de Negócio" name="group_by_business_rule" context="{'group_by': 'business_rule_id'}"/>
                     <filter string="Tipo de Regra" name="group_by_rule_type" context="{'group_by': 'rule_type'}"/>
-                    <filter string="Prioridade" name="group_by_priority" context="{'group_by': 'priority'}"/>
+                    <!-- Filtro de prioridade removido -->
                 </group>
             </search>
         </field>
     </record>
-    
+
     <!-- Ação para Regras Permanentes -->
     <record id="action_business_rule_item" model="ir.actions.act_window">
         <field name="name">Regras Permanentes</field>

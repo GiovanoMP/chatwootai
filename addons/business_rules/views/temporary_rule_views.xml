@@ -21,7 +21,6 @@
                         <group>
                             <field name="business_rule_id"/>
                             <field name="rule_type"/>
-                            <field name="priority"/>
                         </group>
                         <group>
                             <field name="date_start"/>
@@ -36,7 +35,7 @@
             </form>
         </field>
     </record>
-    
+
     <!-- Vista de Árvore para Regras Temporárias -->
     <record id="view_business_temporary_rule_tree" model="ir.ui.view">
         <field name="name">business.temporary.rule.tree</field>
@@ -46,7 +45,6 @@
                 <field name="name"/>
                 <field name="business_rule_id"/>
                 <field name="rule_type"/>
-                <field name="priority"/>
                 <field name="date_start"/>
                 <field name="date_end"/>
                 <field name="state"/>
@@ -54,7 +52,7 @@
             </tree>
         </field>
     </record>
-    
+
     <!-- Vista de Calendário para Regras Temporárias -->
     <record id="view_business_temporary_rule_calendar" model="ir.ui.view">
         <field name="name">business.temporary.rule.calendar</field>
@@ -63,11 +61,10 @@
             <calendar string="Regras Temporárias" date_start="date_start" date_stop="date_end" color="business_rule_id" mode="month">
                 <field name="name"/>
                 <field name="rule_type"/>
-                <field name="priority"/>
             </calendar>
         </field>
     </record>
-    
+
     <!-- Vista de Pesquisa para Regras Temporárias -->
     <record id="view_business_temporary_rule_search" model="ir.ui.view">
         <field name="name">business.temporary.rule.search</field>
@@ -89,11 +86,12 @@
                     <filter string="Tipo de Regra" name="group_by_rule_type" context="{'group_by': 'rule_type'}"/>
                     <filter string="Status" name="group_by_state" context="{'group_by': 'state'}"/>
                     <filter string="Mês de Início" name="group_by_month" context="{'group_by': 'date_start:month'}"/>
+                    <!-- Filtro de prioridade removido -->
                 </group>
             </search>
         </field>
     </record>
-    
+
     <!-- Ação para Regras Temporárias -->
     <record id="action_business_temporary_rule" model="ir.actions.act_window">
         <field name="name">Regras Temporárias</field>

@@ -1,0 +1,15 @@
+    async def upload_document(
+        self,
+        account_id: str,
+        document_data: DocumentUploadRequest,
+    ) -> DocumentResponse:
+        """
+        Faz upload de um documento para extração de regras de negócio.
+
+        Args:
+            account_id: ID da conta
+            document_data: Dados do documento
+
+        Returns:
+            Documento criado
+        """

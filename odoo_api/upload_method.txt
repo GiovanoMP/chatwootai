@@ -1,0 +1,26 @@
+    async def upload_document(
+        self,
+        account_id: str,
+        document_data: DocumentUploadRequest,
+    ) -> DocumentResponse:
+        """
+        Faz upload de um documento para extração de regras de negócio.
+
+        Args:
+            account_id: ID da conta
+            document_data: Dados do documento
+
+        Returns:
+            Documento criado
+        """
+        try:
+            # Implementação futura
+            return DocumentResponse(
+                id=1,
+                name="Documento de teste",
+                content="Conteúdo de teste",
+                created_at=datetime.now().isoformat()
+            )
+        except Exception as e:
+            logger.error(f"Failed to upload document: {e}")
+            raise ValidationError(f"Failed to upload document: {e}")

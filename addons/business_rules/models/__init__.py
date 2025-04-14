@@ -5,3 +5,4 @@ from . import business_template
 from . import rule_item
 from . import temporary_rule
 from . import dashboard
+from . import res_config_settings

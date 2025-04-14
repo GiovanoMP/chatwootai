@@ -1,0 +1,129 @@
+"""
+Testes para o agente de embeddings.
+
+Este módulo contém testes para verificar o funcionamento do agente de embeddings,
+incluindo processamento de regras de negócio e produtos.
+"""
+
+import asyncio
+import os
+import sys
+import unittest
+from typing import Dict, Any
+
+# Adicionar o diretório raiz ao PYTHONPATH
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from odoo_api.services.embedding_agent import get_embedding_agent
+
+class TestEmbeddingAgent(unittest.TestCase):
+    """Testes para o agente de embeddings."""
+
+    def setUp(self):
+        """Configuração inicial para os testes."""
+        self.loop = asyncio.get_event_loop()
+        
+        # Dados de teste
+        self.business_rule = {
+            "id": 1,
+            "name": "Horário de Funcionamento",
+            "description": "Nossa loja funciona de segunda a sexta, das 9h às 18h, e aos sábados das 9h às 13h.",
+            "type": "business_hours",
+            "is_temporary": False,
+            "rule_data": {
+                "days": [0, 1, 2, 3, 4, 5],
+                "start_time": "09:00",
+                "end_time": "18:00",
+                "saturday_hours": {
+                    "start_time": "09:00",
+                    "end_time": "13:00"
+                }
+            }
+        }
+        
+        self.product_data = {
+            "id": 1,
+            "name": "Smartphone XYZ",
+            "description": "Smartphone com tela de 6.5 polegadas, 128GB de armazenamento e 8GB de RAM.",
+            "category": "Eletrônicos",
+            "price": 1999.99,
+            "attributes": {
+                "cor": "Preto",
+                "armazenamento": "128GB",
+                "ram": "8GB",
+                "camera": "48MP"
+            },
+            "tags": ["smartphone", "android", "5G"]
+        }
+    
+    def test_process_business_rule(self):
+        """Testar processamento de regra de negócio."""
+        async def _test():
+            # Obter agente de embeddings
+            embedding_agent = await get_embedding_agent()
+            
+            # Testar processamento de regra de negócio sem área de negócio
+            processed_text = await embedding_agent.process_business_rule(self.business_rule)
+            
+            # Verificar se o texto processado contém informações importantes
+            self.assertIn("Horário de Funcionamento", processed_text)
+            self.assertIn("segunda a sexta", processed_text.lower())
+            self.assertIn("9h às 18h", processed_text)
+            self.assertIn("sábados", processed_text.lower())
+            
+            # Testar processamento de regra de negócio com área de negócio
+            business_area = "varejo de móveis"
+            processed_text_with_area = await embedding_agent.process_business_rule(
+                self.business_rule,
+                business_area
+            )
+            
+            # Verificar se o texto processado contém informações importantes
+            self.assertIn("Horário de Funcionamento", processed_text_with_area)
+            self.assertIn("segunda a sexta", processed_text_with_area.lower())
+            self.assertIn("9h às 18h", processed_text_with_area)
+            self.assertIn("sábados", processed_text_with_area.lower())
+            
+            # Verificar se o contexto da área de negócio foi considerado
+            self.assertIn("varejo", processed_text_with_area.lower())
+            self.assertIn("móveis", processed_text_with_area.lower())
+        
+        self.loop.run_until_complete(_test())
+    
+    def test_process_product_data(self):
+        """Testar processamento de dados de produto."""
+        async def _test():
+            # Obter agente de embeddings
+            embedding_agent = await get_embedding_agent()
+            
+            # Testar processamento de dados de produto sem área de negócio
+            processed_text = await embedding_agent.process_product_data(self.product_data)
+            
+            # Verificar se o texto processado contém informações importantes
+            self.assertIn("Smartphone XYZ", processed_text)
+            self.assertIn("6.5 polegadas", processed_text)
+            self.assertIn("128GB", processed_text)
+            self.assertIn("8GB", processed_text)
+            self.assertIn("Preto", processed_text)
+            
+            # Testar processamento de dados de produto com área de negócio
+            business_area = "loja de eletrônicos"
+            processed_text_with_area = await embedding_agent.process_product_data(
+                self.product_data,
+                business_area
+            )
+            
+            # Verificar se o texto processado contém informações importantes
+            self.assertIn("Smartphone XYZ", processed_text_with_area)
+            self.assertIn("6.5 polegadas", processed_text_with_area)
+            self.assertIn("128GB", processed_text_with_area)
+            self.assertIn("8GB", processed_text_with_area)
+            self.assertIn("Preto", processed_text_with_area)
+            
+            # Verificar se o contexto da área de negócio foi considerado
+            self.assertIn("eletrônicos", processed_text_with_area.lower())
+        
+        self.loop.run_until_complete(_test())
+
+if __name__ == "__main__":
+    unittest.main()

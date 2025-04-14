@@ -46,6 +46,9 @@ from src.core.memory import MemorySystem
 from src.core.domain import DomainManager
 from src.plugins.core.plugin_manager import PluginManager
 from src.api.chatwoot.client import ChatwootClient  # Usando a implementação da arquitetura hub-and-spoke
+from src.core.data_proxy_agent import DataProxyAgent
+from src.core.cache.agent_cache import RedisAgentCache
+from src.core.crews.crew_factory import get_crew_factory
 
 # Cria a aplicação FastAPI
 app = FastAPI(title="Chatwoot Webhook Server", description="Servidor para receber webhooks do Chatwoot")
@@ -73,28 +76,28 @@ def initialize_system():
     """
     Inicializa o sistema completo seguindo a nova arquitetura hub-and-spoke
     com configuração dinâmica de domínios baseada na empresa do Chatwoot.
-    
+
     Na nova arquitetura, o domínio é determinado dinamicamente para cada conversa
     com base nas configurações da empresa no Chatwoot, não mais fixado no código.
     """
     logger.info("🚀 Iniciando servidor webhook...")
     logger.info("🚀 Inicializando sistema para receber webhooks do Chatwoot...")
-    
+
     # Sistema de memória para persistência de contexto
     memory_system = MemorySystem()
     logger.info("✅ Sistema de memória inicializado")
-    
+
     # Diretório de configurações
     config_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'config')
     domains_dir = os.path.join(config_dir, 'domains')
-    
+
     # Determinação do domínio padrão para fallback
     default_domain = os.getenv('DEFAULT_DOMAIN', 'cosmetics')
     logger.info(f"Domínio padrão (fallback) configurado: {default_domain}")
-    
+
     # Inicialização do DomainManager com o diretório de domínios
     domain_manager = DomainManager(domains_dir=domains_dir, default_domain=default_domain)
-    
+
     # IMPORTANTE: Explicitamente inicializar o DomainManager para carregar configurações
     try:
         domain_manager.initialize()
@@ -107,17 +110,17 @@ def initialize_system():
             logger.info(f"✅ Domínio padrão {default_domain} configurado manualmente")
         except Exception as e2:
             logger.critical(f"❌ ERRO CRÍTICO: Não foi possível configurar domínio padrão: {str(e2)}")
-    
+
     # Carrega todos os domínios disponíveis no sistema e seus clientes
     available_domains = domain_manager.loader.list_available_domains()
     logger.info(f"✅ Domínios disponíveis carregados: {available_domains}")
-    
+
     # Para cada domínio, listar os clientes disponíveis
     for domain in available_domains:
         clients = domain_manager.loader.list_available_clients(domain)
         if clients:
             logger.info(f"✅ Clientes para o domínio {domain}: {clients}")
-    
+
     # Gerenciador de plugins - Carrega plugins base conforme configuração
     plugin_config = {
         "enabled_plugins": ["sentiment_analysis_plugin", "faq_knowledge_plugin", "response_enhancer_plugin"],
@@ -125,43 +128,59 @@ def initialize_system():
     }
     plugin_manager = PluginManager(config=plugin_config)
     logger.info("✅ Gerenciador de plugins inicializado")
-    
+
     # DataServiceHub - Ponto central de acesso a dados
     data_service_hub = DataServiceHub()
     logger.info("✅ DataServiceHub inicializado")
-    
+
+    # Criar DataProxyAgent para acesso a dados
+    data_proxy_agent = DataProxyAgent(data_service_hub=data_service_hub, domain_manager=domain_manager)
+    logger.info("✅ DataProxyAgent inicializado")
+
+    # Criar cache de agentes (opcional)
+    try:
+        agent_cache = RedisAgentCache()
+        logger.info("✅ RedisAgentCache inicializado")
+    except Exception as e:
+        logger.warning(f"⚠️ Não foi possível inicializar RedisAgentCache: {str(e)}")
+        agent_cache = None
+
+    # Criar factory de crews
+    crew_factory = get_crew_factory()
+    logger.info("✅ CrewFactory inicializado")
+
     # HubCrew - Centro da arquitetura hub-and-spoke
     hub_crew = HubCrew(
-        memory_system=memory_system,
-        data_service_hub=data_service_hub,
+        data_proxy_agent=data_proxy_agent,
+        crew_factory=crew_factory,
         domain_manager=domain_manager,
-        plugin_manager=plugin_manager
+        agent_cache=agent_cache
     )
     logger.info("✅ HubCrew inicializado")
-    
+
     # Carrega o arquivo de mapeamento YAML
     mapping_file_path = os.path.join(config_dir, 'chatwoot_mapping.yaml')
-    
+
     # Inicializa as configurações de mapeamento
     account_domain_mapping = {}
     inbox_domain_mapping = {}
     webhook_settings = {}
-    
+
     # Tenta carregar o arquivo de mapeamento
     try:
         if os.path.exists(mapping_file_path):
             with open(mapping_file_path, 'r') as file:
                 mapping_config = yaml.safe_load(file) or {}
-                
+
                 # Extrai os mapeamentos
                 account_domain_mapping = mapping_config.get('accounts', {})
                 inbox_domain_mapping = mapping_config.get('inboxes', {})
                 webhook_settings = mapping_config.get('webhook_settings', {})
-                
+
                 logger.info(f"✅ Arquivo de mapeamento carregado: {mapping_file_path}")
                 logger.info(f"✅ Accounts mapeados: {len(account_domain_mapping)}")
                 logger.info(f"✅ Inboxes mapeados: {len(inbox_domain_mapping)}")
-                
+
                 # Pré-carga de configurações de clientes para melhor desempenho
                 for account_id, mapping in account_domain_mapping.items():
                     domain = mapping.get('domain')
@@ -178,14 +197,14 @@ def initialize_system():
             logger.warning(f"⚠️ Arquivo de mapeamento não encontrado: {mapping_file_path}")
     except Exception as e:
         logger.error(f"❌ Erro ao carregar arquivo de mapeamento: {str(e)}")
-    
+
     # Configuração do Chatwoot
     chatwoot_base_url = os.getenv('CHATWOOT_BASE_URL')
     chatwoot_api_key = os.getenv('CHATWOOT_API_KEY')
-    
+
     if not chatwoot_base_url or not chatwoot_api_key:
         logger.warning("⚠️ Variáveis de ambiente CHATWOOT_BASE_URL ou CHATWOOT_API_KEY não definidas!")
-    
+
     webhook_config = {
         "chatwoot_base_url": chatwoot_base_url,
         "chatwoot_api_key": chatwoot_api_key,
@@ -197,20 +216,20 @@ def initialize_system():
         # Adiciona configurações adicionais do webhook
         **webhook_settings
     }
-    
+
     # Inicializa o webhook handler com o HubCrew central
     webhook_handler = ChatwootWebhookHandler(
         hub_crew=hub_crew,
         config=webhook_config
     )
     logger.info("✅ ChatwootWebhookHandler inicializado")
-    
+
     # Inicializa o cliente Chatwoot para comunicação com a API
     chatwoot_client = ChatwootClient(
         base_url=chatwoot_base_url,
         api_token=chatwoot_api_key
     )
-    
+
     # Verifica a conexão com o Chatwoot
     try:
         # Tenta obter informações básicas para verificar a conexão
@@ -218,7 +237,7 @@ def initialize_system():
         logger.info("✅ Conexão com Chatwoot verificada com sucesso")
     except Exception as e:
         logger.warning(f"⚠️ Não foi possível verificar a conexão com o Chatwoot: {str(e)}")
-    
+
     logger.info("🎉 Sistema inicializado com sucesso para receber webhooks!")
     logger.info("🔄 Sistema configurado para determinar domínios dinamicamente por conversa")
     return webhook_handler
@@ -259,27 +278,27 @@ async def webhook(request: Request, handler: ChatwootWebhookHandler = Depends(ge
         # Registra chegada do webhook com timestamp
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")
         logger.info(f"📩 [{timestamp}] Webhook recebido do Chatwoot")
-        
+
         # Registra headers da requisição para debug
         headers = dict(request.headers)
         logger.debug(f"Headers da requisição: {json.dumps(headers, indent=2)}")
-        
+
         # Obtém dados do webhook
         data = await request.json()
-        
+
         # Log completo dos dados para arquivo
         with open('logs/last_webhook_payload.json', 'w') as f:
             json.dump(data, f, indent=2)
-        
+
         # Log resumido para console
         logger.debug(f"Dados do webhook: {json.dumps(data, indent=2)[:1000]}...")
-        
+
         # Verifica o tipo de evento
         event_type = data.get("event")
         if not event_type:
             logger.warning("⚠️ Webhook sem tipo de evento")
             raise HTTPException(status_code=400, detail="Tipo de evento não especificado")
-        
+
         # Extrai informações importantes para log
         message_info = ""
         if event_type == "message_created":
@@ -288,15 +307,15 @@ async def webhook(request: Request, handler: ChatwootWebhookHandler = Depends(ge
             contact = data.get("contact", {})
             message_info = f"ID: {message.get('id')}, Conversa: {conversation.get('id')}, Contato: {contact.get('name')}"
             logger.info(f"📨 Mensagem: '{message.get('content', '')[:100]}...'")
-        
+
         # Processa o webhook
         logger.info(f"⚙️ Processando evento: {event_type} | {message_info}")
         response = await handler.process_webhook(data)
-        
+
         # Retorna a resposta do processamento com detalhes
         logger.info(f"✅ Webhook processado com sucesso: {json.dumps(response)}")
         return response
-        
+
     except Exception as e:
         logger.error(f"❌ Erro ao processar webhook: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Erro ao processar webhook: {str(e)}")
@@ -306,7 +325,7 @@ def main():
     # Usa valores de .env ou padrões
     port = int(os.getenv("WEBHOOK_PORT", "8000"))
     host = os.getenv("WEBHOOK_HOST", "0.0.0.0")  # Importante usar 0.0.0.0 para funcionar com ngrok
-    
+
     print("\n" + "="*70)
     print("🚀 INICIANDO SERVIDOR WEBHOOK PARA CHATWOOT")
     print("="*70)
@@ -314,7 +333,7 @@ def main():
     print(f"🔗 Use ngrok para expor este servidor para a internet:")
     print(f"   ngrok http {port}")
     print("="*70 + "\n")
-    
+
     # Inicia o servidor
     uvicorn.run(app, host=host, port=port)
 

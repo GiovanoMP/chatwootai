@@ -13,23 +13,26 @@ _logger = logging.getLogger(__name__)
 
 class DocumentUploadWizard(models.TransientModel):
     _name = 'business.document.upload.wizard'
-    _description = 'Assistente de Upload de Documentos'
+    _description = 'Assistente de Suporte ao Cliente'
 
     business_rule_id = fields.Many2one('business.rules', string='Regra de Negócio', required=True)
     document_type = fields.Selection([
-        ('faq', 'Perguntas Frequentes (FAQ)'),
-        ('policies', 'Políticas da Empresa'),
-        ('procedures', 'Procedimentos'),
-        ('products', 'Informações de Produtos'),
+        ('support', 'Suporte Técnico'),
+        ('feedback', 'Feedback'),
+        ('question', 'Dúvida'),
+        ('suggestion', 'Sugestão'),
         ('other', 'Outro')
-    ], string='Tipo de Documento', default='faq', required=True)
+    ], string='Tipo de Mensagem', default='support', required=True)
+    
+    message = fields.Text(string='Mensagem', help='Digite sua mensagem ou dúvida')
 
     document_file = fields.Binary(string='Arquivo', required=True)
     document_filename = fields.Char(string='Nome do Arquivo')
 
     state = fields.Selection([
         ('upload', 'Upload'),
-        ('review', 'Revisar')
+        ('review', 'Revisão'),
+        ('done', 'Concluído')
     ], default='upload', string='Estado')
 
     # Campos para revisão
@@ -37,7 +40,7 @@ class DocumentUploadWizard(models.TransientModel):
     extracted_rules = fields.One2many('business.document.extracted.rule', 'wizard_id', string='Regras Extraídas')
 
     def action_extract_content(self):
-        """Extrair conteúdo do documento"""
+        """Extrair conteúdo do documento e processar como FAQ para suporte ao cliente"""
         self.ensure_one()
 
         if not self.document_file:
@@ -75,7 +78,11 @@ class DocumentUploadWizard(models.TransientModel):
             else:
                 raise UserError(_("Formato de arquivo não suportado. Por favor, use PDF, DOCX, DOC ou TXT."))
 
-            # Processar o conteúdo para extrair regras
+            # Adicionar a mensagem do usuário ao conteúdo, se fornecida
+            if self.message:
+                content = f"Mensagem do usuário:\n{self.message}\n\nConteúdo do documento:\n{content}"
+
+            # Processar o conteúdo para extrair FAQs
             extracted_rules = self._extract_rules_from_content(content)
 
             # Limpar regras existentes
@@ -109,13 +116,13 @@ class DocumentUploadWizard(models.TransientModel):
             raise UserError(_("Erro ao processar o documento: %s") % str(e))
 
     def _extract_rules_from_content(self, content):
-        """Extrair regras do conteúdo do documento"""
+        """Extrair FAQs e informações de suporte do conteúdo do documento"""
         rules = []
 
-        # Implementação simplificada - na versão real usaríamos NLP mais sofisticado
-
-        # Para FAQ, procurar por padrões de pergunta e resposta
-        if self.document_type == 'faq':
+        # Implementação para processar diferentes tipos de mensagens
+        
+        # Para suporte técnico e dúvidas, procurar por padrões de pergunta e resposta
+        if self.document_type in ['support', 'question']:
             # Dividir por linhas
             lines = content.split('\n')
             current_question = None
@@ -127,7 +134,7 @@ class DocumentUploadWizard(models.TransientModel):
                     continue
 
                 # Verificar se é uma pergunta
-                if line.endswith('?') or re.match(r'^[0-9]+[\.\)]\s', line):
+                if line.endswith('?') or re.match(r'^[0-9]+[\.\)]\s', line) or re.match(r'^P[0-9]*:', line) or re.match(r'^Pergunta[0-9]*:', line):
                     # Se já temos uma pergunta anterior, salvar
                     if current_question and current_answer:
                         rules.append({
@@ -149,39 +156,75 @@ class DocumentUploadWizard(models.TransientModel):
                     'name': current_question[:100],
                     'description': '\n'.join(current_answer)
                 })
+                
+            # Se não encontrou perguntas e respostas, criar uma regra com o conteúdo completo
+            if not rules and content.strip():
+                title = "Dúvida de Suporte"
+                if self.message:
+                    # Usar as primeiras palavras da mensagem como título
+                    words = self.message.split()
+                    if len(words) > 3:
+                        title = " ".join(words[:5]) + "..."
+                    else:
+                        title = self.message[:100]
+                        
+                rules.append({
+                    'name': title,
+                    'description': content.strip()
+                })
 
-        # Para políticas, procurar por seções
-        elif self.document_type in ['policies', 'procedures']:
+        # Para feedback e sugestões, processar como seções
+        elif self.document_type in ['feedback', 'suggestion']:
             sections = re.split(r'\n\s*\n', content)
+            
+            # Se há apenas uma seção, usar a mensagem como título
+            if len(sections) == 1 and self.message:
+                rules.append({
+                    'name': self.message[:100],
+                    'description': sections[0].strip()
+                })
+            else:
+                for i, section in enumerate(sections):
+                    if len(section.strip()) < 20:  # Ignorar seções muito curtas
+                        continue
 
-            for section in sections:
-                if len(section.strip()) < 50:
-                    continue
+                    # Tentar extrair um título
+                    lines = section.split('\n')
+                    title = lines[0].strip()
 
-                # Tentar extrair um título
-                lines = section.split('\n')
-                title = lines[0].strip()
-
-                if title and len(title) < 100:
-                    description = '\n'.join(lines[1:]).strip()
-                    if description:
+                    if title and len(title) < 100:
+                        description = '\n'.join(lines[1:]).strip()
+                        if description:
+                            rules.append({
+                                'name': title,
+                                'description': description
+                            })
+                    else:
+                        # Se não conseguir extrair um título, usar um genérico
                         rules.append({
-                            'name': title,
-                            'description': description
+                            'name': f"{self.document_type.capitalize()} {i+1}",
+                            'description': section.strip()
                         })
 
         # Para outros tipos, dividir em seções
         else:
-            sections = re.split(r'\n\s*\n', content)
-
-            for i, section in enumerate(sections):
-                if len(section.strip()) < 50:
-                    continue
-
+            # Se tiver mensagem, usar como título principal
+            if self.message:
                 rules.append({
-                    'name': f"Seção {i+1}",
-                    'description': section.strip()
+                    'name': self.message[:100],
+                    'description': content.strip()
                 })
+            else:
+                sections = re.split(r'\n\s*\n', content)
+
+                for i, section in enumerate(sections):
+                    if len(section.strip()) < 30:
+                        continue
+
+                    rules.append({
+                        'name': f"Informação {i+1}",
+                        'description': section.strip()
+                    })
 
         return rules
 
@@ -197,10 +240,10 @@ class DocumentUploadWizard(models.TransientModel):
 
         # Determinar o tipo de regra com base no tipo de documento
         rule_type_mapping = {
-            'faq': 'general',
-            'policies': 'general',
-            'procedures': 'general',
-            'products': 'product',
+            'support': 'general',
+            'feedback': 'general',
+            'question': 'general',
+            'suggestion': 'general',
             'other': 'other'
         }
         rule_type = rule_type_mapping.get(self.document_type, 'general')

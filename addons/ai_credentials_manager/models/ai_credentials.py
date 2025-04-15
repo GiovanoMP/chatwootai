@@ -67,7 +67,7 @@ class AISystemCredentials(models.Model):
                       help="Nome descritivo para estas credenciais")
     account_id = fields.Char('ID da Conta', required=True, index=True, tracking=True,
                            help="Identificador único da conta (ex: account_1)")
-    token = fields.Char('Token de Referência', required=True, index=True, tracking=True, copy=False,
+    token = fields.Char('Token de Referência', index=True, tracking=True, copy=False,
                        help="Token usado nos arquivos YAML para referência")
 
     # Informações do cliente

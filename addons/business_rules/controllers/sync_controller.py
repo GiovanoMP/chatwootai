@@ -12,10 +12,22 @@ _logger = logging.getLogger(__name__)
 class BusinessRulesSyncController(http.Controller):
 
     @http.route('/business_rules/sync', type='json', auth='user')
-    def sync_business_rules(self, business_rule_id):
+    def sync_business_rules_http(self, business_rule_id):
+        """Endpoint HTTP para sincronizar regras de negócio"""
+        return self.sync_business_rules(business_rule_id)
+
+    def sync_business_rules(self, business_rule_id, env=None):
         """Endpoint para sincronizar regras de negócio com o sistema de IA"""
         try:
-            business_rule = request.env['business.rules'].browse(int(business_rule_id))
+            # Obter o ambiente Odoo
+            if env is None:
+                env = request.env if hasattr(request, 'env') else None
+
+            if env is None:
+                raise ValueError("Ambiente Odoo não disponível")
+
+            # Obter a regra de negócio
+            business_rule = env['business.rules'].browse(int(business_rule_id))
             if not business_rule.exists():
                 return {'success': False, 'error': _('Regra de negócio não encontrada')}
 
@@ -23,15 +35,52 @@ class BusinessRulesSyncController(http.Controller):
             rules_data = self._prepare_rules_data(business_rule)
 
             # Chamar a API para sincronizar as regras
-            api_url = self._get_api_url()
+            api_url = self._get_api_url(env)
+
+            # Se não encontrar URL válida, falhar de forma segura
+            if not api_url:
+                raise ValueError("URL do sistema de IA não encontrada. Configure o módulo ai_credentials_manager primeiro.")
+
+            # Obter o token de autenticação (que é o token de referência do módulo ai_credentials_manager)
+            token = self._get_api_token(env)
+            _logger.info(f"Token obtido: {token if token else 'None'}")
+
+            if not token:
+                # Verificar se há credenciais configuradas
+                credentials_count = env['ai.system.credentials'].sudo().search_count([('active', '=', True)])
+                _logger.error(f"Número de credenciais ativas encontradas: {credentials_count}")
+
+                if credentials_count > 0:
+                    # Verificar se há credenciais com token configurado
+                    credentials_with_token = env['ai.system.credentials'].sudo().search_count([('active', '=', True), ('token', '!=', False)])
+                    _logger.error(f"Número de credenciais com token configurado: {credentials_with_token}")
+
+                    # Obter detalhes da primeira credencial
+                    cred = env['ai.system.credentials'].sudo().search([('active', '=', True)], limit=1)
+                    if cred:
+                        _logger.error(f"Detalhes da credencial: ID={cred.id}, account_id={cred.account_id}, token={cred.token or 'None'}")
+
+                raise ValueError("Token de API não encontrado. Configure o módulo ai_credentials_manager primeiro.")
+
             sync_endpoint = f"{api_url}/api/v1/business-rules/sync"
 
             try:
                 # Preparar os dados para a API
-                account_id = f"account_{business_rule.id}"
+                # Obter o account_id correto do módulo ai_credentials_manager
+                account_id = self._get_account_id(env)
+
+                # Se não encontrar credenciais, falhar de forma segura
+                if not account_id:
+                    raise ValueError("Nenhuma credencial válida encontrada. Configure o módulo ai_credentials_manager primeiro.")
+
+                # Obter o token de API
+                token = self._get_api_token(env)
+                if not token:
+                    raise ValueError("Token de API não encontrado. Configure o módulo ai_credentials_manager primeiro.")
+
                 headers = {
                     'Content-Type': 'application/json',
-                    'Authorization': f"Bearer {self._get_api_token()}"
+                    'Authorization': f"Bearer {token}"
                 }
 
                 # Fazer a chamada para a API
@@ -77,71 +126,186 @@ class BusinessRulesSyncController(http.Controller):
             _logger.error("Erro ao sincronizar regras de negócio: %s", str(e))
             return {'success': False, 'error': str(e)}
 
-    def _get_api_token(self):
-        """Obter token de API do módulo ai_credentials_manager"""
+    def _get_account_id(self, env=None):
+        """Obter account_id do módulo ai_credentials_manager"""
+        # Usar o ambiente fornecido ou o ambiente da requisição
+        env = env or request.env
+
+        _logger.info("Iniciando busca por account_id")
+
         # Verificar se o módulo ai_credentials_manager está instalado
-        if not request.env['ir.module.module'].sudo().search([('name', '=', 'ai_credentials_manager'), ('state', '=', 'installed')]):
-            # Fallback para o método antigo se o módulo não estiver instalado
-            return request.env['ir.config_parameter'].sudo().get_param('business_rules.api_token', 'default_token')
+        ai_module = env['ir.module.module'].sudo().search([('name', '=', 'ai_credentials_manager'), ('state', '=', 'installed')])
+        if not ai_module:
+            # Não usar fallback - exigir que o módulo esteja instalado
+            _logger.error("Módulo ai_credentials_manager não está instalado")
+            return None
+
+        _logger.info("Módulo ai_credentials_manager está instalado")
 
         # Obter credenciais do módulo ai_credentials_manager
         try:
-            # Obter o account_id baseado no ID da empresa atual
-            company_id = request.env.company.id
-            account_id = f"account_{company_id}"
+            # Verificar se a tabela existe
+            table_exists = env.cr.execute("""SELECT EXISTS (
+                SELECT FROM information_schema.tables
+                WHERE table_name = 'ai_system_credentials'
+            )""")
+            exists = env.cr.fetchone()[0]
+            _logger.info(f"Tabela ai_system_credentials existe: {exists}")
 
-            # Buscar credenciais para este account_id
-            credentials = request.env['ai.system.credentials'].sudo().search([('account_id', '=', account_id)], limit=1)
+            if not exists:
+                _logger.error("Tabela ai_system_credentials não existe")
+                return None
+
+            # Contar credenciais ativas
+            credentials_count = env['ai.system.credentials'].sudo().search_count([('active', '=', True)])
+            _logger.info(f"Número de credenciais ativas: {credentials_count}")
+
+            # Buscar todas as credenciais ativas
+            # Nota: Idealmente, deveríamos filtrar por empresa atual, mas como estamos
+            # usando um sistema de tenant único por banco de dados, podemos pegar a primeira
+            credentials = env['ai.system.credentials'].sudo().search([('active', '=', True)], limit=1)
 
             if credentials:
-                # Registrar acesso às credenciais
-                request.env['ai.credentials.access.log'].sudo().create({
-                    'credential_id': credentials.id,
-                    'access_time': fields.Datetime.now(),
-                    'user_id': request.env.user.id,
-                    'ip_address': request.httprequest.remote_addr,
-                    'operation': 'get_token',
-                    'success': True
-                })
+                _logger.info(f"Credencial encontrada: ID={credentials.id}, account_id={credentials.account_id}")
+                return credentials.account_id
+            else:
+                _logger.error("Nenhuma credencial encontrada no módulo ai_credentials_manager")
 
+                # Verificar se há credenciais inativas
+                inactive_count = env['ai.system.credentials'].sudo().search_count([('active', '=', False)])
+                _logger.info(f"Número de credenciais inativas: {inactive_count}")
+
+                if inactive_count > 0:
+                    inactive_cred = env['ai.system.credentials'].sudo().search([('active', '=', False)], limit=1)
+                    _logger.info(f"Credencial inativa encontrada: ID={inactive_cred.id}, account_id={inactive_cred.account_id}")
+
+                return None  # Não usar fallback - exigir que existam credenciais
+        except Exception as e:
+            _logger.error(f"Erro ao obter account_id do ai_credentials_manager: {str(e)}")
+            _logger.exception("Traceback completo:")
+            return None  # Não usar fallback - falhar de forma segura
+
+    def _get_api_token(self, env=None):
+        """Obter token de API do módulo ai_credentials_manager"""
+        # Usar o ambiente fornecido ou o ambiente da requisição
+        env = env or request.env
+
+        _logger.info("Iniciando busca por token de API")
+
+        # Verificar se o módulo ai_credentials_manager está instalado
+        ai_module = env['ir.module.module'].sudo().search([('name', '=', 'ai_credentials_manager'), ('state', '=', 'installed')])
+        if not ai_module:
+            # Não usar fallback - exigir que o módulo esteja instalado
+            _logger.error("Módulo ai_credentials_manager não está instalado")
+            return None
+
+        _logger.info("Módulo ai_credentials_manager está instalado")
+
+        # Obter credenciais do módulo ai_credentials_manager
+        try:
+            # Obter o account_id
+            _logger.info("Obtendo account_id")
+            account_id = self._get_account_id(env)
+            _logger.info(f"Account ID obtido: {account_id if account_id else 'None'}")
+
+            if not account_id:
+                _logger.error("Nenhum account_id encontrado para buscar token")
+                return None
+
+            # Buscar credenciais para este account_id
+            _logger.info(f"Buscando credenciais para account_id: {account_id}")
+            credentials = env['ai.system.credentials'].sudo().search([('account_id', '=', account_id), ('active', '=', True)], limit=1)
+            _logger.info(f"Credenciais encontradas: {bool(credentials)}")
+
+            if credentials:
+                _logger.info(f"Detalhes da credencial: ID={credentials.id}, account_id={credentials.account_id}")
+
+                # Verificar se o token de referência existe
+                # Este token é usado tanto para identificar as credenciais nos arquivos YAML
+                # quanto para autenticação com o sistema de IA
+                _logger.info(f"Token na credencial: {credentials.token or 'None'}")
+
+                if not credentials.token:
+                    _logger.error(f"Token de referência não configurado para account_id {account_id}")
+                    return None
+
+                # Registrar acesso às credenciais
+                _logger.info("Registrando acesso às credenciais")
+                try:
+                    env['ai.credentials.access.log'].sudo().create({
+                        'credential_id': credentials.id,
+                        'access_time': fields.Datetime.now(),
+                        'user_id': env.user.id,
+                        'ip_address': request.httprequest.remote_addr if hasattr(request, 'httprequest') else '0.0.0.0',
+                        'operation': 'get_token',
+                        'success': True
+                    })
+                    _logger.info("Acesso registrado com sucesso")
+                except Exception as log_error:
+                    _logger.error(f"Erro ao registrar acesso: {str(log_error)}")
+
+                _logger.info(f"Token encontrado para account_id {account_id}: {credentials.token}")
                 return credentials.token
             else:
                 _logger.warning(f"Credenciais não encontradas para account_id {account_id}")
-                # Fallback para o método antigo
-                return request.env['ir.config_parameter'].sudo().get_param('business_rules.api_token', 'default_token')
+                return None  # Não usar fallback - exigir que existam credenciais
         except Exception as e:
             _logger.error(f"Erro ao obter token do ai_credentials_manager: {str(e)}")
-            # Fallback para o método antigo em caso de erro
-            return request.env['ir.config_parameter'].sudo().get_param('business_rules.api_token', 'default_token')
+            _logger.exception("Traceback completo:")
+            return None  # Não usar fallback - falhar de forma segura
 
-    def _get_api_url(self):
+    def _get_api_url(self, env=None):
         """Obter URL da API do módulo ai_credentials_manager"""
+        # Usar o ambiente fornecido ou o ambiente da requisição
+        env = env or request.env
+
         # Verificar se o módulo ai_credentials_manager está instalado
-        if not request.env['ir.module.module'].sudo().search([('name', '=', 'ai_credentials_manager'), ('state', '=', 'installed')]):
-            # Fallback para o método antigo se o módulo não estiver instalado
-            return request.env['ir.config_parameter'].sudo().get_param('business_rules.api_url', 'http://localhost:8000')
+        if not env['ir.module.module'].sudo().search([('name', '=', 'ai_credentials_manager'), ('state', '=', 'installed')]):
+            # Não usar fallback - exigir que o módulo esteja instalado
+            _logger.error("Módulo ai_credentials_manager não está instalado")
+            return None
 
         # Obter credenciais do módulo ai_credentials_manager
         try:
-            # Obter o account_id baseado no ID da empresa atual
-            company_id = request.env.company.id
-            account_id = f"account_{company_id}"
+            # Obter o account_id
+            account_id = self._get_account_id(env)
+            if not account_id:
+                _logger.error("Nenhum account_id encontrado para buscar URL")
+                return None
 
             # Buscar credenciais para este account_id
-            credentials = request.env['ai.system.credentials'].sudo().search([('account_id', '=', account_id)], limit=1)
+            credentials = env['ai.system.credentials'].sudo().search([('account_id', '=', account_id), ('active', '=', True)], limit=1)
 
             if credentials:
                 # Obter URL do sistema de IA
-                ai_system_url = credentials.get_ai_system_url()
-                if ai_system_url:
-                    return ai_system_url
+                # Verificar se o campo webhook_url existe
+                if hasattr(credentials, 'webhook_url'):
+                    ai_system_url = credentials.webhook_url
+                # Se não existir, tentar get_ai_system_url
+                elif hasattr(credentials, 'get_ai_system_url'):
+                    ai_system_url = credentials.get_ai_system_url()
+                # Se não existir, tentar ngrok_url ou ai_system_url
+                elif hasattr(credentials, 'use_ngrok') and credentials.use_ngrok and credentials.ngrok_url:
+                    ai_system_url = credentials.ngrok_url
+                elif hasattr(credentials, 'ai_system_url') and credentials.ai_system_url:
+                    ai_system_url = credentials.ai_system_url
+                else:
+                    ai_system_url = None
 
-            # Fallback para o método antigo
-            return request.env['ir.config_parameter'].sudo().get_param('business_rules.api_url', 'http://localhost:8000')
+                if ai_system_url:
+                    _logger.info(f"URL encontrada para account_id {account_id}: {ai_system_url}")
+                    return ai_system_url
+                else:
+                    _logger.error(f"URL não configurada para account_id {account_id}")
+                    return None
+
+            # Não usar fallback - exigir que existam credenciais com URL válida
+            _logger.error(f"Credenciais não encontradas para account_id {account_id}")
+            return None
         except Exception as e:
             _logger.error(f"Erro ao obter URL da API do ai_credentials_manager: {str(e)}")
-            # Fallback para o método antigo em caso de erro
-            return request.env['ir.config_parameter'].sudo().get_param('business_rules.api_url', 'http://localhost:8000')
+            # Não usar fallback - falhar de forma segura
+            return None
 
     def _prepare_rules_data(self, business_rule):
         """Preparar dados das regras para envio ao sistema de IA"""
@@ -151,7 +315,7 @@ class BusinessRulesSyncController(http.Controller):
             'website': business_rule.website,
             'description': business_rule.description,
             'company_values': business_rule.company_values,
-            'business_model': business_rule.business_model,
+            'business_area': business_rule.business_area,
             'greeting_message': business_rule.greeting_message,
             'communication_style': business_rule.communication_style,
             'emoji_usage': business_rule.emoji_usage,

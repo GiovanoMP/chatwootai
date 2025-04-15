@@ -1,101 +1,101 @@
-## Configuração Template para o Domínio de Varejo
-## Este arquivo define configurações base compartilhadas por todos os clientes no domínio de varejo
+## Configuração Template para o Domínio de Cosméticos
+## Este arquivo define configurações base compartilhadas por todos os clientes no domínio de cosméticos
 ## Ele serve como template para novos clientes, mas cada cliente tem sua própria configuração específica
 
 version: "2.1"
 metadata:
   domain: retail
-  description: "Domínio de vendas para produtos de varejo geral"
+  description: "Domínio de vendas para produtos de beleza"
   is_template: true
   inherit: "_base"  # Herda configurações base
 
-# Configurações específicas dos agentes para o domínio de varejo
+# Configurações específicas dos agentes para o domínio de cosméticos
 agents:
-  retail_expert:
+  sales_expert:
     type: SalesAgent
     config:
-      role: "Consultor de Varejo"
-      goal: "Auxiliar clientes na escolha de produtos diversos para o dia a dia"
+      role: "Consultor de Beleza"
+      goal: "Auxiliar clientes na escolha de produtos cosméticos adequados"
       backstory: |
-        Especialista em produtos de varejo com amplo conhecimento
-        de eletrodomésticos, eletrônicos, moda e itens para casa.
-        Você já trabalhou com as principais lojas de departamento e entende
-        as necessidades específicas para diferentes perfis de consumidores.
+        Especialista em produtos de beleza com profundo conhecimento
+        de formulações cosméticas e preferências de clientes.
+        Você já trabalhou com as principais marcas de cosméticos e entende
+        as necessidades específicas para diferentes tipos de pele e estilos.
     tools:
       - product_catalog
-      - customer_profiler
-      - retail_recommender
+      - skin_analyzer
+      - beauty_recommender
     plugins:
-      - name: retail_advisor
-        version: 1.0
+      - name: cosmetics_advisor
+        version: 1.2
         config:
-          product_categories: ["eletrônicos", "eletrodomésticos", "moda", "casa"]
-          customer_profiles: ["família", "solteiro", "casal", "estudante"]
+          skin_types: ["normal", "seca", "oleosa", "mista"]
+          concern_areas: ["acne", "rugas", "manchas", "hidratação"]
 
-  home_specialist:
+  skincare_specialist:
     type: ProductAgent
     config:
-      role: "Especialista em Produtos para Casa"
-      goal: "Recomendar produtos ideais para diferentes ambientes domésticos"
+      role: "Especialista em Cuidados com a Pele"
+      goal: "Recomendar rotinas de cuidados específicas para cada tipo de pele"
       backstory: |
-        Especialista em design de interiores e produtos para casa com anos de experiência
-        em decoração, organização e funcionalidade de ambientes.
+        Especialista em dermatologia cosmética com anos de experiência
+        em formulações e protocolos para diferentes condições de pele.
     tools:
-      - customer_profiler
+      - skin_analyzer
       - product_catalog
-      - home_planner
+      - routine_builder
     plugins:
-      - name: home_solutions
-        version: 1.0
+      - name: skin_diagnosis
+        version: 1.1
         config:
-          room_types: ["sala", "cozinha", "quarto", "banheiro"]
-          style_options: ["moderno", "clássico", "minimalista", "rústico"]
+          diagnosis_depth: "detailed"
+          include_ingredients: true
 
 # Configuração das crews para este domínio
 crew:
-  # Crew de vendas para produtos de varejo
+  # Crew de vendas para cosméticos
   sales_crew:
-    name: RetailSalesCrew
-    description: "Equipe especializada em vendas de produtos de varejo"
-    agents: [retail_expert, home_specialist]
+    name: CosmeticsSalesCrew
+    description: "Equipe especializada em vendas de produtos cosméticos"
+    agents: [sales_expert, skincare_specialist]
     tasks:
-      - description: "Analisar a consulta do cliente e identificar necessidades de consumo"
-        agent: retail_expert
+      - description: "Analisar a consulta do cliente e identificar necessidades de beleza"
+        agent: sales_expert
         expected_output: "Análise das necessidades do cliente"
-      - description: "Criar um perfil de consumidor baseado nas preferências"
-        agent: retail_expert
-        expected_output: "Perfil detalhado do consumidor"
+      - description: "Avaliar o tipo de pele e condições específicas"
+        agent: skincare_specialist
+        expected_output: "Diagnóstico do tipo de pele e recomendações"
       - description: "Formular recomendações de produtos personalizadas"
-        agent: retail_expert
+        agent: sales_expert
         expected_output: "Lista de produtos recomendados com justificativas"
-      - description: "Sugerir soluções para ambientes domésticos"
-        agent: home_specialist
-        expected_output: "Soluções personalizadas para casa"
+      - description: "Criar uma rotina de cuidados personalizada"
+        agent: skincare_specialist
+        expected_output: "Rotina de cuidados com a pele passo a passo"
   
-  # Crew de suporte para produtos de varejo
+  # Crew de suporte para cosméticos
   support_crew:
-    name: RetailSupportCrew
-    description: "Equipe especializada em suporte técnico para produtos de varejo"
-    agents: [home_specialist, retail_expert]
+    name: CosmeticsSupportCrew
+    description: "Equipe especializada em suporte técnico para produtos cosméticos"
+    agents: [skincare_specialist, sales_expert]
     tasks:
-      - description: "Analisar problemas reportados com produtos"
-        agent: retail_expert
+      - description: "Analisar problemas reportados com produtos cosméticos"
+        agent: skincare_specialist
         expected_output: "Diagnóstico do problema reportado"
-      - description: "Fornecer orientações de uso e instalação"
-        agent: home_specialist
-        expected_output: "Instruções detalhadas de uso e instalação"
-      - description: "Recomendar soluções para problemas comuns"
-        agent: retail_expert
-        expected_output: "Soluções para problemas frequentes"
+      - description: "Fornecer orientações de uso correto dos produtos"
+        agent: sales_expert
+        expected_output: "Instruções detalhadas de uso"
+      - description: "Recomendar alternativas para casos de reações adversas"
+        agent: skincare_specialist
+        expected_output: "Recomendações de produtos alternativos"
 
 # Configurações de integração com serviços externos específicos para este domínio
 integrations:
   odoo:
     product_categories:
-      - eletrônicos
-      - eletrodomésticos
-      - moda
-      - casa_decoração
+      - cosméticos
+      - maquiagem
+      - perfumaria
+      - cuidados_pessoais
     price_lists:
       - varejo
       - atacado
@@ -103,13 +103,13 @@ integrations:
   
   chatwoot:
     default_labels:
-      - varejo
-      - casa
-      - eletrônicos
+      - beleza
+      - cosméticos
+      - skincare
     canned_responses:
-      - welcome_retail
+      - welcome_cosmetics
+      - skincare_routine
       - product_recommendation
-      - special_offers
 
 # Configurações de memória para este domínio
 memory:
@@ -118,4 +118,4 @@ memory:
   priority_contexts:
     - "histórico de compras"
     - "preferências de produtos"
-    - "perfil do cliente"
+    - "condições de pele"

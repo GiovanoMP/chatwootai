@@ -6,7 +6,7 @@
 # Formato: "account_id": {"domain": "nome_do_domínio", "account_id": "id_do_cliente"}
 # Quando uma mensagem chega de uma conta específica, o sistema identifica exatamente qual cliente e domínio usar
 accounts:
-  "1": {"domain": "cosmetics", "account_id": "account_1"}  # Beleza Natural Ltda.
+  "1": {"domain": "retail", "account_id": "account_1"}  # Sandra Cosméticos
   "2": {"domain": "cosmetics", "account_id": "account_2"}  # Glamour Cosméticos S.A.
   "3": {"domain": "health", "account_id": "account_3"}     # Vida Saudável Farmácias
   "4": {"domain": "retail", "account_id": "account_4"}     # SuperCompras Varejo
@@ -16,7 +16,7 @@ accounts:
 # Mapeamento de inbox_id para domínio e cliente (fallback)
 # Usado quando o account_id não resolve para um cliente específico
 inboxes:
-  "101": {"domain": "cosmetics", "account_id": "account_1"}  # Inbox do WhatsApp da Beleza Natural
+  "101": {"domain": "retail", "account_id": "account_1"}  # Inbox do WhatsApp da Sandra Cosméticos
   "102": {"domain": "cosmetics", "account_id": "account_2"}  # Inbox do Instagram da Glamour Cosméticos
   "201": {"domain": "health", "account_id": "account_3"}     # Inbox do WhatsApp da Vida Saudável
   "301": {"domain": "retail", "account_id": "account_4"}     # Inbox do Facebook do SuperCompras
@@ -25,7 +25,7 @@ inboxes:
 
 # Lista de clientes para referência fácil
 clients:
-  "account_1": {"name": "Beleza Natural Ltda.", "domain": "cosmetics"}
+  "account_1": {"name": "Sandra Cosméticos", "domain": "retail"}
   "account_2": {"name": "Glamour Cosméticos S.A.", "domain": "cosmetics"}
   "account_3": {"name": "Vida Saudável Farmácias", "domain": "health"}
   "account_4": {"name": "SuperCompras Varejo", "domain": "retail"}

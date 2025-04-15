@@ -36,6 +36,7 @@ cp "$SRC_DIR/models/rule_item.py" "$DEST_DIR/models/"
 cp "$SRC_DIR/models/temporary_rule.py" "$DEST_DIR/models/"
 cp "$SRC_DIR/models/dashboard.py" "$DEST_DIR/models/"
 cp "$SRC_DIR/models/res_config_settings.py" "$DEST_DIR/models/"
+cp "$SRC_DIR/models/business_support_document.py" "$DEST_DIR/models/"
 
 # Copiar vistas
 cp "$SRC_DIR/views/business_rules_views.xml" "$DEST_DIR/views/"
@@ -44,6 +45,7 @@ cp "$SRC_DIR/views/temporary_rule_views.xml" "$DEST_DIR/views/"
 cp "$SRC_DIR/views/dashboard_view.xml" "$DEST_DIR/views/"
 cp "$SRC_DIR/views/menu_views.xml" "$DEST_DIR/views/"
 cp "$SRC_DIR/views/res_config_settings_views.xml" "$DEST_DIR/views/"
+cp "$SRC_DIR/views/business_support_document_views.xml" "$DEST_DIR/views/"
 
 # Copiar wizards
 cp "$SRC_DIR/wizards/__init__.py" "$DEST_DIR/wizards/"

@@ -2,6 +2,6 @@
 Módulo de cache para o sistema ChatwootAI.
 """
 
-from src.core.cache.agent_cache import RedisAgentCache
+# Removido a importação de RedisAgentCache pois o módulo foi descontinuado
 
-__all__ = ["RedisAgentCache"]
+__all__ = []

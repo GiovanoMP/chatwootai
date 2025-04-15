@@ -28,6 +28,7 @@ Características:
         'views/temporary_rule_views.xml',
         'views/dashboard_view.xml',
         'views/res_config_settings_views.xml',
+        'views/business_support_document_views.xml',
         'views/menu_views.xml',
         'data/business_template_data.xml',
         'data/config_parameter.xml',

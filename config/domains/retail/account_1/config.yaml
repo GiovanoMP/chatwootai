@@ -1,15 +1,18 @@
 account_id: account_1
-description: "Configura\xE7\xE3o para Sandra Cosmeticos"
+name: Sandra Cosméticos
+description: Configuração para Sandra Cosméticos
+
 integrations:
   mcp:
-    config:
-      credential_ref: account_1-00bfe67a
-      db: account_1
-      url: http://localhost:8069
-      username: giovano@sprintia.com.br
     type: odoo-mcp
+    config:
+      url: http://localhost:8069
+      db: account_1
+      username: givoano@sprintia.com.br
+      credential_ref: account_1-00bfe67a  # Token de referência para autenticação
+
   qdrant:
     collection: business_rules_account_1
+
   redis:
     prefix: account_1
-name: Sandra Cosmeticos

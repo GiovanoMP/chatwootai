@@ -11,7 +11,7 @@
                     <field name="sync_status" widget="statusbar" statusbar_visible="not_synced,syncing,synced,error"/>
                     <button name="action_view_active_rules" string="Ver Regras Ativas" type="object"/>
                     <button name="action_scrape_website" string="Extrair do Website" type="object" attrs="{'invisible': [('website', '=', False)]}"/>
-                    <button name="action_upload_documents" string="Suporte ao Cliente" type="object"/>
+                    <button name="action_view_customer_support" string="Ver Suporte ao Cliente" type="object"/>
                 </header>
                 <sheet>
                     <div class="oe_button_box" name="button_box">
@@ -27,8 +27,8 @@
                     <group>
                         <group>
                             <field name="website" placeholder="https://www.exemplo.com.br"/>
-                            <field name="business_model"/>
-                            <field name="business_model_other" attrs="{'invisible': [('business_model', '!=', 'other')], 'required': [('business_model', '=', 'other')]}"/>
+                            <field name="business_area"/>
+                            <field name="business_area_other" attrs="{'invisible': [('business_area', '!=', 'other')], 'required': [('business_area', '=', 'other')]}"/>
                         </group>
                         <group>
                             <field name="last_sync_date" readonly="1"/>
@@ -105,6 +105,42 @@
                                 </tree>
                             </field>
                         </page>
+                        <page string="Documentos de Suporte ao Cliente">
+                            <div class="alert alert-info" role="alert">
+                                <p>Nesta aba você pode gerenciar documentos relacionados ao suporte ao cliente.</p>
+                            </div>
+
+                            <!-- Documentos de Suporte -->
+                            <div class="row">
+                                <div class="col-12">
+                                    <h3>Documentos de Suporte</h3>
+                                    <field name="support_document_ids" widget="many2many" nolabel="1">
+                                        <tree>
+                                            <field name="name"/>
+                                            <field name="document_type"/>
+                                            <field name="create_date"/>
+                                            <field name="sync_status" decoration-success="sync_status == 'synced'" decoration-danger="sync_status == 'error'" decoration-info="sync_status == 'not_synced'"/>
+                                        </tree>
+                                    </field>
+                                </div>
+                            </div>
+
+                            <!-- Botões de Ação -->
+                            <div class="row mt-3">
+                                <div class="col-12">
+                                    <button name="action_upload_documents"
+                                            string="Adicionar Documento"
+                                            type="object"
+                                            class="btn btn-primary"
+                                            icon="fa-upload"/>
+                                    <button name="action_sync_support_documents"
+                                            string="Sincronizar Documentos"
+                                            type="object"
+                                            class="btn btn-success"
+                                            icon="fa-refresh"/>
+                                </div>
+                            </div>
+                        </page>
                     </notebook>
                 </sheet>
                 <div class="oe_chatter">
@@ -122,7 +158,7 @@
         <field name="arch" type="xml">
             <tree string="Regras de Negócio" decoration-muted="active == False">
                 <field name="name"/>
-                <field name="business_model"/>
+                <field name="business_area"/>
                 <field name="active_permanent_rules_count" string="Regras Permanentes"/>
                 <field name="active_temporary_rules_count" string="Regras Temporárias"/>
                 <field name="last_sync_date"/>
@@ -139,14 +175,14 @@
         <field name="arch" type="xml">
             <search string="Regras de Negócio">
                 <field name="name"/>
-                <field name="business_model"/>
+                <field name="business_area"/>
                 <filter string="Sincronizadas" name="synced" domain="[('sync_status', '=', 'synced')]"/>
                 <filter string="Não Sincronizadas" name="not_synced" domain="[('sync_status', '=', 'not_synced')]"/>
                 <filter string="Com Erro" name="error" domain="[('sync_status', '=', 'error')]"/>
                 <separator/>
                 <filter string="Arquivadas" name="inactive" domain="[('active', '=', False)]"/>
                 <group expand="0" string="Agrupar Por">
-                    <filter string="Modelo de Negócio" name="group_by_model" context="{'group_by': 'business_model'}"/>
+                    <filter string="Área de Negócio" name="group_by_area" context="{'group_by': 'business_area'}"/>
                     <filter string="Status de Sincronização" name="group_by_sync" context="{'group_by': 'sync_status'}"/>
                 </group>
             </search>

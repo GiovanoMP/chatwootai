@@ -74,13 +74,13 @@ class AISystemCredentials(models.Model):
     client_name = fields.Char('Nome do Cliente', tracking=True,
                              help="Nome do cliente para referência")
     business_area = fields.Selection([
-        ('retail', 'Varejo'),
-        ('ecommerce', 'E-commerce'),
-        ('healthcare', 'Saúde'),
+        ('retail', 'Varejo/Loja Física'),
+        ('ecommerce', 'E-commerce/Loja Virtual'),
+        ('healthcare', 'Saúde/Clínica/Consultório'),
         ('education', 'Educação'),
         ('manufacturing', 'Indústria'),
-        ('services', 'Serviços'),
-        ('restaurant', 'Restaurante'),
+        ('services', 'Prestador de Serviços'),
+        ('restaurant', 'Restaurante/Pizzaria'),
         ('financial', 'Serviços Financeiros'),
         ('technology', 'Tecnologia'),
         ('hospitality', 'Hotelaria'),
@@ -323,9 +323,13 @@ class AISystemCredentials(models.Model):
                 }
             },
             'qdrant': {
+                # Usar o valor configurado ou gerar um nome baseado no account_id
+                # Isso é seguro porque estamos usando o account_id da própria credencial
                 'collection': creds.qdrant_collection or f"business_rules_{creds.account_id}"
             },
             'redis': {
+                # Usar o valor configurado ou usar o account_id como prefixo
+                # Isso é seguro porque estamos usando o account_id da própria credencial
                 'prefix': creds.redis_prefix or creds.account_id
             }
         }
@@ -386,8 +390,8 @@ class AISystemCredentials(models.Model):
         elif self.ai_system_url:
             return self.ai_system_url.rstrip('/')
         else:
-            # Tentar obter do parâmetro do sistema
-            return self.env['ir.config_parameter'].sudo().get_param('ai_credentials.default_ai_system_url', '')
+            # Não usar fallback - exigir que a URL esteja configurada
+            return None
 
     # Método para sincronizar credenciais com arquivos YAML (legado)
     def action_sync_to_yaml(self):
@@ -437,12 +441,16 @@ class AISystemCredentials(models.Model):
             if 'qdrant' not in config['integrations']:
                 config['integrations']['qdrant'] = {}
 
+            # Usar o valor configurado ou gerar um nome baseado no account_id
+            # Isso é seguro porque estamos usando o account_id da própria credencial
             config['integrations']['qdrant']['collection'] = self.qdrant_collection or f"business_rules_{self.account_id}"
 
             # Atualizar configuração Redis
             if 'redis' not in config['integrations']:
                 config['integrations']['redis'] = {}
 
+            # Usar o valor configurado ou usar o account_id como prefixo
+            # Isso é seguro porque estamos usando o account_id da própria credencial
             config['integrations']['redis']['prefix'] = self.redis_prefix or self.account_id
 
             # Salvar configuração
@@ -505,7 +513,8 @@ class AISystemCredentials(models.Model):
             # Obter URL do webhook
             webhook_url = self.get_ai_system_url()
             if not webhook_url:
-                raise UserError(_('URL do sistema de IA não configurada'))
+                # Falhar de forma segura se a URL não estiver configurada
+                raise UserError(_('URL do sistema de IA não configurada. Configure a URL do sistema de IA ou do Ngrok.'))
 
             # Garantir que a URL termina com /webhook
             if not webhook_url.endswith('/webhook'):
@@ -524,7 +533,11 @@ class AISystemCredentials(models.Model):
                     'odoo_db': self.odoo_db,
                     'odoo_username': self.odoo_username,
                     'token': self.token,
+                    # Usar o valor configurado ou gerar um nome baseado no account_id
+                    # Isso é seguro porque estamos usando o account_id da própria credencial
                     'qdrant_collection': self.qdrant_collection or f"business_rules_{self.account_id}",
+                    # Usar o valor configurado ou usar o account_id como prefixo
+                    # Isso é seguro porque estamos usando o account_id da própria credencial
                     'redis_prefix': self.redis_prefix or self.account_id,
                 }
             }

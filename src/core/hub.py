@@ -14,7 +14,7 @@ a necessidade de roteamento entre múltiplas crews funcionais.
 
 import logging
 from typing import Dict, Any, Optional
-from src.core.cache.agent_cache import RedisAgentCache
+# Removido a importação de RedisAgentCache pois o módulo foi descontinuado
 from src.core.data_proxy_agent import DataProxyAgent
 from src.core.domain.domain_manager import DomainManager
 from src.core.crews.crew_factory import CrewFactory, get_crew_factory
@@ -38,7 +38,7 @@ class HubCrew:
                  data_proxy_agent: Optional[DataProxyAgent] = None,
                  crew_factory: Optional[CrewFactory] = None,
                  domain_manager: Optional[DomainManager] = None,
-                 agent_cache: Optional[RedisAgentCache] = None):
+                 agent_cache: Optional[Any] = None):  # Alterado para Any pois RedisAgentCache foi removido
         """
         Initialize the hub crew.
 

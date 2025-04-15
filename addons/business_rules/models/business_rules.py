@@ -57,8 +57,8 @@ class BusinessRules(models.Model):
     saturday_hours_start = fields.Float(string='Início Sábado', default=8.0, tracking=True)
     saturday_hours_end = fields.Float(string='Término Sábado', default=12.0, tracking=True)
 
-    # Modelo de Negócio
-    business_model = fields.Selection([
+    # Área de Negócio
+    business_area = fields.Selection([
         ('retail', 'Varejo/Loja Física'),
         ('ecommerce', 'E-commerce/Loja Virtual'),
         ('healthcare', 'Saúde/Clínica/Consultório'),
@@ -71,13 +71,23 @@ class BusinessRules(models.Model):
         ('hospitality', 'Hotelaria'),
         ('real_estate', 'Imobiliário'),
         ('other', 'Outro')
-    ], string='Modelo de Negócio', required=True, tracking=True)
+    ], string='Área de Negócio', required=True, tracking=True)
 
-    business_model_other = fields.Char(string='Outro Modelo de Negócio', tracking=True)
+    business_area_other = fields.Char(string='Outra Área de Negócio', tracking=True)
 
     # Regras e Sincronização
     rule_ids = fields.One2many('business.rule.item', 'business_rule_id', string='Regras Permanentes')
     temporary_rule_ids = fields.One2many('business.temporary.rule', 'business_rule_id', string='Regras Temporárias')
+
+    # Documentos de Suporte ao Cliente
+    support_document_ids = fields.Many2many(
+        'business.support.document',
+        'business_rule_support_doc_rel',
+        'business_rule_id',
+        'document_id',
+        string='Documentos de Suporte',
+        help='Documentos relacionados ao suporte ao cliente'
+    )
 
     last_sync_date = fields.Datetime(string='Última Sincronização', readonly=True)
     sync_status = fields.Selection([
@@ -108,13 +118,13 @@ class BusinessRules(models.Model):
             )
             record.active_temporary_rules_count = len(active_temp_rules)
 
-    @api.onchange('business_model')
-    def _onchange_business_model(self):
-        """Carregar regras padrão com base no modelo de negócio selecionado"""
-        if self.business_model:
-            # Aqui carregaríamos regras padrão do modelo selecionado
+    @api.onchange('business_area')
+    def _onchange_business_area(self):
+        """Carregar regras padrão com base na área de negócio selecionada"""
+        if self.business_area:
+            # Aqui carregaríamos regras padrão da área selecionada
             # Implementação completa será feita posteriormente
-            template = self.env['business.template'].search([('model_type', '=', self.business_model)], limit=1)
+            template = self.env['business.template'].search([('model_type', '=', self.business_area)], limit=1)
             if template:
                 self.greeting_message = template.default_greeting
                 # Outras configurações padrão podem ser carregadas aqui
@@ -128,8 +138,15 @@ class BusinessRules(models.Model):
         self.env.cr.commit()  # Commit imediato para atualizar a UI
 
         try:
-            # Chamar o controlador de sincronização
-            result = self.env['business.rules.sync.controller'].sync_business_rules(self.id)
+            # Chamar diretamente o método do controlador
+            # Importar o controlador
+            from ..controllers.sync_controller import BusinessRulesSyncController
+
+            # Criar uma instância do controlador
+            controller = BusinessRulesSyncController()
+
+            # Chamar o método diretamente, passando o ambiente
+            result = controller.sync_business_rules(self.id, env=self.env)
 
             # Verificar resultado da sincronização
             if result and result.get('success'):
@@ -217,14 +234,131 @@ class BusinessRules(models.Model):
             'context': {'default_business_rule_id': self.id, 'default_website': self.website}
         }
 
+    def action_view_customer_support(self):
+        """Abre a visualização de suporte ao cliente."""
+        self.ensure_one()
+        return {
+            'name': _('Suporte ao Cliente'),
+            'type': 'ir.actions.act_window',
+            'res_model': 'business.support.document',
+            'view_mode': 'tree,form',
+            'domain': [('id', 'in', self.support_document_ids.ids)],
+            'context': {'default_business_rule_id': self.id}
+        }
+
     def action_upload_documents(self):
         """Abrir wizard para upload de documentos"""
         self.ensure_one()
         return {
-            'name': _('Suporte ao Cliente'),
+            'name': _('Adicionar Documento de Suporte'),
             'type': 'ir.actions.act_window',
             'res_model': 'business.document.upload.wizard',
             'view_mode': 'form',
             'target': 'new',
             'context': {'default_business_rule_id': self.id}
         }
+
+    def action_sync_support_documents(self):
+        """Sincroniza os documentos de suporte com o sistema de IA."""
+        self.ensure_one()
+        try:
+            # Chamar o MCP-Odoo para sincronizar documentos
+            result = self._call_mcp_sync_support_docs()
+
+            if result and result.get('success'):
+                return {
+                    'type': 'ir.actions.client',
+                    'tag': 'display_notification',
+                    'params': {
+                        'title': _('Sincronização Concluída'),
+                        'message': _('Documentos sincronizados com sucesso.'),
+                        'sticky': False,
+                        'type': 'success'
+                    }
+                }
+            else:
+                error_msg = result.get('error') if result else "Erro desconhecido"
+                return {
+                    'type': 'ir.actions.client',
+                    'tag': 'display_notification',
+                    'params': {
+                        'title': _('Falha na Sincronização'),
+                        'message': error_msg,
+                        'sticky': False,
+                        'type': 'danger'
+                    }
+                }
+        except Exception as e:
+            _logger.error("Erro ao sincronizar documentos de suporte: %s", str(e))
+            return {
+                'type': 'ir.actions.client',
+                'tag': 'display_notification',
+                'params': {
+                    'title': _('Erro'),
+                    'message': str(e),
+                    'sticky': False,
+                    'type': 'danger'
+                }
+            }
+
+    def _call_mcp_sync_support_docs(self):
+        """Chama o MCP-Odoo para sincronizar documentos de suporte."""
+        try:
+            import requests
+
+            # Obter configurações do MCP-Odoo
+            IrConfigParam = self.env['ir.config_parameter'].sudo()
+            mcp_url = IrConfigParam.get_param('business_rules.mcp_url', 'http://localhost:8000')
+            mcp_token = IrConfigParam.get_param('business_rules.mcp_token', '')
+            account_id = IrConfigParam.get_param('business_rules.account_id', 'account_1')
+
+            # Preparar a requisição
+            headers = {
+                'Content-Type': 'application/json',
+                'Authorization': f'Bearer {mcp_token}' if mcp_token else ''
+            }
+
+            # Obter informações dos documentos
+            docs_data = []
+            for doc in self.support_document_ids:
+                docs_data.append({
+                    'id': doc.id,
+                    'name': doc.name,
+                    'document_type': doc.document_type,
+                    'content': doc.content,
+                    'create_date': fields.Datetime.to_string(doc.create_date) if doc.create_date else '',
+                })
+
+            payload = {
+                'account_id': account_id,
+                'business_rule_id': self.id,
+                'documents': docs_data
+            }
+
+            # Fazer a requisição ao MCP-Odoo
+            _logger.info(f"Chamando MCP-Odoo para sincronizar documentos de suporte para a regra de negócio {self.id}")
+            response = requests.post(
+                f"{mcp_url}/tools/sync_support_documents",
+                headers=headers,
+                json=payload,
+                timeout=30  # Timeout de 30 segundos
+            )
+
+            # Verificar resposta
+            if response.status_code == 200:
+                result = response.json()
+
+                # Atualizar status de sincronização dos documentos
+                if result.get('synced_docs'):
+                    for doc_id in result['synced_docs']:
+                        doc = self.env['business.support.document'].browse(int(doc_id))
+                        if doc:
+                            doc.write({'sync_status': 'synced'})
+
+                return result
+            else:
+                _logger.error(f"Erro na chamada ao MCP-Odoo: {response.status_code} - {response.text}")
+                return {'success': False, 'error': f"Erro {response.status_code}: {response.text}"}
+        except Exception as e:
+            _logger.error(f"Exceção ao chamar MCP-Odoo: {str(e)}")
+            return {'success': False, 'error': str(e)}

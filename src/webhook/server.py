@@ -12,10 +12,12 @@ import json
 import traceback
 import yaml
 import uvicorn
-from fastapi import FastAPI, Request, HTTPException, Depends
+import httpx
+from fastapi import FastAPI, Request, HTTPException, Depends, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from dotenv import load_dotenv
-from typing import Dict, Any
+from typing import Dict, Any, List, Optional
 from datetime import datetime
 
 # Adiciona o diretório raiz ao path para importar os módulos
@@ -306,6 +308,66 @@ async def webhook(request: Request, handler: ChatwootWebhookHandler = Depends(ge
     except Exception as e:
         logger.error(f"❌ Erro ao processar webhook: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Erro ao processar webhook: {str(e)}")
+
+@app.api_route("/api/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "PATCH"])
+async def api_proxy(request: Request, path: str):
+    """Proxy reverso para a API Odoo"""
+    # URL da API Odoo
+    odoo_api_url = os.getenv("ODOO_API_URL", "http://localhost:8001")
+
+    # Construir a URL completa
+    url = f"{odoo_api_url}/api/{path}"
+
+    # Log da requisição
+    logger.info(f"🔄 Encaminhando requisição para API Odoo: {request.method} {url}")
+
+    # Obter o corpo da requisição
+    body = await request.body()
+
+    # Obter os headers da requisição
+    headers = dict(request.headers)
+
+    # Remover headers que não devem ser encaminhados
+    headers.pop("host", None)
+
+    # Obter os parâmetros da query
+    params = dict(request.query_params)
+
+    try:
+        # Criar cliente HTTP
+        async with httpx.AsyncClient() as client:
+            # Encaminhar a requisição para a API Odoo
+            response = await client.request(
+                method=request.method,
+                url=url,
+                params=params,
+                headers=headers,
+                content=body,
+                timeout=30.0  # Timeout de 30 segundos
+            )
+
+            # Log da resposta
+            logger.info(f"✅ Resposta da API Odoo: {response.status_code}")
+
+            # Retornar a resposta da API Odoo
+            return Response(
+                content=response.content,
+                status_code=response.status_code,
+                headers=dict(response.headers),
+            )
+    except Exception as e:
+        # Log do erro
+        logger.error(f"❌ Erro ao encaminhar requisição para API Odoo: {str(e)}", exc_info=True)
+
+        # Retornar erro
+        return Response(
+            content=json.dumps({
+                "error": "Erro ao encaminhar requisição para API Odoo",
+                "detail": str(e)
+            }),
+            status_code=500,
+            media_type="application/json"
+        )
 
 def main():
     """Função principal para iniciar o servidor"""

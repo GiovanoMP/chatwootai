@@ -39,9 +39,10 @@ python scripts/webhook/simple_ngrok_starter.py
 
 ```bash
 # Passo 4: Iniciar o monitor de logs
+
+# Passo 4: Iniciar o monitor de logs
 cd /home/giovano/Projetos/Chatwoot\ V4
 python scripts/webhook/monitor_webhook_logs.py --webhook-log logs/webhook.log --hub-log logs/hub.log
-```
 
 ### Terminal 4 ou SSH para a VPS: Atualizar a URL na VPS
 
@@ -138,4 +139,5 @@ Verifique se o Chatwoot está configurado para enviar webhooks para a URL corret
 http://147.93.9.211:8802/webhook
 ```
 
-Esta URL deve apontar para a VPS na porta 8802, que está mapeada para a porta 8002 do container `webhook-proxy`.
+Esta URL deve apontar para a VPS na porta 8802, que está mapeada para a porta 8002 do container `webhook-proxy`.cd /home/giovano/Projetos/Chatwoot\ V4
+python scripts/webhook/monitor_webhook_logs.py --webhook-log logs/webhook.log --hub-log logs/hub.log

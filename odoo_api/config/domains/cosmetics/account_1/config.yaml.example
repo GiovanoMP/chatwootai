@@ -1,0 +1,41 @@
+# Exemplo de configuração para account_1 no domínio cosmetics
+# Este arquivo deve ser copiado para config.yaml e preenchido com as configurações reais
+
+account_id: account_1
+name: Cliente Cosmetics
+description: Configuração para Cliente Cosmetics
+integrations:
+  mcp:
+    type: odoo-mcp
+    config:
+      url: http://localhost:8069
+      db: account_1
+      username: admin
+      credential_ref: a1b2c3d4-e5f6-g7h8-i9j0  # Referência, não a senha real
+  qdrant:
+    collection: business_rules_account_1
+  redis:
+    prefix: account_1
+  facebook:
+    app_id: 123456789
+    app_secret_ref: fb_secret_account_1  # Referência, não o segredo real
+    access_token_ref: fb_token_account_1  # Referência, não o token real
+  instagram:
+    client_id: 987654321
+    client_secret_ref: ig_secret_account_1  # Referência, não o segredo real
+    access_token_ref: ig_token_account_1  # Referência, não o token real
+  mercado_livre:
+    app_id: ML123456
+    client_secret_ref: ml_secret_account_1  # Referência, não o segredo real
+    access_token_ref: ml_token_account_1  # Referência, não o token real
+  crews:
+    support:
+      enabled: true
+      members:
+        - agent_id: support_agent
+          role: lead
+    sales:
+      enabled: true
+      members:
+        - agent_id: sales_agent
+          role: lead

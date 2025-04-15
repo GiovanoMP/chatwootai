@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 from odoo import models, fields, api, _
-from odoo.exceptions import AccessError, ValidationError
+from odoo.exceptions import AccessError, ValidationError, UserError
 import logging
 import uuid
 import base64
@@ -150,6 +150,15 @@ class AISystemCredentials(models.Model):
     active = fields.Boolean('Ativo', default=True, tracking=True)
     last_accessed = fields.Datetime('Último Acesso', readonly=True)
     notes = fields.Text('Notas', help="Notas adicionais sobre estas credenciais")
+
+    # Campos para status de sincronização
+    sync_status = fields.Selection([
+        ('not_synced', 'Não Sincronizado'),
+        ('synced', 'Sincronizado'),
+        ('error', 'Erro')
+    ], string='Status de Sincronização', default='not_synced', readonly=True, tracking=True)
+    last_sync = fields.Datetime('Última Sincronização', readonly=True)
+    error_message = fields.Text('Mensagem de Erro', readonly=True)
 
     # URL do sistema de IA
     ai_system_url = fields.Char('URL do Sistema de IA', tracking=True,
@@ -374,7 +383,7 @@ class AISystemCredentials(models.Model):
             # Tentar obter do parâmetro do sistema
             return self.env['ir.config_parameter'].sudo().get_param('ai_credentials.default_ai_system_url', '')
 
-    # Método para sincronizar credenciais com arquivos YAML
+    # Método para sincronizar credenciais com arquivos YAML (legado)
     def action_sync_to_yaml(self):
         self.ensure_one()
         try:
@@ -460,6 +469,167 @@ class AISystemCredentials(models.Model):
                 'access_time': fields.Datetime.now(),
                 'ip_address': self.env.context.get('remote_addr', 'N/A'),
                 'operation': 'sync_to_yaml',
+                'success': False,
+                'error_message': str(e)
+            })
+
+            return {
+                'type': 'ir.actions.client',
+                'tag': 'display_notification',
+                'params': {
+                    'title': _('Falha na sincronização'),
+                    'message': str(e),
+                    'sticky': False,
+                    'type': 'danger',
+                }
+            }
+
+    # Método para sincronizar credenciais com o webhook
+    def action_sync_to_webhook(self):
+        """
+        Sincroniza as credenciais com o sistema de IA através do webhook.
+        Este método envia as credenciais para o endpoint /webhook do sistema de IA,
+        que processa e armazena as credenciais de forma segura usando referências.
+        """
+        self.ensure_one()
+        try:
+            import requests
+            import json
+
+            # Obter URL do webhook
+            webhook_url = self.get_ai_system_url()
+            if not webhook_url:
+                raise UserError(_('URL do sistema de IA não configurada'))
+
+            # Garantir que a URL termina com /webhook
+            if not webhook_url.endswith('/webhook'):
+                webhook_url = f"{webhook_url}/webhook"
+
+            # Preparar payload
+            payload = {
+                'source': 'credentials',
+                'event': 'credentials_sync',
+                'account_id': self.account_id,
+                'token': self.token,
+                'credentials': {
+                    'domain': self.business_area.lower() if self.business_area != 'other' else self.business_area_other.lower(),
+                    'name': self.client_name or self.name,
+                    'odoo_url': self.odoo_url,
+                    'odoo_db': self.odoo_db,
+                    'odoo_username': self.odoo_username,
+                    'token': self.token,
+                    'qdrant_collection': self.qdrant_collection or f"business_rules_{self.account_id}",
+                    'redis_prefix': self.redis_prefix or self.account_id,
+                }
+            }
+
+            # Adicionar credenciais de redes sociais se preenchidas
+            if self.facebook_app_id:
+                payload['credentials']['facebook_app_id'] = self.facebook_app_id
+            if self.facebook_app_secret:
+                payload['credentials']['facebook_app_secret'] = self.facebook_app_secret
+            if self.facebook_access_token:
+                payload['credentials']['facebook_access_token'] = self.facebook_access_token
+
+            # Adicionar credenciais do Instagram
+            if self.instagram_client_id:
+                payload['credentials']['instagram_client_id'] = self.instagram_client_id
+            if self.instagram_client_secret:
+                payload['credentials']['instagram_client_secret'] = self.instagram_client_secret
+            if self.instagram_access_token:
+                payload['credentials']['instagram_access_token'] = self.instagram_access_token
+
+            # Adicionar credenciais do Mercado Livre
+            if self.mercadolivre_app_id:
+                payload['credentials']['mercado_livre_app_id'] = self.mercadolivre_app_id
+            if self.mercadolivre_client_secret:
+                payload['credentials']['mercado_livre_client_secret'] = self.mercadolivre_client_secret
+            if self.mercadolivre_access_token:
+                payload['credentials']['mercado_livre_access_token'] = self.mercadolivre_access_token
+
+            # Enviar requisição
+            headers = {'Content-Type': 'application/json'}
+            response = requests.post(
+                webhook_url,
+                headers=headers,
+                json=payload,
+                timeout=30
+            )
+
+            # Verificar resposta
+            if response.status_code == 200:
+                result = response.json()
+
+                # Registrar sincronização bem-sucedida
+                self.env['ai.credentials.access.log'].sudo().create({
+                    'credential_id': self.id,
+                    'access_time': fields.Datetime.now(),
+                    'ip_address': self.env.context.get('remote_addr', 'N/A'),
+                    'operation': 'sync_to_webhook',
+                    'success': True
+                })
+
+                # Atualizar status de sincronização
+                self.write({
+                    'sync_status': 'synced',
+                    'last_sync': fields.Datetime.now(),
+                    'error_message': False
+                })
+
+                return {
+                    'type': 'ir.actions.client',
+                    'tag': 'display_notification',
+                    'params': {
+                        'title': _('Sincronização bem-sucedida'),
+                        'message': _('As credenciais foram sincronizadas com o sistema de IA.'),
+                        'sticky': False,
+                        'type': 'success',
+                    }
+                }
+            else:
+                # Falha na requisição
+                error_msg = f"Erro HTTP {response.status_code}: {response.text}"
+
+                # Atualizar status de sincronização
+                self.write({
+                    'sync_status': 'error',
+                    'error_message': error_msg
+                })
+
+                # Registrar falha
+                self.env['ai.credentials.access.log'].sudo().create({
+                    'credential_id': self.id,
+                    'access_time': fields.Datetime.now(),
+                    'ip_address': self.env.context.get('remote_addr', 'N/A'),
+                    'operation': 'sync_to_webhook',
+                    'success': False,
+                    'error_message': error_msg
+                })
+
+                return {
+                    'type': 'ir.actions.client',
+                    'tag': 'display_notification',
+                    'params': {
+                        'title': _('Falha na sincronização'),
+                        'message': error_msg,
+                        'sticky': False,
+                        'type': 'danger',
+                    }
+                }
+
+        except Exception as e:
+            # Atualizar status de sincronização
+            self.write({
+                'sync_status': 'error',
+                'error_message': str(e)
+            })
+
+            # Registrar falha
+            self.env['ai.credentials.access.log'].sudo().create({
+                'credential_id': self.id,
+                'access_time': fields.Datetime.now(),
+                'ip_address': self.env.context.get('remote_addr', 'N/A'),
+                'operation': 'sync_to_webhook',
                 'success': False,
                 'error_message': str(e)
             })

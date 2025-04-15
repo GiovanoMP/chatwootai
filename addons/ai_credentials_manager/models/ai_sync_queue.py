@@ -15,9 +15,9 @@ class AISyncQueue(models.Model):
     _description = 'Fila de Sincronização com IA'
     _order = 'create_date DESC'
     _inherit = ['mail.thread', 'mail.activity.mixin']
-    
+
     name = fields.Char('Nome', compute='_compute_name', store=True)
-    credential_id = fields.Many2one('ai.system.credentials', string='Credencial', 
+    credential_id = fields.Many2one('ai.system.credentials', string='Credencial',
                                    required=True, ondelete='cascade', tracking=True)
     module = fields.Selection([
         ('business_rules', 'Regras de Negócio'),
@@ -45,10 +45,10 @@ class AISyncQueue(models.Model):
     next_retry = fields.Datetime('Próxima Tentativa')
     result = fields.Text('Resultado', readonly=True)
     error_message = fields.Text('Mensagem de Erro', readonly=True)
-    
+
     # Campos relacionados
     account_id = fields.Char(related='credential_id.account_id', string='ID da Conta', store=True)
-    
+
     @api.depends('module', 'module_custom', 'operation', 'operation_custom', 'create_date')
     def _compute_name(self):
         for record in self:
@@ -56,7 +56,7 @@ class AISyncQueue(models.Model):
             operation = record.operation_custom if record.operation == 'custom' else dict(record._fields['operation'].selection).get(record.operation)
             date = record.create_date or datetime.now()
             record.name = f"{module} - {operation} ({date.strftime('%d/%m/%Y %H:%M')})"
-    
+
     def action_retry(self):
         """Força uma nova tentativa de processamento."""
         self.ensure_one()
@@ -86,7 +86,7 @@ class AISyncQueue(models.Model):
                 'type': 'warning',
             }
         }
-    
+
     def action_cancel(self):
         """Cancela uma operação pendente."""
         self.ensure_one()
@@ -115,7 +115,7 @@ class AISyncQueue(models.Model):
                 'type': 'warning',
             }
         }
-    
+
     @api.model
     def process_queue(self):
         """Processa a fila de sincronização (chamado pelo agendador)."""
@@ -127,54 +127,71 @@ class AISyncQueue(models.Model):
             ('next_retry', '<=', now),
             ('next_retry', '=', False)
         ], limit=10)
-        
+
         for op in pending_ops:
             try:
                 # Marcar como processando
                 op.write({'state': 'processing'})
                 self.env.cr.commit()  # Commit imediato para evitar bloqueios
-                
+
                 # Obter credenciais
                 creds = op.credential_id
                 if not creds or not creds.active:
                     raise UserError(_("Credenciais inválidas ou inativas"))
-                
+
                 # Obter URL do sistema de IA
                 ai_url = creds.get_ai_system_url()
                 if not ai_url:
                     raise UserError(_("URL do sistema de IA não configurada"))
-                
+
                 # Preparar dados
                 data = json.loads(op.data) if op.data else {}
-                
+
                 # Adicionar metadados
                 if 'metadata' not in data:
                     data['metadata'] = {}
-                
+
                 data['metadata'].update({
                     'account_id': creds.account_id,
                     'module': op.module_custom if op.module == 'custom' else op.module,
                     'operation': op.operation_custom if op.operation == 'custom' else op.operation,
                 })
-                
+
                 # Determinar endpoint
-                endpoint = f"{ai_url}/api/v1/{op.module}"
-                if op.operation != 'sync':
-                    endpoint += f"/{op.operation}"
-                
+                if op.module == 'credentials':
+                    # Usar o endpoint /webhook para credenciais
+                    endpoint = f"{ai_url}/webhook"
+
+                    # Preparar payload para o webhook
+                    payload = {
+                        'source': 'credentials',
+                        'event': 'credentials_sync',
+                        'account_id': creds.account_id,
+                        'token': creds.token,
+                        'credentials': data
+                    }
+                else:
+                    # Usar o endpoint /api/v1/{module} para outros módulos
+                    endpoint = f"{ai_url}/api/v1/{op.module}"
+                    if op.operation != 'sync':
+                        endpoint += f"/{op.operation}"
+
+                    # Usar o payload original
+                    payload = data
+
                 # Enviar requisição
                 headers = {
                     'Content-Type': 'application/json',
                     'Authorization': f"Bearer {creds.token}"
                 }
-                
+
                 response = requests.post(
                     endpoint,
                     headers=headers,
-                    json=data,
+                    json=payload,
                     timeout=60  # Timeout de 60 segundos
                 )
-                
+
                 # Verificar resposta
                 if response.status_code == 200:
                     result = response.json()
@@ -187,19 +204,19 @@ class AISyncQueue(models.Model):
                     # Falha na requisição
                     error_msg = f"Erro HTTP {response.status_code}: {response.text}"
                     self._handle_failure(op, error_msg)
-                
+
             except Exception as e:
                 self._handle_failure(op, str(e))
-    
+
     def _handle_failure(self, op, error_msg):
         """Trata falhas no processamento."""
         retry_count = op.retry_count + 1
-        
+
         if retry_count <= op.max_retries:
             # Calcular próxima tentativa com backoff exponencial
             delay_minutes = 5 * (2 ** (retry_count - 1))  # 5, 10, 20, 40, ...
             next_retry = fields.Datetime.now() + timedelta(minutes=delay_minutes)
-            
+
             op.write({
                 'state': 'pending',
                 'retry_count': retry_count,
@@ -214,7 +231,7 @@ class AISyncQueue(models.Model):
                 'error_message': f"Máximo de tentativas atingido. Último erro: {error_msg}"
             })
             _logger.error(f"Falha definitiva no processamento da operação {op.id} após {retry_count} tentativas. Erro: {error_msg}")
-    
+
     @api.model
     def create_sync_operation(self, credential_id, module, operation, data=None):
         """Cria uma nova operação de sincronização."""
@@ -224,7 +241,7 @@ class AISyncQueue(models.Model):
             if not creds:
                 raise UserError(_("Credencial não encontrada para account_id: %s") % credential_id)
             credential_id = creds.id
-        
+
         # Criar operação
         values = {
             'credential_id': credential_id,
@@ -234,16 +251,16 @@ class AISyncQueue(models.Model):
             'state': 'pending',
             'next_retry': fields.Datetime.now()
         }
-        
+
         # Adicionar campos personalizados se necessário
         if module == 'custom':
             if not data or 'module_custom' not in data:
                 raise UserError(_("Campo 'module_custom' é obrigatório para módulo personalizado"))
             values['module_custom'] = data['module_custom']
-        
+
         if operation == 'custom':
             if not data or 'operation_custom' not in data:
                 raise UserError(_("Campo 'operation_custom' é obrigatório para operação personalizada"))
             values['operation_custom'] = data['operation_custom']
-        
+
         return self.create(values)

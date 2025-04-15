@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 class OdooConnector:
     """Conector base para Odoo via XML-RPC."""
-    
+
     def __init__(
         self,
         host: str,
@@ -33,7 +33,7 @@ class OdooConnector:
     ):
         """
         Inicializa o conector Odoo.
-        
+
         Args:
             host: Hostname do servidor Odoo
             port: Porta do servidor Odoo
@@ -48,24 +48,24 @@ class OdooConnector:
         self.username = username
         self.password = password
         self.use_https = use_https
-        
+
         # Construir URLs
         protocol = "https" if use_https else "http"
         self.common_url = f"{protocol}://{host}:{port}/xmlrpc/2/common"
         self.object_url = f"{protocol}://{host}:{port}/xmlrpc/2/object"
-        
+
         # Inicializar conexão
         self.uid = None
         self.common = xmlrpc.client.ServerProxy(self.common_url)
         self.models = xmlrpc.client.ServerProxy(self.object_url)
-    
+
     async def connect(self) -> int:
         """
         Estabelece conexão com o servidor Odoo.
-        
+
         Returns:
             ID do usuário autenticado
-        
+
         Raises:
             OdooConnectionError: Se não for possível conectar ao servidor
             OdooAuthenticationError: Se a autenticação falhar
@@ -79,24 +79,24 @@ class OdooConnector:
                     self.database, self.username, self.password, {}
                 ),
             )
-            
+
             if not uid:
                 raise OdooAuthenticationError(
                     f"Authentication failed for user {self.username} on database {self.database}"
                 )
-            
+
             self.uid = uid
             logger.info(f"Connected to Odoo server {self.host}:{self.port} as {self.username} (uid: {self.uid})")
             return uid
-        
+
         except xmlrpc.client.Fault as e:
             logger.error(f"Odoo XML-RPC fault: {e}")
             raise OdooConnectionError(f"XML-RPC fault: {e}")
-        
+
         except Exception as e:
             logger.error(f"Failed to connect to Odoo server: {e}")
             raise OdooConnectionError(f"Failed to connect to Odoo server: {e}")
-    
+
     @retry(
         stop=stop_after_attempt(settings.RETRY_MAX_ATTEMPTS),
         wait=wait_exponential(
@@ -114,30 +114,30 @@ class OdooConnector:
     ) -> Any:
         """
         Executa um método no modelo Odoo.
-        
+
         Args:
             model: Nome do modelo Odoo
             method: Nome do método a ser executado
             args: Argumentos posicionais para o método
             kwargs: Argumentos nomeados para o método
-        
+
         Returns:
             Resultado da execução do método
-        
+
         Raises:
             OdooConnectionError: Se não for possível conectar ao servidor
             OdooOperationError: Se a operação falhar
         """
         if args is None:
             args = []
-        
+
         if kwargs is None:
             kwargs = {}
-        
+
         # Garantir que estamos conectados
         if self.uid is None:
             await self.connect()
-        
+
         try:
             # Executar em thread separada para não bloquear o event loop
             loop = asyncio.get_event_loop()
@@ -153,17 +153,17 @@ class OdooConnector:
                     kwargs,
                 ),
             )
-            
+
             return result
-        
+
         except xmlrpc.client.Fault as e:
             logger.error(f"Odoo XML-RPC fault: {e}")
             raise OdooOperationError(f"XML-RPC fault: {e}")
-        
+
         except Exception as e:
             logger.error(f"Failed to execute method {method} on model {model}: {e}")
             raise OdooOperationError(f"Failed to execute method {method} on model {model}: {e}")
-    
+
     async def search_read(
         self,
         model: str,
@@ -175,7 +175,7 @@ class OdooConnector:
     ) -> List[Dict[str, Any]]:
         """
         Busca e lê registros do modelo Odoo.
-        
+
         Args:
             model: Nome do modelo Odoo
             domain: Domínio de busca
@@ -183,64 +183,64 @@ class OdooConnector:
             offset: Offset para paginação
             limit: Limite de registros
             order: Ordenação
-        
+
         Returns:
             Lista de registros
         """
         if domain is None:
             domain = []
-        
+
         kwargs = {}
-        
+
         if fields:
             kwargs["fields"] = fields
-        
+
         if offset:
             kwargs["offset"] = offset
-        
+
         if limit:
             kwargs["limit"] = limit
-        
+
         if order:
             kwargs["order"] = order
-        
+
         return await self.execute_kw(model, "search_read", [domain], kwargs)
-    
+
     async def create(self, model: str, values: Dict[str, Any]) -> int:
         """
         Cria um novo registro no modelo Odoo.
-        
+
         Args:
             model: Nome do modelo Odoo
             values: Valores para o novo registro
-        
+
         Returns:
             ID do registro criado
         """
         return await self.execute_kw(model, "create", [values])
-    
+
     async def write(self, model: str, ids: List[int], values: Dict[str, Any]) -> bool:
         """
         Atualiza registros existentes no modelo Odoo.
-        
+
         Args:
             model: Nome do modelo Odoo
             ids: IDs dos registros a serem atualizados
             values: Valores a serem atualizados
-        
+
         Returns:
             True se a operação for bem-sucedida
         """
         return await self.execute_kw(model, "write", [ids, values])
-    
+
     async def unlink(self, model: str, ids: List[int]) -> bool:
         """
         Remove registros do modelo Odoo.
-        
+
         Args:
             model: Nome do modelo Odoo
             ids: IDs dos registros a serem removidos
-        
+
         Returns:
             True se a operação for bem-sucedida
         """
@@ -249,30 +249,30 @@ class OdooConnector:
 
 class OdooConnectorFactory:
     """Fábrica para criar conectores Odoo."""
-    
+
     @staticmethod
     async def create_connector(account_id: str) -> OdooConnector:
         """
         Cria um conector Odoo para o account_id especificado.
-        
+
         Args:
             account_id: ID da conta
-        
+
         Returns:
             Instância de OdooConnector
-        
+
         Raises:
             ValueError: Se a configuração para o account_id não for encontrada
         """
         # Obter configuração do Redis (se disponível)
         # TODO: Implementar cache Redis
-        
+
         # Se não estiver no cache, carregar do arquivo YAML
         config = await OdooConnectorFactory._load_config_from_yaml(account_id)
-        
+
         if not config:
             raise ValueError(f"Configuration for account_id {account_id} not found")
-        
+
         # Criar conector
         connector = OdooConnector(
             host=config.get("host"),
@@ -282,41 +282,130 @@ class OdooConnectorFactory:
             password=config.get("password"),
             use_https=config.get("use_https", True),
         )
-        
+
         # Conectar
         await connector.connect()
-        
+
         return connector
-    
+
     @staticmethod
     @lru_cache(maxsize=32)
     async def _load_config_from_yaml(account_id: str) -> Dict[str, Any]:
         """
         Carrega a configuração do arquivo YAML.
-        
+
         Args:
             account_id: ID da conta
-        
+
         Returns:
             Configuração do Odoo
         """
-        config_dir = settings.MCP_CONFIG_DIR
-        config_file = os.path.join(config_dir, f"{account_id}.yaml")
-        
+        # Determinar o domínio com base no account_id
+        domain = await OdooConnectorFactory._determine_domain(account_id)
+        if not domain:
+            logger.error(f"Could not determine domain for account_id {account_id}")
+            return None
+
+        # Construir caminho para o arquivo de configuração
+        config_dir = os.path.join(settings.CONFIG_DIR, "domains", domain, account_id)
+        config_file = os.path.join(config_dir, "config.yaml")
+
         if not os.path.exists(config_file):
             logger.error(f"Configuration file {config_file} not found")
             return None
-        
+
         try:
             with open(config_file, "r") as f:
                 config = yaml.safe_load(f)
-            
-            # Extrair configuração do Odoo
-            if "database" in config:
-                return config["database"]
-            
+
+            # Extrair configuração do MCP (Odoo)
+            if "integrations" in config and "mcp" in config["integrations"]:
+                mcp_config = config["integrations"]["mcp"]
+
+                if "config" in mcp_config:
+                    db_config = {
+                        "host": mcp_config["config"].get("url", "").replace("http://", "").replace("https://", "").split(":")[0],
+                        "port": int(mcp_config["config"].get("url", "").split(":")[-1]) if ":" in mcp_config["config"].get("url", "") else 8069,
+                        "database": mcp_config["config"].get("db", ""),
+                        "username": mcp_config["config"].get("username", ""),
+                        "credential_ref": mcp_config["config"].get("credential_ref", ""),
+                        "use_https": mcp_config["config"].get("url", "").startswith("https")
+                    }
+
+                    # Obter a senha real usando a referência
+                    password = await OdooConnectorFactory._get_credential_by_ref(db_config["credential_ref"], account_id)
+                    if password:
+                        db_config["password"] = password
+                    else:
+                        logger.error(f"Could not retrieve password for credential_ref {db_config['credential_ref']}")
+                        return None
+
+                    return db_config
+
+            logger.error(f"MCP configuration not found in {config_file}")
             return None
-        
+
         except Exception as e:
             logger.error(f"Failed to load configuration from {config_file}: {e}")
             return None
+
+    @staticmethod
+    async def _determine_domain(account_id: str) -> str:
+        """
+        Determina o domínio com base no account_id.
+
+        Args:
+            account_id: ID da conta
+
+        Returns:
+            Nome do domínio
+        """
+        # Verificar se existe um mapeamento de account_id para domínio
+        mapping_file = os.path.join(settings.CONFIG_DIR, "account_mapping.yaml")
+
+        if os.path.exists(mapping_file):
+            try:
+                with open(mapping_file, "r") as f:
+                    mapping = yaml.safe_load(f)
+
+                if mapping and "accounts" in mapping:
+                    for domain, accounts in mapping["accounts"].items():
+                        if account_id in accounts:
+                            return domain
+            except Exception as e:
+                logger.error(f"Failed to load account mapping: {e}")
+
+        # Se não encontrar no mapeamento, usar o domínio padrão
+        return "cosmetics"  # Domínio padrão
+
+    @staticmethod
+    async def _get_credential_by_ref(credential_ref: str, account_id: str) -> str:
+        """
+        Recupera a credencial real usando a referência.
+
+        Args:
+            credential_ref: Referência da credencial
+            account_id: ID da conta
+
+        Returns:
+            Credencial real
+        """
+        # Em um ambiente de produção, isso deve consultar um serviço seguro de gerenciamento de credenciais
+        # Por enquanto, vamos usar uma abordagem simplificada para desenvolvimento
+
+        # Verificar se existe um arquivo de credenciais
+        credentials_file = os.path.join(settings.CONFIG_DIR, "credentials.yaml")
+
+        if os.path.exists(credentials_file):
+            try:
+                with open(credentials_file, "r") as f:
+                    credentials = yaml.safe_load(f)
+
+                if credentials and account_id in credentials and credential_ref in credentials[account_id]:
+                    return credentials[account_id][credential_ref]
+            except Exception as e:
+                logger.error(f"Failed to load credentials: {e}")
+
+        # Se não encontrar no arquivo, usar a própria referência como senha (para desenvolvimento)
+        logger.warning(f"Using credential_ref as password for development: {credential_ref}")
+        return credential_ref

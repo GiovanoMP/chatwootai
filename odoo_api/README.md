@@ -11,6 +11,7 @@ Esta API fornece endpoints para:
 - Busca semântica de produtos
 - Gerenciamento em massa de produtos
 - Gerenciamento de regras de negócio
+- Gerenciamento seguro de credenciais
 
 ## Estrutura do Projeto
 
@@ -39,11 +40,14 @@ odoo_api/
 │   │   ├── routes.py
 │   │   ├── schemas.py
 │   │   └── services.py
-│   └── business_rules/      # API para regras de negócio
+│   ├── business_rules/      # API para regras de negócio
+│   │   ├── __init__.py
+│   │   ├── routes.py
+│   │   ├── schemas.py
+│   │   └── services.py
+│   └── credentials/         # API para gerenciamento de credenciais
 │       ├── __init__.py
-│       ├── routes.py
-│       ├── schemas.py
-│       └── services.py
+│       └── routes.py
 ├── services/                # Serviços compartilhados
 │   ├── __init__.py
 │   ├── cache_service.py     # Serviço de cache com Redis
@@ -136,6 +140,10 @@ A documentação da API estará disponível em http://localhost:8000/docs.
 - `POST /api/v1/business-rules/sync`: Sincroniza regras com o sistema de IA
 - `GET /api/v1/business-rules/active`: Lista regras ativas
 
+### Módulo Credentials
+
+- `POST /api/v1/credentials/get`: Recupera uma credencial usando sua referência
+
 ## Testes
 
 Para executar os testes:
@@ -151,6 +159,7 @@ A documentação completa está disponível na pasta `docs/`:
 - [Plano de Ação](docs/PLANO_DE_ACAO.md): Plano detalhado para o desenvolvimento da API
 - [Referência da API](docs/API_REFERENCE.md): Documentação dos endpoints da API
 - [Arquitetura](docs/ARCHITECTURE.md): Detalhes da arquitetura do sistema
+- [Sistema de Referências para Credenciais](docs/credential_reference_system.md): Explicação do sistema de referências para credenciais
 
 ## Licença
 

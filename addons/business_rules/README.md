@@ -95,6 +95,16 @@ Este módulo se integra com:
 - Sistema de IA para atendimento ao cliente
 - Módulo de Gerenciamento de Produtos no Sistema de IA
 - Módulo de Descrição Semântica de Produtos
+- Módulo de Gerenciador de Credenciais para IA
+
+### Integração com Gerenciador de Credenciais
+
+O módulo agora se integra com o **Gerenciador de Credenciais para IA** para obter as credenciais de autenticação de forma segura:
+
+1. **Autenticação Centralizada**: Utiliza o módulo `ai_credentials_manager` para obter tokens de API e URLs
+2. **Fallback Automático**: Se o módulo de credenciais não estiver disponível, usa os parâmetros do sistema
+3. **Registro de Acessos**: Todas as operações de acesso às credenciais são registradas para auditoria
+4. **Segurança Aprimorada**: Credenciais sensíveis não são armazenadas diretamente no código ou banco de dados
 
 ## Notas Técnicas
 
@@ -104,6 +114,6 @@ Este módulo se integra com:
 
 ---
 
-**Desenvolvido por:** ChatwootAI Team  
-**Versão:** 1.0  
+**Desenvolvido por:** ChatwootAI Team
+**Versão:** 1.0
 **Compatibilidade:** Odoo 14.0

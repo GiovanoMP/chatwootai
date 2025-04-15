@@ -251,15 +251,59 @@ class ProductTemplate(models.Model):
 
         return metadata
 
+    def _get_mcp_credentials(self):
+        """Obter credenciais do MCP-Odoo do módulo ai_credentials_manager ou dos parâmetros do sistema."""
+        # Verificar se o módulo ai_credentials_manager está instalado
+        if not self.env['ir.module.module'].sudo().search([('name', '=', 'ai_credentials_manager'), ('state', '=', 'installed')]):
+            # Fallback para o método antigo se o módulo não estiver instalado
+            mcp_url = self.env['ir.config_parameter'].sudo().get_param('mcp_odoo.url', 'http://localhost:8000')
+            mcp_token = self.env['ir.config_parameter'].sudo().get_param('mcp_odoo.token', '')
+            account_id = self.env['ir.config_parameter'].sudo().get_param('mcp_odoo.account_id', 'account_2')
+            return mcp_url, mcp_token, account_id
+
+        # Obter credenciais do módulo ai_credentials_manager
+        try:
+            # Obter o account_id baseado no ID da empresa atual
+            company_id = self.env.company.id
+            account_id = f"account_{company_id}"
+
+            # Buscar credenciais para este account_id
+            credentials = self.env['ai.system.credentials'].sudo().search([('account_id', '=', account_id)], limit=1)
+
+            if credentials:
+                # Registrar acesso às credenciais
+                self.env['ai.credentials.access.log'].sudo().create({
+                    'credential_id': credentials.id,
+                    'access_time': fields.Datetime.now(),
+                    'user_id': self.env.user.id,
+                    'ip_address': self.env.context.get('remote_addr', 'N/A'),
+                    'operation': 'get_mcp_credentials',
+                    'success': True
+                })
+
+                # Obter URL do sistema de IA e token
+                mcp_url = credentials.get_ai_system_url()
+                mcp_token = credentials.token
+
+                return mcp_url, mcp_token, account_id
+            else:
+                _logger.warning(f"Credenciais não encontradas para account_id {account_id}")
+        except Exception as e:
+            _logger.error(f"Erro ao obter credenciais do ai_credentials_manager: {str(e)}")
+
+        # Fallback para o método antigo em caso de erro
+        mcp_url = self.env['ir.config_parameter'].sudo().get_param('mcp_odoo.url', 'http://localhost:8000')
+        mcp_token = self.env['ir.config_parameter'].sudo().get_param('mcp_odoo.token', '')
+        account_id = self.env['ir.config_parameter'].sudo().get_param('mcp_odoo.account_id', 'account_2')
+        return mcp_url, mcp_token, account_id
+
     def _call_mcp_generate_description(self, product_id, metadata):
         """Chama o MCP-Odoo para gerar uma descrição semântica."""
         try:
             import requests
 
             # Obter configurações do MCP-Odoo
-            mcp_url = self.env['ir.config_parameter'].sudo().get_param('mcp_odoo.url', 'http://localhost:8000')
-            mcp_token = self.env['ir.config_parameter'].sudo().get_param('mcp_odoo.token', '')
-            account_id = self.env['ir.config_parameter'].sudo().get_param('mcp_odoo.account_id', 'account_2')
+            mcp_url, mcp_token, account_id = self._get_mcp_credentials()
 
             # Preparar a requisição
             headers = {

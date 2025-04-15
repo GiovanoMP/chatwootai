@@ -23,7 +23,7 @@ class BusinessRulesSyncController(http.Controller):
             rules_data = self._prepare_rules_data(business_rule)
 
             # Chamar a API para sincronizar as regras
-            api_url = request.env['ir.config_parameter'].sudo().get_param('business_rules.api_url', 'http://localhost:8000')
+            api_url = self._get_api_url()
             sync_endpoint = f"{api_url}/api/v1/business-rules/sync"
 
             try:
@@ -78,8 +78,70 @@ class BusinessRulesSyncController(http.Controller):
             return {'success': False, 'error': str(e)}
 
     def _get_api_token(self):
-        """Obter token de API das configurações"""
-        return request.env['ir.config_parameter'].sudo().get_param('business_rules.api_token', 'default_token')
+        """Obter token de API do módulo ai_credentials_manager"""
+        # Verificar se o módulo ai_credentials_manager está instalado
+        if not request.env['ir.module.module'].sudo().search([('name', '=', 'ai_credentials_manager'), ('state', '=', 'installed')]):
+            # Fallback para o método antigo se o módulo não estiver instalado
+            return request.env['ir.config_parameter'].sudo().get_param('business_rules.api_token', 'default_token')
+
+        # Obter credenciais do módulo ai_credentials_manager
+        try:
+            # Obter o account_id baseado no ID da empresa atual
+            company_id = request.env.company.id
+            account_id = f"account_{company_id}"
+
+            # Buscar credenciais para este account_id
+            credentials = request.env['ai.system.credentials'].sudo().search([('account_id', '=', account_id)], limit=1)
+
+            if credentials:
+                # Registrar acesso às credenciais
+                request.env['ai.credentials.access.log'].sudo().create({
+                    'credential_id': credentials.id,
+                    'access_time': fields.Datetime.now(),
+                    'user_id': request.env.user.id,
+                    'ip_address': request.httprequest.remote_addr,
+                    'operation': 'get_token',
+                    'success': True
+                })
+
+                return credentials.token
+            else:
+                _logger.warning(f"Credenciais não encontradas para account_id {account_id}")
+                # Fallback para o método antigo
+                return request.env['ir.config_parameter'].sudo().get_param('business_rules.api_token', 'default_token')
+        except Exception as e:
+            _logger.error(f"Erro ao obter token do ai_credentials_manager: {str(e)}")
+            # Fallback para o método antigo em caso de erro
+            return request.env['ir.config_parameter'].sudo().get_param('business_rules.api_token', 'default_token')
+
+    def _get_api_url(self):
+        """Obter URL da API do módulo ai_credentials_manager"""
+        # Verificar se o módulo ai_credentials_manager está instalado
+        if not request.env['ir.module.module'].sudo().search([('name', '=', 'ai_credentials_manager'), ('state', '=', 'installed')]):
+            # Fallback para o método antigo se o módulo não estiver instalado
+            return request.env['ir.config_parameter'].sudo().get_param('business_rules.api_url', 'http://localhost:8000')
+
+        # Obter credenciais do módulo ai_credentials_manager
+        try:
+            # Obter o account_id baseado no ID da empresa atual
+            company_id = request.env.company.id
+            account_id = f"account_{company_id}"
+
+            # Buscar credenciais para este account_id
+            credentials = request.env['ai.system.credentials'].sudo().search([('account_id', '=', account_id)], limit=1)
+
+            if credentials:
+                # Obter URL do sistema de IA
+                ai_system_url = credentials.get_ai_system_url()
+                if ai_system_url:
+                    return ai_system_url
+
+            # Fallback para o método antigo
+            return request.env['ir.config_parameter'].sudo().get_param('business_rules.api_url', 'http://localhost:8000')
+        except Exception as e:
+            _logger.error(f"Erro ao obter URL da API do ai_credentials_manager: {str(e)}")
+            # Fallback para o método antigo em caso de erro
+            return request.env['ir.config_parameter'].sudo().get_param('business_rules.api_url', 'http://localhost:8000')
 
     def _prepare_rules_data(self, business_rule):
         """Preparar dados das regras para envio ao sistema de IA"""

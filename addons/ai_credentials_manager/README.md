@@ -159,15 +159,27 @@ Para operações interativas complexas (futuros módulos como análise de dados,
                          └─────────────────┘
 ```
 
-## Fluxo de Autenticação
+## Fluxo de Autenticação e Sincronização
+
+### Sincronização com Webhook
+
+O módulo implementa um fluxo seguro de sincronização com o sistema de IA através do webhook:
 
 1. Módulo de negócio solicita sincronização
 2. Módulo de credenciais obtém token para o cliente atual
-3. Módulo de credenciais envia dados + token para o sistema de IA
-4. Sistema de IA verifica token contra configuração YAML
-5. Sistema de IA processa dados e retorna resposta
-6. Módulo de credenciais processa resposta e notifica módulo de negócio
-7. Todo o processo é registrado para auditoria
+3. Módulo de credenciais envia dados + token para o endpoint `/webhook` do sistema de IA
+4. Sistema de IA verifica o token de autenticação
+5. Sistema de IA armazena apenas referências para credenciais sensíveis no arquivo YAML
+6. Sistema de IA processa dados e retorna resposta
+7. Módulo de credenciais atualiza o status de sincronização e notifica o usuário
+8. Todo o processo é registrado para auditoria
+
+### Vantagens do Webhook
+
+- **Segurança Aprimorada**: Credenciais sensíveis são armazenadas como referências, não como valores reais
+- **Mesclagem Inteligente**: Preserva a estrutura existente do arquivo YAML enquanto atualiza apenas o necessário
+- **Verificação de Token**: Garante que apenas requisições autenticadas sejam processadas
+- **Centralização**: Todas as credenciais são gerenciadas em um único local
 
 ## Comunicação entre Odoo e Sistema de IA
 
@@ -469,7 +481,12 @@ Para módulos futuros que utilizam o MCP através de agentes:
          config:
            url: "http://localhost:8069"
            db: "account_1"
-           credential_ref: "account_1_mcp_credentials"  # Referência, não credenciais reais
+           username: "admin"
+           credential_ref: "a1b2c3d4-e5f6-g7h8-i9j0"  # Referência, não a senha real
+       facebook:
+         app_id: "123456789"
+         app_secret_ref: "fb_secret_account_1"  # Referência, não o segredo real
+         access_token_ref: "fb_token_account_1"  # Referência, não o token real
      ```
 
 2. **DataProxyAgent Recupera Credenciais**:

@@ -110,7 +110,7 @@ config/
 └── domains/
     └── cosmetics/
         └── account_1/
-            └── config.yaml
+    hooks        └── config.yaml
 ```
 
 O arquivo `config.yaml` gerado terá a seguinte estrutura:

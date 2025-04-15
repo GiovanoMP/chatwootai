@@ -118,11 +118,13 @@ async def health_check():
 from odoo_api.modules.semantic_product.routes import router as semantic_product_router
 from odoo_api.modules.product_management.routes import router as product_management_router
 from odoo_api.modules.business_rules.routes import router as business_rules_router
+from odoo_api.modules.credentials.routes import router as credentials_router
 
 # Incluir rotas
 app.include_router(semantic_product_router, prefix="/api/v1")
 app.include_router(product_management_router, prefix="/api/v1")
 app.include_router(business_rules_router, prefix="/api/v1")
+app.include_router(credentials_router, prefix="/api/v1")
 
 # Inicialização da aplicação
 @app.on_event("startup")

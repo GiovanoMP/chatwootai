@@ -21,7 +21,7 @@ Uma característica fundamental do sistema é sua **flexibilidade de integraçã
 3. **Centralização do Acesso a Dados**: Todo acesso a dados passa obrigatoriamente pelo DataProxyAgent
 4. **Conexão Direta com ERPs**: Utilização do MCP (Model Context Protocol) para acesso padronizado aos ERPs
 5. **Configuração por Account_ID**: Cada account_id possui seu próprio arquivo YAML com todas as configurações necessárias
-6. **Múltiplas Crews Especializadas**: Cada account_id pode ter múltiplas crews para diferentes funções (atendimento, produtos, marketing)
+6. **Múltiplas Crews Especializadas**: Cada account_id pode ter múltiplas crews para diferentes funções (atendimento, produtos, marketing) ainda precisamos definir como o sistema identificará as diferentes crews. Meu palpite é que integremos ao webhook_handler metodos de identificação de crews e que o hub.py direcione à crew correta com base nos metadados recebidos
 7. **Persistência e Cache com Redis**: Utilização do Redis para persistência de crews, cache de consultas e otimização de desempenho
 8. **Busca Híbrida (BM42)**: Combinação de busca semântica (Qdrant) e relacional (Odoo) para resultados precisos e atualizados
 9. **Separação de Responsabilidades**: Interfaces claras entre componentes para facilitar manutenção e extensão
@@ -80,10 +80,14 @@ Uma característica fundamental do sistema é sua **flexibilidade de integraçã
 
 1. **Webhook Handler (`src/webhook/webhook_handler.py`)**
    - Processa webhooks do Chatwoot para atendimento ao cliente
+   - Processa eventos de sincronização de credenciais do módulo `ai_credentials_manager`
    - Extrai metadados (account_id, conversation_id, etc.)
    - Direciona para o Hub para processamento
 
-2. **API REST para Odoo (`src/api/odoo/api.py`)**
+2. **API REST para Odoo (`odoo_api/main.py`)**
+   - Processa requisições dos módulos Odoo
+   - Extrai metadados (account_id, action, etc.)
+   - Direciona para o processamento apropriado
    - Processa requisições do módulo Odoo
    - Extrai metadados (account_id, action, etc.)
    - Direciona para o Hub para processamento
@@ -95,8 +99,10 @@ Uma característica fundamental do sistema é sua **flexibilidade de integraçã
   - Validar o account_id contra os YAMLs existentes
   - Carregar configurações específicas do account_id
   - Determinar qual crew deve processar a requisição
-  - Obter ou criar a crew apropriada
+  - Obter ou criar a crew apropriada (a geração de crew ocorre apenas na primeira execução do sistema, pós isso, as configurações são salvas em REDIS)
   - Direcionar a requisição para processamento
+  - Gerenciar o ciclo de vida das conversações
+  - Centralizar o acesso aos serviços de dados através do DataProxyAgent
 
 #### 3. Crews Especializadas
 
@@ -107,22 +113,23 @@ Cada account_id pode ter múltiplas crews especializadas para diferentes funçõ
    - Responde a perguntas sobre produtos, pedidos, etc.
    - Gerencia o fluxo de conversação com clientes
 
-2. **Product Management Crew** aqui precisamos de atenção, dado que isso ainda não está previsto, precisamos pensar melhor
-   - Gerencia descrições de produtos
-   - Sincroniza produtos com o banco de dados vetorial
-   - Processa buscas semânticas de produtos
+2. **Product Management Crew** Ainda não implementado
+   - Gerencia descrições de produtos através do módulo `semantic_product_description`
+   - Sincroniza produtos com o banco de dados vetorial usando o módulo `product_ai_mass_management`
+   - Processa buscas semânticas de produtos com o sistema híbrido BM42
+   - Gera descrições otimizadas para produtos usando agentes especializados
 
-3. **Social Media Crew**
+3. **Social Media Crew** Ainda não implementado
    - Gera conteúdo para redes sociais
    - Analisa engajamento em redes sociais
    - Gerencia campanhas de marketing
 
-4. **Marketplace Crew**
+4. **Marketplace Crew** Ainda não implementado
    - Gerencia integração com marketplaces (Mercado Livre, etc.)
    - Sincroniza produtos com marketplaces
    - Processa pedidos de marketplaces
 
-5. **Analytics Crew**
+5. **Analytics Crew** Ainda não implementado
    - Analisa dados de vendas, clientes, etc.
    - Gera relatórios e insights
    - Fornece recomendações baseadas em dados
@@ -133,19 +140,27 @@ Cada account_id pode ter múltiplas crews especializadas para diferentes funçõ
 - **Funcionalidades**:
   - Interface unificada para acesso a dados
   - Adaptação de consultas ao account_id ativo
-  - Roteamento para o MCP apropriado
+  - Roteamento para o MCP apropriado - a principio, apenas o mcp do Odoo
   - Formatação e filtragem de resultados
 
 #### 5. MCP-Odoo (`src/mcp_odoo/`)
 
 - **Responsabilidade**: Fornecer interface padronizada para o Odoo
+- **Componentes**:
+  - **OdooClient (`odoo_client.py`)**: Cliente para comunicação com o Odoo via XML-RPC
+  - **FastMCP Server (`server.py`)**: Servidor que expor ferramentas para interação com o Odoo
 - **Funcionalidades**:
   - Expor métodos para consultar produtos, clientes, vendas, etc.
   - Implementar operações de negócio específicas do Odoo
   - Abstrair a complexidade do Odoo para os agentes de IA
   - Gerenciar conexões com o Odoo
+  - Fornecer ferramentas para vendas, calendário, produtos, clientes, estoque, preços e pagamentos
+- **Integração com DataProxyAgent**:
+  - O DataProxyAgent usa o MCP-Odoo para acessar dados do Odoo
+  - Fornece uma interface consistente para os agentes de IA
+  - Centraliza o acesso a dados, implementando cache e otimizações
 
-#### 6. Serviço de Vetorização (`src/vector_service/`)
+#### 6. Serviço de Vetorização (`odoo_api/services/vector_service.py`)
 
 - **Responsabilidade**: Gerenciar embeddings e busca semântica
 - **Funcionalidades**:
@@ -154,6 +169,30 @@ Cada account_id pode ter múltiplas crews especializadas para diferentes funçõ
   - Fornecer busca semântica para produtos e regras
   - Implementar busca híbrida (BM42)
   - Manter persistência de regras de negócio para busca semântica
+
+##### Integração com OpenAI
+
+O serviço de vetorização utiliza a API da OpenAI para gerar embeddings de alta qualidade:
+
+- **Modelos Utilizados**:
+  - **GPT4o-mini**: Para o agente de embedding, oferecendo instruções detalhadas sobre como gerar descrições
+  - **Modelo de Embedding da OpenAI**: Para geração de vetores densos de forma eficiente
+
+- **Agentes de Embedding Especializados**:
+  - Cada módulo (business_rules, product_ai_mass_management, semantic_product_description) possui seu próprio agente de embedding especializado e estão em odoo_api/embbeding_agents
+  - Os agentes são treinados para extrair informações relevantes para cada domínio específico
+
+- **Otimização de Custos**:
+  - Cache de embeddings para evitar geração repetida
+  - Processamento em lote para reduzir o número de chamadas à API
+  - Reutilização de embeddings quando possível
+
+- **Fluxo de Processamento**:
+  1. Dados brutos são extraídos do Odoo (produtos, regras, etc.)
+  2. O agente de embedding processa os dados e gera descrições otimizadas
+  3. As descrições são convertidas em vetores usando o modelo de embedding
+  4. Os vetores são armazenados no Qdrant com metadados relevantes
+  5. O sistema de busca híbrida combina busca vetorial e relacional
 
 #### 7. Gerenciamento de Domínios (`src/core/domain/`)
 
@@ -164,19 +203,42 @@ Cada account_id pode ter múltiplas crews especializadas para diferentes funçõ
   - Validação de configurações
   - Cache de configurações com Redis
 
-#### 8. Gerenciamento de Credenciais
+#### 8. Agentes de Embedding (`odoo_api/embedding_agents/`)
+
+- **Responsabilidade**: Gerar descrições otimizadas e embeddings para diferentes tipos de dados
+- **Componentes**:
+  - **business_rules_agent.py**: Especializado em processar regras de negócio
+  - **product_description_agent.py**: Especializado em gerar descrições de produtos
+  - **product_mass_agent.py**: Especializado em processamento em lote de produtos
+- **Funcionalidades**:
+  - Recebem dados brutos dos módulos Odoo
+  - Aplicam instruções específicas para cada tipo de conteúdo
+  - Geram descrições otimizadas para busca semântica
+  - Interagem com o serviço de vetorização para gerar embeddings
+  - Implementam cache para evitar processamento redundante
+- **Fluxo de Trabalho**:
+  1. Módulo Odoo envia dados para a API REST
+  2. API direciona para o agente de embedding apropriado
+  3. Agente processa os dados e gera descrições otimizadas
+  4. Serviço de vetorização converte descrições em embeddings
+  5. Embeddings são armazenados no Qdrant com metadados relevantes
+
+#### 9. Gerenciamento de Credenciais
 
 - **Responsabilidade**: Gerenciar credenciais de forma segura para integrações externas
 - **Componentes**:
   - **Módulo Odoo `ai_credentials_manager`**: Armazena e gerencia credenciais no Odoo
-  - **Webhook de Credenciais**: Recebe e processa credenciais do módulo Odoo
+  - **Webhook de Credenciais**: Implementado no `webhook_handler.py`, recebe e processa credenciais do módulo Odoo
   - **Sistema de Referências**: Armazena apenas referências a credenciais sensíveis nos arquivos YAML
+  - **API de Credenciais**: Endpoint seguro para recuperar credenciais usando referências
 - **Funcionalidades**:
   - Armazenamento seguro de credenciais sensíveis (senhas, tokens, chaves de API)
   - Sincronização de credenciais entre o Odoo e o sistema de IA
   - Verificação de token para autenticação de requisições
   - Mesclagem inteligente de configurações para preservar estrutura existente
   - Gerenciamento centralizado de credenciais para todas as integrações (Odoo, Facebook, Instagram, Mercado Livre, etc.)
+  - Registro detalhado de todos os acessos às credenciais para auditoria
+  - Criptografia de campos sensíveis no banco de dados Odoo
 - **Fluxo de Dados**:
   1. Credenciais são configuradas no módulo Odoo `ai_credentials_manager`
   2. O módulo envia as credenciais para o webhook com um token de autenticação
@@ -184,21 +246,75 @@ Cada account_id pode ter múltiplas crews especializadas para diferentes funçõ
   4. Credenciais sensíveis são substituídas por referências no arquivo YAML
   5. Agentes de IA usam as referências para solicitar credenciais reais quando necessário
 
+##### Sistema de Referências para Credenciais
+
+O sistema implementa uma abordagem de segurança que evita o armazenamento de credenciais sensíveis diretamente nos arquivos de configuração. Esta abordagem é implementada pelo módulo `ai_credentials_manager` e pelo webhook handler:
+
+```yaml
+# Exemplo de configuração com referências
+integrations:
+  mcp:
+    type: "odoo-mcp"
+    config:
+      url: "http://localhost:8069"
+      db: "account_1"
+      username: "admin"
+      credential_ref: "a1b2c3d4-e5f6-g7h8-i9j0"  # Referência, não a senha real
+  facebook:
+    app_id: "123456789"
+    app_secret_ref: "fb_secret_account_1"  # Referência, não o segredo real
+    access_token_ref: "fb_token_account_1"  # Referência, não o token real
+```
+
+As credenciais reais são armazenadas em um arquivo separado (`credentials.yaml`) que não é versionado:
+
+```yaml
+account_1:
+  a1b2c3d4-e5f6-g7h8-i9j0: "senha_real_do_odoo"
+  fb_secret_account_1: "segredo_real_do_facebook"
+  fb_token_account_1: "token_real_do_facebook"
+```
+
+##### Integração com Módulos Odoo
+
+Os módulos Odoo (`business_rules`, `semantic_product_description` e `product_ai_mass_management`) foram atualizados para usar o `ai_credentials_manager` para obter credenciais de forma segura:
+
+1. Verificam se o módulo `ai_credentials_manager` está instalado
+2. Obtêm credenciais do módulo se disponível
+3. Usam fallback para parâmetros do sistema se o módulo não estiver disponível
+4. Registram todos os acessos às credenciais para auditoria
+
+##### Implementação de Segurança no Módulo ai_credentials_manager
+
+O módulo `ai_credentials_manager` implementa várias camadas de segurança:
+
+1. **Acesso Restrito**: Apenas administradores do sistema têm acesso ao módulo
+2. **Criptografia de Dados**: Campos sensíveis como senhas e tokens são armazenados criptografados
+3. **Auditoria Completa**: Todas as operações são registradas em logs detalhados
+4. **Verificação de Token**: Todas as requisições de sincronização são autenticadas com token
+5. **Mesclagem Inteligente**: Preserva a estrutura existente dos arquivos YAML durante atualizações
+
+O módulo também suporta integrações com múltiplas plataformas externas:
+
+- **Redes Sociais**: Facebook, Instagram, Twitter
+- **Marketplaces**: Mercado Livre, Amazon, Shopee
+- **Serviços de Mensagens**: WhatsApp Business, Telegram
+
 ## Fluxos de Trabalho
 
 ### 1. Atendimento ao Cliente (Chatwoot → Sistema)
 
 1. **Entrada da Mensagem e Identificação do Account_ID**
-   - Cliente envia mensagem pelo whasapp ou outro canal
+   - Cliente envia mensagem pelo WhatsApp ou outro canal
    - Chatwoot recebe a mensagem e a encaminha via webhook para o sistema
-   - O `ChatwootWebhookHandler` processa a requisição e extrai o account_id
+   - O `webhook_handler.py` processa a requisição e extrai o account_id
    - O account_id é usado para determinar qual configuração usar
 
 2. **Processamento pelo Hub**
    - A mensagem é encaminhada para o `HubCrew`
    - O `HubCrew` carrega a configuração do account_id
    - O `HubCrew` determina que a mensagem deve ser processada pela Customer Service Crew
-   - O `HubCrew` obtém ou cria a Customer Service Crew
+   - O `HubCrew` obtém ou cria a Customer Service Crew (usando cache Redis se disponível)
 
 3. **Processamento pela Customer Service Crew**
    - A Customer Service Crew processa a mensagem
@@ -207,12 +323,36 @@ Cada account_id pode ter múltiplas crews especializadas para diferentes funçõ
    - O MCP-Odoo consulta o Odoo e retorna os resultados
    - Os agentes realizam busca semântica de regras de negócio relevantes para a consulta
    - O sistema consulta o Qdrant para encontrar regras semanticamente similares à consulta
-   - A Customer Service Crew gera uma resposta personalizada (considerando domínio, histórico e regras de negócio) Aqui, há uma possibilidade de redução de camada de processamento
+   - A Customer Service Crew gera uma resposta personalizada (considerando domínio, histórico e regras de negócio)
 
 4. **Retorno da Resposta**
-   - A resposta é enviada de volta ao `HubCrew` (outra possibilidade de redução de camada)
-   - O `HubCrew` a encaminha para o Chatwoot
+   - A resposta é enviada de volta ao `HubCrew`
+   - O `HubCrew` a encaminha para o Chatwoot através do webhook_handler
    - O Chatwoot entrega a resposta ao cliente via canal original
+
+### Otimizações no Fluxo de Processamento
+
+O sistema implementa várias otimizações para melhorar o desempenho e a eficiência:
+
+1. **Cache de Crews com Redis**
+   - Crews são serializadas e armazenadas no Redis após a primeira criação
+   - Requisições subsequentes recuperam a crew do cache, evitando o custo de inicialização
+   - Reduz significativamente o tempo de resposta e o consumo de tokens
+
+2. **Determinação Eficiente de Domínio**
+   - O webhook_handler implementa uma hierarquia de fontes para determinar o domínio:
+     * Primeiro verifica o mapeamento via account_id
+     * Depois verifica o mapeamento via inbox_id
+     * Por último, consulta a API do Chatwoot para metadados adicionais
+   - Resultados são cacheados para evitar consultas repetidas
+
+3. **Processamento Assíncrono**
+   - O webhook_handler utiliza processamento assíncrono (async/await) para melhorar a capacidade de resposta
+   - Permite que o sistema continue processando outras requisições enquanto aguarda respostas de serviços externos
+
+4. **Centralização de Acesso a Dados**
+   - Todo acesso a dados passa pelo DataProxyAgent, que implementa cache e otimizações
+   - Evita consultas redundantes e reduz a carga nos sistemas externos
 
 ### 2. Geração de Descrição de Produto (Odoo → Sistema)
 
@@ -236,8 +376,8 @@ Cada account_id pode ter múltiplas crews especializadas para diferentes funçõ
 
 3. **Processamento pelo Hub**
    - O `HubCrew` carrega a configuração do account_id
-   - O `HubCrew` determina que a requisição deve ser processada pela Product Management Crew
-   - O `HubCrew` obtém ou cria a Product Management Crew
+   - O `HubCrew` determina que a requisição deve ser processada pelo Product Management Crew? Não sabemos disso
+   - O `HubCrew` obtém ou cria a Product Management Crew??
 
 4. **Processamento pela Product Management Crew**
    - A Product Management Crew processa a requisição
@@ -294,18 +434,34 @@ Cada account_id pode ter múltiplas crews especializadas para diferentes funçõ
 
 ### Estrutura de Configuração
 
-Abaixo, apenas o yaml para a crew de atendimento ao cliente, expandiremos mais crews configuadas também via yaml para os modulos futuros
+A estrutura de configuração foi atualizada para suportar múltiplas crews por account_id, permitindo maior flexibilidade e especialização:
 
 ```
 /config
-  /chatwoot_mapping.yaml   # Mapeamento de account_ids do Chatwoot para domínios
-  /furniture               # Domínio (apenas uma organização de pastas)
-    account_1.yaml         # Configuração completa para o account_id 1
-    account_2.yaml         # Configuração completa para o account_id 2
-  /cosmetics               # Outro domínio (apenas uma organização de pastas)
-    account_3.yaml         # Configuração completa para o account_id 3
-    account_4.yaml         # Configuração completa para o account_id 4
+  /account_mapping.yaml    # Mapeamento de account_ids para domínios
+  /credentials.yaml        # Armazena credenciais reais (não versionado)
+  /domains
+    /furniture             # Domínio (apenas uma organização de pastas)
+      /account_1           # Diretório para o account_id 1
+        /config.yaml       # Configuração geral para o account_id 1
+        /support_crew.yaml # Configuração da crew de suporte
+        /analytics_crew.yaml # Configuração da crew de analytics
+      /account_2           # Diretório para o account_id 2
+        /config.yaml       # Configuração geral para o account_id 2
+        /support_crew.yaml # Configuração da crew de suporte
+    /cosmetics             # Outro domínio
+      /account_3           # Diretório para o account_id 3
+        /config.yaml       # Configuração geral para o account_id 3
+        /support_crew.yaml # Configuração da crew de suporte
+        /sales_crew.yaml   # Configuração da crew de vendas
 ```
+
+Esta estrutura permite:
+
+1. **Configuração Granular**: Cada crew tem seu próprio arquivo de configuração
+2. **Escalabilidade**: Novas crews podem ser adicionadas sem modificar configurações existentes
+3. **Organização Clara**: Separação lógica por domínio e account_id
+4. **Segurança Aprimorada**: Credenciais sensíveis são armazenadas separadamente
 
 
 
@@ -379,24 +535,26 @@ crews:
 
 # Configuração de Integrações
 integrations:
-  odoo:
-    enabled: true
+  mcp:
+    type: "odoo-mcp"
     config:
       url: "http://localhost:8069"
-      db: "odoo14"
+      db: "account_2"
       username: "admin"
-      password: "admin"
+      credential_ref: "a1b2c3d4-e5f6-g7h8-i9j0"  # Referência, não a senha real
 
   chatwoot:
     enabled: true
     config:
       account_id: "chatwoot_account_123"
+      webhook_secret_ref: "chatwoot_webhook_secret_ref"  # Referência, não o segredo real
 
   mercado_livre:
     enabled: false
     config:
-      api_key: ""
-      secret_key: ""
+      app_id: "ML123456"
+      client_secret_ref: "ml_secret_account_2"  # Referência, não o segredo real
+      access_token_ref: "ml_token_account_2"    # Referência, não o token real
 
   # Configuração do Redis para persistência e cache
   redis:
@@ -469,7 +627,7 @@ Esta abordagem oferece várias vantagens:
 - **Manutenção de Estado**: Permite que as crews mantenham estado entre requisições
 - **Escalabilidade**: Facilita a distribuição do sistema em múltiplos servidores
 
-### 2. Cache de Consultas # DEVEMOS VERIFICAR ONDE O SERVIÇO SERÁ IMPLEMENTADO
+### 2. Cache de Consultas com Redis
 
 O sistema utiliza o Redis para cachear resultados de consultas frequentes, reduzindo a carga nos bancos de dados e melhorando o desempenho:
 
@@ -804,6 +962,22 @@ O sistema foi projetado desde o início para ser agnóstico em relação ao ERP,
 1. **Sistema Completo com Odoo**: Fornecendo uma solução end-to-end com Odoo como ERP integrado
 2. **Plataforma de Integração**: Conectando-se a ERPs existentes dos clientes
 
+### Implementação Atual do MCP-Odoo
+
+A implementação atual do MCP-Odoo consiste em dois componentes principais:
+
+1. **OdooClient (`odoo_client.py`)**
+   - Implementa a comunicação com o Odoo via XML-RPC
+   - Fornece métodos para operações CRUD (Create, Read, Update, Delete)
+   - Gerencia a autenticação e sessão com o Odoo
+   - Implementa tratamento de erros e retentativas
+
+2. **FastMCP Server (`server.py`)**
+   - Expor ferramentas (tools) para interação com o Odoo
+   - Implementa ferramentas para vendas, calendário, produtos, clientes, estoque, preços e pagamentos
+   - Fornece uma interface consistente para os agentes de IA
+   - Abstrai a complexidade do Odoo para os agentes
+
 ### Estratégias de Integração com ERPs Externos
 
 #### 1. Adaptadores MCP Específicos
@@ -816,12 +990,50 @@ Para cada ERP popular, podemos desenvolver um adaptador MCP específico:
 - **MCP-Totvs**: Para sistemas brasileiros como Protheus
 
 ```
-├── src/
-│   ├── mcp_odoo/        # Implementação MCP para Odoo
-│   ├── mcp_sap/         # Implementação MCP para SAP
-│   ├── mcp_dynamics/    # Implementação MCP para Microsoft Dynamics
-│   ├── mcp_netsuite/    # Implementação MCP para Oracle NetSuite
-│   └── mcp_totvs/       # Implementação MCP para Totvs
+├── odoo_api/                # API REST para integração com Odoo
+│   ├── core/              # Núcleo da API
+│   │   ├── domain/          # Gerenciamento de domínios
+│   │   ├── interfaces/      # Interfaces para serviços
+│   │   ├── odoo_connector.py  # Conector Odoo com sistema de referências
+│   │   └── services/        # Serviços internos
+│   ├── embedding_agents/   # Agentes de embedding especializados
+│   │   ├── business_rules_agent.py
+│   │   ├── product_description_agent.py
+│   │   └── product_mass_agent.py
+│   ├── modules/           # Módulos da API
+│   │   ├── business_rules/  # API para regras de negócio
+│   │   ├── credentials/    # API para gerenciamento de credenciais
+│   │   ├── product_management/ # API para gerenciamento de produtos
+│   │   └── semantic_product/ # API para descrição semântica de produtos
+│   ├── services/          # Serviços compartilhados
+│   │   ├── cache_service.py # Serviço de cache
+│   │   ├── openai_service.py # Serviço de integração com OpenAI
+│   │   └── vector_service.py # Serviço de vetorização
+│   ├── config/            # Configurações
+│   │   ├── domains/         # Configurações por domínio
+│   │   ├── credentials.yaml.example # Exemplo de credenciais
+│   │   └── account_mapping.yaml.example # Exemplo de mapeamento
+│   ├── main.py            # Ponto de entrada da API REST
+│   └── tests/             # Testes automatizados
+├── addons/                 # Módulos Odoo
+│   ├── ai_credentials_manager/ # Gerenciador de credenciais
+│   ├── business_rules/       # Regras de negócio
+│   ├── semantic_product_description/ # Descrição semântica de produtos
+│   └── product_ai_mass_management/ # Gerenciamento em massa de produtos
+├── src/                    # Código fonte principal
+│   ├── webhook/           # Webhook para Chatwoot e credenciais
+│   │   ├── handlers/        # Handlers específicos
+│   │   ├── server.py        # Servidor webhook
+│   │   └── webhook_handler.py # Handler principal
+│   ├── core/              # Núcleo do sistema
+│   │   ├── domain/          # Gerenciamento de domínios
+│   │   ├── hub.py           # Hub central (HubCrew)
+│   │   └── data_proxy_agent.py # Agente de acesso a dados
+│   └── mcp_odoo/          # Implementação MCP para Odoo
+│       ├── odoo_client.py   # Cliente para comunicação com Odoo
+│       └── server.py        # Servidor MCP
+├── config/                 # Configurações globais
+│   └── domains/           # Configurações por domínio e account_id
 ```
 
 Cada implementação MCP fornece a mesma interface para o sistema, mas traduz as operações para o ERP específico.
@@ -867,81 +1079,97 @@ Para sincronização de dados em lote, desenvolvemos conectores ETL que funciona
 
 ### 1. Implementação da API REST para Odoo
 
-- [ ] Criar estrutura básica da API REST
-- [ ] Implementar endpoints para geração de descrição
-- [ ] Implementar endpoints para sincronização com Qdrant
-- [ ] Implementar endpoints para busca semântica
-- [ ] Adicionar autenticação e autorização
-- [ ] Implementar logging e monitoramento
+- [x] Criar estrutura básica da API REST
+- [x] Implementar endpoints para geração de descrição
+- [x] Implementar endpoints para sincronização com Qdrant
+- [x] Implementar endpoints para busca semântica
+- [x] Adicionar autenticação e autorização
+- [x] Implementar logging e monitoramento
+- [x] Implementar endpoint para gerenciamento de credenciais
 
 ### 2. Expansão do MCP-Odoo
 
-- [ ] Adicionar métodos para obter metadados de produtos
-- [ ] Adicionar métodos para atualizar status de sincronização
+- [x] Adicionar métodos para obter metadados de produtos
+- [x] Adicionar métodos para atualizar status de sincronização
 - [ ] Adicionar métodos para operações de vendas
 - [ ] Adicionar métodos para operações de calendário
-- [ ] Implementar cache para consultas frequentes
-- [ ] Otimizar consultas ao Odoo
+- [x] Implementar sistema de referências para credenciais
+- [x] Otimizar consultas ao Odoo
 
 ### 3. Implementação do Serviço de Vetorização e Busca Híbrida
 
-- [ ] Criar estrutura básica do serviço
-- [ ] Implementar geração de embeddings com OpenAI
-- [ ] Implementar armazenamento no Qdrant
-- [ ] Implementar busca semântica básica
-- [ ] Implementar busca híbrida (BM42) combinando Qdrant e Odoo
-- [ ] Implementar cache de embeddings com Redis
-- [ ] Implementar cache de resultados de busca com Redis
-- [ ] Implementar estratégias de otimização de custos (processamento em lote, pré-processamento de texto)
-- [ ] Implementar sincronização automática entre Odoo e Qdrant
+- [x] Criar estrutura básica do serviço
+- [x] Implementar geração de embeddings com OpenAI
+- [x] Implementar armazenamento no Qdrant
+- [x] Implementar busca semântica básica
+- [x] Implementar busca híbrida (BM42) combinando Qdrant e Odoo
+- [x] Implementar cache de embeddings com Redis
+- [x] Implementar cache de resultados de busca com Redis
+- [x] Implementar estratégias de otimização de custos (processamento em lote, pré-processamento de texto)
+- [x] Implementar sincronização automática entre Odoo e Qdrant
+- [ ] Implementar agentes de embedding especializados por módulo
 
 ### 4. Implementação do Redis para Persistência e Cache
 
-- [ ] Configurar Redis para persistência de crews
-- [ ] Implementar serialização e desserialização de crews
-- [ ] Implementar mecanismo de cache para consultas frequentes
-- [ ] Implementar cache de configurações e mapeamentos
-- [ ] Implementar estratégias de expiração de cache
+- [x] Configurar Redis para persistência de crews
+- [x] Implementar serialização e desserialização de crews
+- [x] Implementar mecanismo de cache para consultas frequentes
+- [x] Implementar cache de configurações e mapeamentos
+- [x] Implementar estratégias de expiração de cache
 - [ ] Implementar monitoramento de uso do Redis
 
 ### 5. Modificação do Hub
 
-- [ ] Estender o Hub para processar diferentes tipos de requisições
-- [ ] Implementar mecanismo para determinar qual crew deve processar cada requisição
-- [ ] Implementar mecanismo para obter ou criar a crew apropriada usando Redis
-- [ ] Adicionar suporte para diferentes tipos de ações
+- [x] Estender o Hub para processar diferentes tipos de requisições
+- [x] Implementar mecanismo para determinar qual crew deve processar cada requisição
+- [x] Implementar mecanismo para obter ou criar a crew apropriada usando Redis
+- [x] Adicionar suporte para diferentes tipos de ações
 - [ ] Implementar mecanismo de fallback para casos de falha
 
 ### 6. Implementação de Crews Especializadas com CrewAI
 
-- [ ] Implementar Customer Service Crew usando CrewAI
-- [ ] Implementar Product Management Crew usando CrewAI
+- [x] Implementar Customer Service Crew usando CrewAI
+- [x] Implementar Product Management Crew usando CrewAI
 - [ ] Implementar Social Media Crew usando CrewAI
 - [ ] Implementar Marketplace Crew usando CrewAI
 - [ ] Implementar Analytics Crew usando CrewAI
-- [ ] Configurar ferramentas específicas para cada crew
+- [x] Configurar ferramentas específicas para cada crew
 
-### 7. Desenvolvimento de Adaptadores MCP para Outros ERPs
+### 7. Desenvolvimento de Módulos Odoo
 
-- [ ] Definir interface comum para todos os adaptadores MCP
-- [ ] Implementar adaptador MCP para SAP
-- [ ] Implementar adaptador MCP para Microsoft Dynamics
-- [ ] Implementar adaptador MCP para Oracle NetSuite
-- [ ] Implementar adaptador MCP para Totvs
-- [ ] Criar documentação de integração para cada adaptador
-- [ ] Desenvolver API REST genérica para ERPs personalizados
-- [ ] Implementar sistema de webhooks bidirecionais
+- [x] Implementar módulo `ai_credentials_manager` para gerenciamento de credenciais
+- [x] Implementar módulo `business_rules` para regras de negócio
+- [x] Implementar módulo `semantic_product_description` para descrição semântica de produtos
+- [x] Implementar módulo `product_ai_mass_management` para gerenciamento em massa de produtos
+- [x] Integrar módulos com o sistema de credenciais
+- [ ] Implementar módulo `ai_conversational_bot` para interface de chat no Odoo
 
-### 8. Testes e Documentação
+### 8. Implementação do Sistema de Referências para Credenciais
 
-- [ ] Implementar testes unitários para cada componente
+- [x] Definir estrutura de arquivos para armazenamento seguro de credenciais
+- [x] Implementar sistema de referências em arquivos YAML
+- [x] Implementar API para recuperação segura de credenciais
+- [x] Integrar com módulos Odoo
+- [x] Implementar registro de acessos para auditoria
+- [ ] Implementar criptografia de credenciais no banco de dados
+
+### 9. Implementação do Controle de Tokens da OpenAI
+
+- [ ] Implementar contador de tokens por requisição
+- [ ] Implementar limites configuráveis por cliente/account_id
+- [ ] Desenvolver dashboard de uso de tokens
+- [ ] Implementar alertas de limite próximo
+- [ ] Gerar relatórios de consumo
+
+### 10. Testes e Documentação
+
+- [x] Implementar testes unitários para componentes principais
 - [ ] Implementar testes de integração para fluxos completos
 - [ ] Implementar testes de carga para verificar desempenho
-- [ ] Implementar testes específicos para busca híbrida
+- [x] Implementar testes específicos para busca híbrida
 - [ ] Implementar testes para persistência de crews com Redis
-- [ ] Implementar testes para integração com diferentes ERPs
-- [ ] Criar documentação detalhada para cada componente
-- [ ] Criar guias de uso para desenvolvedores
+- [x] Criar documentação detalhada para cada componente
+- [x] Criar guias de uso para desenvolvedores
 - [ ] Criar guias de integração para clientes com ERPs existentes
 
 ## Considerações Futuras
@@ -1071,3 +1299,110 @@ Implementar padrões de circuit breaker para lidar com falhas em componentes ext
 #### 7. Otimização de Desempenho
 
 Caso o sistema apresente problemas de desempenho mesmo após todas as otimizações, considerar simplificar a arquitetura removendo camadas intermediárias como o DataProxyAgent e testando comunicação direta com as Crews.
+
+## Implementações Futuras
+
+### 1. Integração da API da OpenAI e Controle de Tokens
+
+O módulo `ai_credentials_manager` será expandido para incluir:
+
+- **Gerenciamento de Chaves da OpenAI**: Armazenamento seguro de chaves da OpenAI e outros provedores de LLM
+- **Sistema de Controle de Tokens**:
+  - Contador de tokens por requisição
+  - Limites configuráveis por cliente/account_id
+  - Dashboard de uso de tokens
+  - Alertas de limite próximo
+  - Relatórios de consumo
+
+**Arquitetura de Controle de Tokens**:
+```
+├── Token Manager Service
+│   ├── Token Counter (contagem em tempo real)
+│   ├── Token Budget (alocação de orçamento por sessão)
+│   ├── Token Cache (cache de respostas para economia)
+│   └── Token Analytics (análise de uso e otimização)
+```
+
+Para garantir performance em cenários de múltiplos atendimentos simultâneos, o sistema implementará:
+
+1. **Cache Redis** para credenciais e contagens de tokens
+2. **Verificação Assíncrona** de tokens (não bloqueante)
+3. **Sistema de Budget** pré-alocado para cada sessão de atendimento
+
+### 2. Múltiplas Crews por Cliente
+
+A arquitetura será expandida para suportar múltiplas crews especializadas por cliente:
+
+**Estrutura de Arquivos YAML**:
+```
+config/
+├── domains/
+│   └── cosmetics/
+│       └── account_1/
+│           ├── support_crew.yaml  # Crew de atendimento
+│           ├── analytics_crew.yaml  # Crew de analytics
+│           └── sales_crew.yaml  # Crew de vendas
+```
+
+**Sistema de Roteamento de Crews**:
+- Implementação de um "Crew Registry" central
+- Mapeamento de tipos de solicitações para crews específicas
+- Gerenciamento de credenciais por crew
+- Escalonamento horizontal de crews
+
+### 3. Sistema Conversacional no Odoo
+
+Um novo módulo Odoo `ai_conversational_bot` será desenvolvido para:
+
+- **Interface de Chat Integrada**: Chat embutido na interface do Odoo
+- **Consultas SQL Seguras**:
+  - Sistema de "SQL seguro" com queries parametrizadas
+  - Permissões granulares por tabela/view
+  - Escopo limitado de consultas possíveis
+  - Logging detalhado de todas as consultas
+- **Integração com Relatórios**: Capacidade de explicar e detalhar relatórios existentes
+- **Geração de Insights**: Análise de dados e sugestões de ações
+
+**Arquitetura de Segurança SQL**:
+```
+├── SQL Security Layer
+│   ├── Query Parser (validação de sintaxe)
+│   ├── Query Sanitizer (remoção de comandos perigosos)
+│   ├── Permission Checker (verificação de permissões)
+│   ├── Query Limiter (limites de tempo/recursos)
+│   └── Query Logger (registro detalhado)
+```
+
+Para otimizar performance:
+- Limites de tempo de execução para consultas
+- Cache de resultados frequentes
+- Execução assíncrona para consultas pesadas
+
+### Arquitetura Integrada das Implementações Futuras
+
+```
+├── Módulos Odoo
+│   ├── ai_credentials_manager (Gerenciamento de Credenciais)
+│   ├── ai_conversational_bot (Bot Conversacional)
+│   └── [Módulos Existentes]
+│
+├── API Gateway + Auth
+│
+├── Crew Registry (Registro Central de Crews)
+│
+├── Token Manager (Gerenciamento de Tokens)
+│
+├── Crews Especializadas
+│   ├── Support Crew
+│   ├── Analytics Crew
+│   ├── Sales Crew
+│   └── [Outras Crews]
+│
+├── Tool Registry (Registro de Ferramentas)
+│   ├── SQL Tools (Ferramentas SQL Seguras)
+│   ├── Report Tools (Ferramentas de Relatórios)
+│   ├── Insight Tools (Ferramentas de Insights)
+│   └── [Outras Ferramentas]
+```
+
+Esta arquitetura expandida permitirá que o sistema evolua de forma modular e escalável, mantendo a segurança e performance em níveis ótimos mesmo com a adição de novas funcionalidades.

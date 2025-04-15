@@ -1,155 +1,149 @@
-## Configuração para o Cliente 1 - Domínio de Cosméticos
-## Este arquivo define todas as configurações específicas para o Cliente 1 no domínio de cosméticos
-
-version: "2.1"
-metadata:
-  domain: cosmetics
-  account_id: "account_1"
-  client_name: "Sandra Cosmeticos."
-  description: "Loja especializada em produtos de beleza naturais e orgânicos"
-  business_area: "retail"
-  inherit: "_base"  # Herda configurações base
-
-# Configurações específicas dos agentes para o domínio de cosméticos
+account_id: account_1
 agents:
   sales_expert:
+    config:
+      backstory: "Especialista em produtos de beleza com profundo conhecimento\nde\
+        \ formula\xE7\xF5es cosm\xE9ticas e prefer\xEAncias de clientes.\nVoc\xEA\
+        \ j\xE1 trabalhou com as principais marcas de cosm\xE9ticos e entende\nas\
+        \ necessidades espec\xEDficas para diferentes tipos de pele e estilos.\n"
+      goal: "Auxiliar clientes na escolha de produtos cosm\xE9ticos adequados"
+      role: Consultor de Beleza
+    plugins:
+    - config:
+        concern_areas:
+        - acne
+        - rugas
+        - manchas
+        - "hidrata\xE7\xE3o"
+        skin_types:
+        - normal
+        - seca
+        - oleosa
+        - mista
+      name: cosmetics_advisor
+      version: 1.2
+    tools:
+    - product_catalog
+    - skin_analyzer
+    - beauty_recommender
     type: SalesAgent
-    config:
-      role: "Consultor de Beleza"
-      goal: "Auxiliar clientes na escolha de produtos cosméticos adequados"
-      backstory: |
-        Especialista em produtos de beleza com profundo conhecimento
-        de formulações cosméticas e preferências de clientes.
-        Você já trabalhou com as principais marcas de cosméticos e entende
-        as necessidades específicas para diferentes tipos de pele e estilos.
-    tools:
-      - product_catalog
-      - skin_analyzer
-      - beauty_recommender
-    plugins:
-      - name: cosmetics_advisor
-        version: 1.2
-        config:
-          skin_types: ["normal", "seca", "oleosa", "mista"]
-          concern_areas: ["acne", "rugas", "manchas", "hidratação"]
-
   skincare_specialist:
-    type: ProductAgent
     config:
-      role: "Especialista em Cuidados com a Pele"
-      goal: "Recomendar rotinas de cuidados específicas para cada tipo de pele"
-      backstory: |
-        Especialista em dermatologia cosmética com anos de experiência
-        em formulações e protocolos para diferentes condições de pele.
-    tools:
-      - skin_analyzer
-      - product_catalog
-      - routine_builder
+      backstory: "Especialista em dermatologia cosm\xE9tica com anos de experi\xEA\
+        ncia\nem formula\xE7\xF5es e protocolos para diferentes condi\xE7\xF5es de\
+        \ pele.\n"
+      goal: "Recomendar rotinas de cuidados espec\xEDficas para cada tipo de pele"
+      role: Especialista em Cuidados com a Pele
     plugins:
-      - name: skin_diagnosis
-        version: 1.1
-        config:
-          diagnosis_depth: "detailed"
-          include_ingredients: true
-
-# Configuração das crews para este domínio
+    - config:
+        diagnosis_depth: detailed
+        include_ingredients: true
+      name: skin_diagnosis
+      version: 1.1
+    tools:
+    - skin_analyzer
+    - product_catalog
+    - routine_builder
+    type: ProductAgent
 crews:
   SalesCrew:
-    name: "SalesCrew"
-    description: "Equipe especializada em vendas de produtos cosméticos"
     agents:
-      - sales_expert
-      - skincare_specialist
-    tasks:
-      - description: "Analisar a consulta do cliente e identificar necessidades de beleza"
-        agent: sales_expert
-        expected_output: "Análise das necessidades do cliente"
-      - description: "Avaliar o tipo de pele e condições específicas"
-        agent: skincare_specialist
-        expected_output: "Diagnóstico do tipo de pele e recomendações"
-      - description: "Formular recomendações de produtos personalizadas"
-        agent: sales_expert
-        expected_output: "Lista de produtos recomendados com justificativas"
-      - description: "Criar uma rotina de cuidados personalizada"
-        agent: skincare_specialist
-        expected_output: "Rotina de cuidados com a pele passo a passo"
+    - sales_expert
+    - skincare_specialist
     config:
       max_iterations: 3
-      verbose: True
-
-  support_crew:
-    name: "SupportCrew"
-    description: "Equipe especializada em suporte técnico para produtos cosméticos"
-    agents: [skincare_specialist, sales_expert]
+      verbose: true
+    description: "Equipe especializada em vendas de produtos cosm\xE9ticos"
+    name: SalesCrew
     tasks:
-      - description: "Analisar problemas reportados com produtos cosméticos"
-        agent: skincare_specialist
-        expected_output: "Diagnóstico do problema reportado"
-      - description: "Fornecer orientações de uso correto dos produtos"
-        agent: sales_expert
-        expected_output: "Instruções detalhadas de uso"
-      - description: "Recomendar alternativas para casos de reações adversas"
-        agent: skincare_specialist
-        expected_output: "Recomendações de produtos alternativos"
-
-# Configurações de integração com serviços externos específicos para este domínio
+    - agent: sales_expert
+      description: Analisar a consulta do cliente e identificar necessidades de beleza
+      expected_output: "An\xE1lise das necessidades do cliente"
+    - agent: skincare_specialist
+      description: "Avaliar o tipo de pele e condi\xE7\xF5es espec\xEDficas"
+      expected_output: "Diagn\xF3stico do tipo de pele e recomenda\xE7\xF5es"
+    - agent: sales_expert
+      description: "Formular recomenda\xE7\xF5es de produtos personalizadas"
+      expected_output: Lista de produtos recomendados com justificativas
+    - agent: skincare_specialist
+      description: Criar uma rotina de cuidados personalizada
+      expected_output: Rotina de cuidados com a pele passo a passo
+  support_crew:
+    agents:
+    - skincare_specialist
+    - sales_expert
+    description: "Equipe especializada em suporte t\xE9cnico para produtos cosm\xE9\
+      ticos"
+    name: SupportCrew
+    tasks:
+    - agent: skincare_specialist
+      description: "Analisar problemas reportados com produtos cosm\xE9ticos"
+      expected_output: "Diagn\xF3stico do problema reportado"
+    - agent: sales_expert
+      description: "Fornecer orienta\xE7\xF5es de uso correto dos produtos"
+      expected_output: "Instru\xE7\xF5es detalhadas de uso"
+    - agent: skincare_specialist
+      description: "Recomendar alternativas para casos de rea\xE7\xF5es adversas"
+      expected_output: "Recomenda\xE7\xF5es de produtos alternativos"
+description: "Configura\xE7\xE3o para Cliente Teste"
 integrations:
-  # Configuração do MCP (Message Control Program)
-  mcp:
-    type: "odoo-mcp"  # Tipo de MCP a ser usado
-    config:
-      url: "http://localhost:8069"
-      db: "account_1"  # Nome do banco de dados Odoo
-      username: "admin"
-      password: "admin"
-      api_key: "odoo_api_key_account_1"  # Chave de API para autenticação
-      timeout: 30
-      verify_ssl: false
-
-  # Configuração do Qdrant (para busca semântica)
-  qdrant:
-    collection: "business_rules_account_1"  # Coleção para regras de negócio
-    embedding_model: "text-embedding-3-small"
-    similarity_threshold: 0.7
-    max_results: 10
-
-  # Configuração do Redis (para cache)
-  redis:
-    host: "localhost"
-    port: 6379
-    db: 0
-    password: ""
-    ttl: 86400  # 24 horas em segundos
-
-  # Configuração legada do Odoo (mantida para compatibilidade)
-  odoo:
-    product_categories:
-      - cosméticos
-      - maquiagem
-      - perfumaria
-      - cuidados_pessoais
-    price_lists:
-      - varejo
-      - atacado
-      - promocional
-
   chatwoot:
-    default_labels:
-      - beleza
-      - cosméticos
-      - skincare
     canned_responses:
-      - welcome_cosmetics
-      - skincare_routine
-      - product_recommendation
-
-# Configurações de memória para este domínio
+    - welcome_cosmetics
+    - skincare_routine
+    - product_recommendation
+    default_labels:
+    - beleza
+    - "cosm\xE9ticos"
+    - skincare
+  facebook:
+    access_token: EAAG1234567890
+    access_token_ref: fb_token_account_1
+    app_id: '123456789'
+    app_secret: abcdefghijklmnopqrstuvwxyz
+    app_secret_ref: fb_secret_account_1
+  instagram:
+    access_token_ref: ig_token_account_1
+    client_id: '987654321'
+    client_secret_ref: ig_secret_account_1
+  mcp:
+    config:
+      credential_ref: a1b2c3d4-e5f6-g7h8-i9j0
+      db: account_1
+      url: http://localhost:8069
+      username: admin
+    type: odoo-mcp
+  mercado_livre:
+    access_token_ref: ml_token_account_1
+    app_id: ML123456
+    client_secret_ref: ml_secret_account_1
+  odoo:
+    price_lists:
+    - varejo
+    - atacado
+    - promocional
+    product_categories:
+    - "cosm\xE9ticos"
+    - maquiagem
+    - perfumaria
+    - cuidados_pessoais
+  qdrant:
+    collection: business_rules_account_1
+  redis:
+    prefix: account_1
 memory:
-  ttl: 7200  # 2 horas em segundos
-  storage: redis
   priority_contexts:
-    - "histórico de compras"
-    - "preferências de produtos"
-    - "condições de pele"
-
-
+  - "hist\xF3rico de compras"
+  - "prefer\xEAncias de produtos"
+  - "condi\xE7\xF5es de pele"
+  storage: redis
+  ttl: 7200
+metadata:
+  account_id: account_1
+  business_area: retail
+  client_name: Sandra Cosmeticos.
+  description: "Loja especializada em produtos de beleza naturais e org\xE2nicos"
+  domain: cosmetics
+  inherit: _base
+name: Cliente Teste
+version: '2.1'

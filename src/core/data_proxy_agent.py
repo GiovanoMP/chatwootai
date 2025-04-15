@@ -22,7 +22,6 @@ from crewai import Agent
 from crewai.tools.base_tool import BaseTool
 
 # Importando serviços e ferramentas de suporte
-from src.core.memory import MemorySystem
 from src.core.domain.domain_manager import DomainManager
 from src.utils.redis_client import get_redis_client, RedisCache
 
@@ -51,8 +50,8 @@ class DataProxyAgent:
     """
 
     def __init__(self,
-                 domain_manager: DomainManager,
-                 memory_system: Optional[MemorySystem] = None,
+                 data_service_hub=None,
+                 domain_manager: Optional[DomainManager] = None,
                  additional_tools: Optional[List[BaseTool]] = None,
                  **kwargs):
         """
@@ -65,11 +64,8 @@ class DataProxyAgent:
             **kwargs: Argumentos adicionais para a classe Agent
         """
         # Validar e armazenar atributos essenciais
-        if not domain_manager:
-            raise ConfigurationError("DomainManager é obrigatório para o DataProxyAgentV2")
-
+        self.data_service_hub = data_service_hub
         self._domain_manager = domain_manager
-        self._memory_system = memory_system
 
         # Inicializar Redis para cache
         self._redis_client = get_redis_client()
@@ -234,14 +230,14 @@ class DataProxyAgent:
         try:
             if mcp_type == "odoo-mcp":
                 # Usar o módulo MCP-Odoo para criar o cliente
-                from src.mcp_odoo import get_odoo_client_for_account
+                from mcp_odoo.src.odoo_mcp import get_odoo_client_for_account
 
                 # Tentar criar o cliente usando o domínio e account_id
                 client = get_odoo_client_for_account(domain_name, account_id, self._domain_manager)
 
                 # Se não conseguir criar o cliente usando o domínio e account_id, usar a configuração direta
                 if not client:
-                    from src.mcp_odoo import get_odoo_client
+                    from mcp_odoo.src.odoo_mcp import get_odoo_client
                     client = get_odoo_client(config)
 
                 logger.info(f"Cliente Odoo-MCP criado com sucesso para o domínio {domain_name}")

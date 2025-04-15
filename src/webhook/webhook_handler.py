@@ -15,11 +15,9 @@ import asyncio
 import traceback
 
 from src.core.hub import HubCrew
-from src.core.memory import MemorySystem
 from src.core.data_service_hub import DataServiceHub
 from src.api.chatwoot.client import ChatwootClient
 from src.core.domain import DomainManager
-from src.plugins.core.plugin_manager import PluginManager
 
 logger = logging.getLogger(__name__)
 
@@ -309,8 +307,8 @@ class ChatwootWebhookHandler:
             # determinado para a conversa
 
             # Verificar se temos acesso ao DomainManager e CrewFactory
-            domain_manager = getattr(self.hub_crew, "_domain_manager", None)
-            crew_factory = getattr(self.hub_crew, "_crew_factory", None)
+            domain_manager = getattr(self.hub_crew, "domain_manager", None)
+            crew_factory = getattr(self.hub_crew, "crew_factory", None)
 
             if not domain_manager or not crew_factory:
                 logger.error("HubCrew não tem DomainManager ou CrewFactory configurados")
@@ -330,7 +328,7 @@ class ChatwootWebhookHandler:
             # Determinar o domínio e o account_id interno com base no account_id do Chatwoot
             domain_name = None
             internal_account_id = None
-            domain_manager = getattr(self.hub_crew, "_domain_manager", None)
+            domain_manager = getattr(self.hub_crew, "domain_manager", None)
 
             if domain_manager and account_id:
                 try:

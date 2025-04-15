@@ -42,12 +42,9 @@ load_dotenv()
 from src.webhook.webhook_handler import ChatwootWebhookHandler
 from src.core.hub import HubCrew
 from src.core.data_service_hub import DataServiceHub
-from src.core.memory import MemorySystem
 from src.core.domain import DomainManager
-from src.plugins.core.plugin_manager import PluginManager
 from src.api.chatwoot.client import ChatwootClient  # Usando a implementação da arquitetura hub-and-spoke
 from src.core.data_proxy_agent import DataProxyAgent
-from src.core.cache.agent_cache import RedisAgentCache
 from src.core.crews.crew_factory import get_crew_factory
 
 # Cria a aplicação FastAPI
@@ -83,9 +80,8 @@ def initialize_system():
     logger.info("🚀 Iniciando servidor webhook...")
     logger.info("🚀 Inicializando sistema para receber webhooks do Chatwoot...")
 
-    # Sistema de memória para persistência de contexto
-    memory_system = MemorySystem()
-    logger.info("✅ Sistema de memória inicializado")
+    # Sistema de memória para persistência de contexto agora é gerenciado pelo CrewAI
+    logger.info("✅ Sistema de memória do CrewAI será utilizado")
 
     # Diretório de configurações
     config_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'config')
@@ -121,13 +117,8 @@ def initialize_system():
         if clients:
             logger.info(f"✅ Clientes para o domínio {domain}: {clients}")
 
-    # Gerenciador de plugins - Carrega plugins base conforme configuração
-    plugin_config = {
-        "enabled_plugins": ["sentiment_analysis_plugin", "faq_knowledge_plugin", "response_enhancer_plugin"],
-        "dynamic_loading": True  # Habilita carregamento dinâmico de plugins por domínio
-    }
-    plugin_manager = PluginManager(config=plugin_config)
-    logger.info("✅ Gerenciador de plugins inicializado")
+    # Plugins agora são gerenciados diretamente pelas crews
+    logger.info("✅ Plugins serão gerenciados pelas crews")
 
     # DataServiceHub - Ponto central de acesso a dados
     data_service_hub = DataServiceHub()
@@ -137,13 +128,9 @@ def initialize_system():
     data_proxy_agent = DataProxyAgent(data_service_hub=data_service_hub, domain_manager=domain_manager)
     logger.info("✅ DataProxyAgent inicializado")
 
-    # Criar cache de agentes (opcional)
-    try:
-        agent_cache = RedisAgentCache()
-        logger.info("✅ RedisAgentCache inicializado")
-    except Exception as e:
-        logger.warning(f"⚠️ Não foi possível inicializar RedisAgentCache: {str(e)}")
-        agent_cache = None
+    # Cache de agentes será gerenciado internamente pelo CrewAI
+    logger.info("✅ Cache de agentes será gerenciado pelo CrewAI")
+    agent_cache = None
 
     # Criar factory de crews
     crew_factory = get_crew_factory()

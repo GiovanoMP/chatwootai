@@ -58,12 +58,32 @@ class Settings(BaseSettings):
     LOG_LEVEL: str = Field(default="INFO", env="LOG_LEVEL")
     LOG_FORMAT: str = Field(default="%(asctime)s - %(name)s - %(levelname)s - %(message)s", env="LOG_FORMAT")
 
+    # Configurações do Chatwoot
+    CHATWOOT_API_KEY: Optional[str] = Field(default=None, env="CHATWOOT_API_KEY")
+    CHATWOOT_BASE_URL: Optional[str] = Field(default=None, env="CHATWOOT_BASE_URL")
+    CHATWOOT_ACCOUNT_ID: Optional[str] = Field(default=None, env="CHATWOOT_ACCOUNT_ID")
+
+    # Configurações do Webhook
+    WEBHOOK_PORT: Optional[int] = Field(default=None, env="WEBHOOK_PORT")
+    WEBHOOK_HOST: Optional[str] = Field(default=None, env="WEBHOOK_HOST")
+    WEBHOOK_DOMAIN: Optional[str] = Field(default=None, env="WEBHOOK_DOMAIN")
+    WEBHOOK_USE_HTTPS: Optional[bool] = Field(default=None, env="WEBHOOK_USE_HTTPS")
+    WEBHOOK_AUTH_TOKEN: Optional[str] = Field(default=None, env="WEBHOOK_AUTH_TOKEN")
+
+    # Configurações do Servidor
+    SERVER_PORT: Optional[int] = Field(default=None, env="SERVER_PORT")
+    SERVER_HOST: Optional[str] = Field(default=None, env="SERVER_HOST")
+
+    # Configurações do Ngrok
+    NGROK_AUTH_TOKEN: Optional[str] = Field(default=None, env="NGROK_AUTH_TOKEN")
+
     class Config:
         """Configurações do Pydantic."""
 
         env_file = ".env"
         env_file_encoding = "utf-8"
         case_sensitive = True
+        extra = "allow"  # Permite variáveis extras
 
 
 # Instância global das configurações

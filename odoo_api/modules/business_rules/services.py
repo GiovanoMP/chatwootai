@@ -640,86 +640,6 @@ class BusinessRulesService:
         except Exception as e:
             logger.error(f"Failed to upload document: {e}")
             raise ValidationError(f"Failed to upload document: {e}")
-        """
-        try:
-            # Implementação futura
-            return DocumentResponse(
-                id=1,
-                name="Documento de teste",
-                content="Conteúdo de teste",
-                created_at=datetime.now().isoformat()
-            )
-        except Exception as e:
-            logger.error(f"Failed to upload document: {e}")
-            raise ValidationError(f"Failed to upload document: {e}")
-            if document_data.document_type not in ['pdf', 'docx']:
-                raise ValidationError("Document type must be 'pdf' or 'docx'")
-
-            # Decodificar conteúdo
-            try:
-                content_bytes = base64.b64decode(document_data.content_base64)
-            except:
-                raise ValidationError("Invalid base64 content")
-
-            # Extrair texto do documento
-            extracted_text = ""
-            if document_data.document_type == 'pdf':
-                extracted_text = self._extract_text_from_pdf(content_bytes)
-            elif document_data.document_type == 'docx':
-                extracted_text = self._extract_text_from_docx(content_bytes)
-
-            # Obter conector Odoo
-            odoo = await OdooConnectorFactory.create_connector(account_id)
-
-            # Preparar dados para o Odoo
-            odoo_data = {
-                'name': document_data.name,
-                'description': document_data.description,
-                'document_type': document_data.document_type,
-                'content': document_data.content_base64,
-                'extracted_text': extracted_text,
-                'status': 'processed',
-            }
-
-            # Criar documento no Odoo
-            document_id = await odoo.execute_kw(
-                'business.rule.document',
-                'create',
-                [odoo_data],
-            )
-
-            # Obter documento criado
-            document = await odoo.execute_kw(
-                'business.rule.document',
-                'read',
-                [[document_id]],
-                {'fields': ['name', 'description', 'document_type', 'status', 'create_date', 'write_date']},
-            )
-
-            if not document:
-                raise ValidationError("Failed to create document")
-
-            document = document[0]
-
-            # Iniciar processamento assíncrono do documento para extração de regras
-            # (Implementação futura)
-
-            return DocumentResponse(
-                id=document_id,
-                name=document['name'],
-                description=document['description'],
-                document_type=document['document_type'],
-                created_at=datetime.fromisoformat(document['create_date']),
-                updated_at=datetime.fromisoformat(document['write_date']),
-                status=document['status'],
-            )
-
-        except ValidationError:
-            raise
-
-        except Exception as e:
-            logger.error(f"Failed to upload document: {e}")
-            raise ValidationError(f"Failed to upload document: {e}")
 
     async def list_documents(
         self,
@@ -1039,6 +959,20 @@ class BusinessRulesService:
         """
         Extrai texto de um arquivo DOCX.
 
+        Args:
+            content_bytes: Conteúdo do arquivo em bytes
+
+        Returns:
+            Texto extraído
+        """
+        try:
+            doc = Document(io.BytesIO(content_bytes))
+            text = "\n".join([paragraph.text for paragraph in doc.paragraphs])
+            return text
+        except Exception as e:
+            logger.error(f"Failed to extract text from DOCX: {e}")
+            return ""
+
     async def search_business_rules(
         self,
         account_id: str,
@@ -1048,37 +982,15 @@ class BusinessRulesService:
     ) -> List[Dict[str, Any]]:
         """
         Busca regras de negócio por similaridade semântica.
-        
+
         Args:
             account_id: ID da conta
             query: Consulta de busca
             limit: Limite de resultados
             score_threshold: Limiar de similaridade
-            
+
         Returns:
             Lista de regras ordenadas por similaridade
-        """
-        try:
-            # Obter serviços
-            vector_service = await get_vector_service()
-            
-            # Gerar embedding da consulta
-            query_embedding = await vector_service.generate_embedding(query)
-            
-            # Buscar regras similares
-            collection_name = f"business_rules_{account_id}"
-            search_results = await vector_service.search_vectors(
-                collection_name=collection_name,
-                query_vector=query_embedding,
-                limit=limit,
-                score_threshold=score_threshold
-            )
-            
-            return search_results
-        
-        except Exception as e:
-            logger.error(f"Failed to search business rules: {e}")
-            return []
 
         Raises:
             ValidationError: Se ocorrer um erro na busca
@@ -1124,7 +1036,7 @@ class BusinessRulesService:
 
         except Exception as e:
             logger.error(f"Failed to search business rules: {e}")
-            raise ValidationError(f"Failed to search business rules: {e}")
+            return []
 
 
 # Instância global do serviço

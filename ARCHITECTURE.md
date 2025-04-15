@@ -29,30 +29,48 @@ Uma característica fundamental do sistema é sua **flexibilidade de integraçã
 ## Arquitetura do Sistema
 
 ```
-┌─────────────┐     ┌───────────────┐     ┌───────────────┐     ┌─────────────────┐
-│             │     │               │     │               │     │                 │
-│  Cliente    │────►│   Webhook     │────►│     Hub       │────►│  Customer       │
-│  (Chatwoot) │     │   Handler     │     │               │     │  Service Crew   │
-│             │     │               │     │               │     │                 │
-└─────────────┘     └───────────────┘     └───────┬───────┘     └─────────────────┘
-                                                  │
-┌─────────────┐     ┌───────────────┐             │             ┌─────────────────┐
-│             │     │               │             │             │                 │
-│  Módulo     │────►│   API REST    │─────────────┼────────────►│  Product        │
-│  Odoo       │     │   (Entrada)   │             │             │  Management Crew│
-│             │     │               │             │             │                 │
-└─────────────┘     └───────────────┘             │             └─────────────────┘
-                                                  │
-                                                  │             ┌─────────────────┐
-                                                  │             │                 │
-                                                  └────────────►│  Social Media   │
-                                                                │  Crew           │
-                                                                │                 │
-                                                                └─────────────────┘
-                                                                        │
-                    ┌───────────────┐     ┌─────────────┐               │
-                    │               │     │             │               │
-                    │  DataProxy    │◄───►│  MCP-Odoo   │◄──────────────┘
+┌─────────────┐     ┌───────────────────────────────────────────────────┐
+│             │     │                                                   │
+│  Cliente    │────►│                 Servidor Unificado               │
+│  (Chatwoot) │     │                    (main.py)                     │
+│             │     │                                                   │
+└─────────────┘     │  ┌───────────────┐          ┌───────────────┐    │
+                    │  │               │          │               │    │
+┌─────────────┐     │  │   Webhook     │          │   API REST    │    │
+│             │     │  │   Handler     │          │   (Odoo)      │    │
+│  Módulo     │────►│  │ (/webhook)    │          │ (/api/v1)     │    │
+│  Odoo       │     │  │               │          │               │    │
+│             │     │  └───────┬───────┘          └───────┬───────┘    │
+└─────────────┘     └──────────┼──────────────────────────┼────────────┘
+                               │                          │
+                               │                          │
+                               ▼                          ▼
+                    ┌───────────────┐          ┌───────────────────┐
+                    │               │          │                   │
+                    │     Hub       │────────►│  Customer Service  │
+                    │               │          │  Crew             │
+                    │               │          │                   │
+                    └───────┬───────┘          └───────────────────┘
+                            │
+                            │
+                            ├─────────────────►┌───────────────────┐
+                            │                   │                   │
+                            │                   │  Product          │
+                            │                   │  Management Crew  │
+                            │                   │                   │
+                            │                   └───────────────────┘
+                            │
+                            │
+                            └─────────────────►┌───────────────────┐
+                                                │                   │
+                                                │  Social Media     │
+                                                │  Crew             │
+                                                │                   │
+                                                └────────┬──────────┘
+                                                         │
+                    ┌───────────────┐     ┌─────────────┐│
+                    │               │     │             ││
+                    │  DataProxy    │◄───►│  MCP-Odoo   │◄┘
                     │  Agent        │     │  (Saída)    │
                     │               │     │             │
                     └───────┬───────┘     └──────┬──────┘
@@ -78,13 +96,20 @@ Uma característica fundamental do sistema é sua **flexibilidade de integraçã
 
 #### 1. Pontos de Entrada
 
-1. **Webhook Handler (`src/webhook/webhook_handler.py`)**
+1. **Servidor Unificado (`main.py`)**
+   - Ponto de entrada principal do sistema
+   - Unifica o webhook do Chatwoot e a API Odoo em um único servidor
+   - Direciona requisições para os componentes apropriados com base nos prefixos de rota
+   - Implementa middlewares e eventos compartilhados
+   - Fornece uma interface única para todos os serviços
+
+2. **Webhook Handler (`src/webhook/webhook_handler.py`)**
    - Processa webhooks do Chatwoot para atendimento ao cliente
    - Processa eventos de sincronização de credenciais do módulo `ai_credentials_manager`
    - Extrai metadados (account_id, conversation_id, etc.)
    - Direciona para o Hub para processamento
 
-2. **API REST para Odoo (`odoo_api/main.py`)**
+3. **API REST para Odoo (`odoo_api/modules/*/routes.py`)**
    - Processa requisições dos módulos Odoo
    - Extrai metadados (account_id, action, etc.)
    - Direciona para o processamento apropriado
@@ -300,6 +325,50 @@ O módulo também suporta integrações com múltiplas plataformas externas:
 - **Marketplaces**: Mercado Livre, Amazon, Shopee
 - **Serviços de Mensagens**: WhatsApp Business, Telegram
 
+## Servidor Unificado
+
+O sistema implementa uma arquitetura de servidor unificado que combina o webhook do Chatwoot e a API Odoo em um único aplicativo FastAPI, mantendo a separação lógica entre os diferentes tipos de endpoints.
+
+### Características Principais
+
+1. **Ponto de Entrada Único**: Um único servidor (`main.py`) gerencia todas as requisições
+2. **Roteamento por Prefixo**: Requisições são direcionadas com base nos prefixos de rota
+   - `/webhook/*`: Rotas para o webhook do Chatwoot
+   - `/api/v1/*`: Rotas para a API Odoo
+3. **Middlewares Compartilhados**: Logging, tratamento de erros e autenticação centralizados
+4. **Eventos Unificados**: Eventos de inicialização e finalização gerenciados em um único lugar
+5. **Exposição Externa**: Um único endpoint exposto via ngrok para acesso externo
+
+### Benefícios
+
+1. **Simplicidade**: Um único servidor para gerenciar e implantar
+2. **Organização**: Código bem estruturado com responsabilidades claras
+3. **Manutenção**: Fácil de manter e estender
+4. **Profissionalismo**: Arquitetura limpa e bem definida
+5. **Escalabilidade**: Pode evoluir para uma arquitetura de microserviços no futuro, se necessário
+
+### Implementação
+
+O servidor unificado é implementado no arquivo `main.py` na raiz do projeto, que:
+
+1. Importa os roteadores de ambos os sistemas
+2. Configura middlewares compartilhados
+3. Registra eventos de inicialização e finalização
+4. Inclui os roteadores com os prefixos corretos
+
+```python
+# Exemplo simplificado de main.py
+from fastapi import FastAPI
+from src.webhook.routes import router as webhook_router
+from odoo_api.modules.business_rules.routes import router as business_rules_router
+
+app = FastAPI(title="Sistema Integrado Odoo-AI")
+
+# Incluir roteadores
+app.include_router(webhook_router, prefix="/webhook")
+app.include_router(business_rules_router, prefix="/api/v1")
+```
+
 ## Fluxos de Trabalho
 
 ### 1. Atendimento ao Cliente (Chatwoot → Sistema)
@@ -307,6 +376,7 @@ O módulo também suporta integrações com múltiplas plataformas externas:
 1. **Entrada da Mensagem e Identificação do Account_ID**
    - Cliente envia mensagem pelo WhatsApp ou outro canal
    - Chatwoot recebe a mensagem e a encaminha via webhook para o sistema
+   - O servidor unificado recebe a requisição e a encaminha para o roteador do webhook
    - O `webhook_handler.py` processa a requisição e extrai o account_id
    - O account_id é usado para determinar qual configuração usar
 
@@ -356,7 +426,7 @@ O sistema implementa várias otimizações para melhorar o desempenho e a efici�
 
 ### 2. Geração de Descrição de Produto (Odoo → Sistema)
 
-1. **Módulo Odoo envia requisição para a API REST**
+1. **Módulo Odoo envia requisição para o Servidor Unificado**
    ```json
    {
      "metadata": {
@@ -370,7 +440,9 @@ O sistema implementa várias otimizações para melhorar o desempenho e a efici�
    }
    ```
 
-2. **Processamento pela API REST**
+2. **Processamento pelo Servidor Unificado**
+   - O servidor unificado recebe a requisição na rota `/api/v1/products/123/description`
+   - A requisição é encaminhada para o roteador da API Odoo
    - A API REST extrai o account_id e a ação
    - A requisição é encaminhada para o `HubCrew`
 
@@ -393,7 +465,7 @@ O sistema implementa várias otimizações para melhorar o desempenho e a efici�
 
 ### 3. Sincronização de Produto com Qdrant (Odoo → Sistema)
 
-1. **Módulo Odoo envia requisição para a API REST**
+1. **Módulo Odoo envia requisição para o Servidor Unificado**
    ```json
    {
      "metadata": {
@@ -408,7 +480,9 @@ O sistema implementa várias otimizações para melhorar o desempenho e a efici�
    }
    ```
 
-2. **Processamento pela API REST** no caso do modulo do modulo semantic_product_description
+2. **Processamento pelo Servidor Unificado**
+   - O servidor unificado recebe a requisição na rota `/api/v1/products/123/sync`
+   - A requisição é encaminhada para o roteador da API Odoo
    - A API REST extrai o account_id e a ação
    - A requisição é encaminhada para o `HubCrew`
 

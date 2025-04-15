@@ -7,21 +7,15 @@ Rotas para o módulo Business Rules.
 import logging
 import time
 from typing import Dict, Any, Optional
-from fastapi import APIRouter, Depends, HTTPException, Query, Path, Request, File, UploadFile
+from fastapi import APIRouter, HTTPException, Query, Path, Request, File, UploadFile
 import base64
 
-from odoo_api.config.settings import settings
 from odoo_api.core.exceptions import OdooAPIError, NotFoundError, ValidationError
 from odoo_api.modules.business_rules.schemas import (
     BusinessRuleRequest,
     TemporaryRuleRequest,
-    BusinessRuleResponse,
-    BusinessRuleListResponse,
-    BusinessRuleSyncResponse,
-    DocumentUploadRequest,
-    DocumentResponse,
-    DocumentListResponse,
     APIResponse,
+    DocumentUploadRequest,
 )
 from odoo_api.modules.business_rules.services import get_business_rules_service
 
@@ -64,28 +58,260 @@ def build_response(
         meta=meta,
     )
 
-# Rota para criar regra de negócio
-@router.post(
-    "",
+# IMPORTANTE: Definir rotas específicas ANTES das rotas com parâmetros de caminho
+
+# Rota para busca semântica de regras
+@router.get(
+    "/semantic-search",
     response_model=APIResponse,
-    summary="Cria uma nova regra de negócio",
-    description="Cria uma nova regra de negócio permanente.",
+    summary="Busca semântica de regras",
+    description="Busca regras de negócio semanticamente similares a uma consulta.",
 )
-async def create_business_rule(
+async def search_business_rules(
     request: Request,
-    body: BusinessRuleRequest,
+    query: str = Query(..., description="Consulta para busca semântica"),
+    limit: int = Query(5, description="Número máximo de resultados"),
+    score_threshold: float = Query(0.7, description="Limiar de similaridade (0.0 a 1.0)"),
     account_id: str = Query(..., description="ID da conta"),
 ):
     """
-    Cria uma nova regra de negócio.
+    Busca semântica de regras de negócio.
     """
     try:
         service = get_business_rules_service()
 
-        # Criar regra
-        result = await service.create_business_rule(
+        # Buscar regras
+        result = await service.search_business_rules(
             account_id=account_id,
-            rule_data=body,
+            query=query,
+            limit=limit,
+            score_threshold=score_threshold,
+        )
+
+        # Construir resposta
+        return build_response(
+            success=True,
+            data=result,
+            meta={
+                "request_id": getattr(request.state, "request_id", "unknown"),
+                "query": query,
+                "limit": limit,
+                "score_threshold": score_threshold,
+            },
+        )
+
+    except ValidationError as e:
+        logger.warning(f"Validation error: {e}")
+        raise HTTPException(
+            status_code=422,
+            detail={"code": getattr(e, "code", "VALIDATION_ERROR"), "message": str(e), "details": getattr(e, "details", None)},
+        )
+
+    except OdooAPIError as e:
+        logger.error(f"Odoo API error: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail={"code": getattr(e, "code", "ODOO_API_ERROR"), "message": str(e), "details": getattr(e, "details", None)},
+        )
+
+    except Exception as e:
+        logger.error(f"Unexpected error: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail={"code": "INTERNAL_SERVER_ERROR", "message": str(e)},
+        )
+
+# Rota para sincronizar regras com o sistema de IA
+@router.post(
+    "/sync",
+    response_model=APIResponse,
+    summary="Sincroniza regras com o sistema de IA",
+    description="Sincroniza todas as regras ativas com o sistema de IA.",
+)
+async def sync_business_rules(
+    request: Request,
+    account_id: str = Query(..., description="ID da conta"),
+):
+    """
+    Sincroniza regras com o sistema de IA.
+    """
+    try:
+        service = get_business_rules_service()
+
+        # Sincronizar regras
+        result = await service.sync_business_rules(
+            account_id=account_id,
+        )
+
+        # Construir resposta
+        return build_response(
+            success=True,
+            data=result,
+            meta={"request_id": getattr(request.state, "request_id", "unknown")},
+        )
+
+    except ValidationError as e:
+        logger.warning(f"Validation error: {e}")
+        raise HTTPException(
+            status_code=422,
+            detail={"code": getattr(e, "code", "VALIDATION_ERROR"), "message": str(e), "details": getattr(e, "details", None)},
+        )
+
+    except OdooAPIError as e:
+        logger.error(f"Odoo API error: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail={"code": getattr(e, "code", "ODOO_API_ERROR"), "message": str(e), "details": getattr(e, "details", None)},
+        )
+
+    except Exception as e:
+        logger.error(f"Unexpected error: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail={"code": "INTERNAL_SERVER_ERROR", "message": str(e)},
+        )
+
+# Rota para listar regras ativas
+@router.get(
+    "/active",
+    response_model=APIResponse,
+    summary="Lista regras de negócio ativas",
+    description="Lista regras de negócio ativas no momento.",
+)
+async def list_active_rules(
+    request: Request,
+    account_id: str = Query(..., description="ID da conta"),
+    rule_type: Optional[str] = Query(None, description="Filtrar por tipo de regra"),
+):
+    """
+    Lista regras de negócio ativas.
+    """
+    try:
+        service = get_business_rules_service()
+
+        # Listar regras ativas
+        result = await service.list_active_rules(
+            account_id=account_id,
+            rule_type=rule_type,
+        )
+
+        # Construir resposta
+        return build_response(
+            success=True,
+            data=result,
+            meta={"request_id": getattr(request.state, "request_id", "unknown")},
+        )
+
+    except ValidationError as e:
+        logger.warning(f"Validation error: {e}")
+        raise HTTPException(
+            status_code=422,
+            detail={"code": getattr(e, "code", "VALIDATION_ERROR"), "message": str(e), "details": getattr(e, "details", None)},
+        )
+
+    except OdooAPIError as e:
+        logger.error(f"Odoo API error: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail={"code": getattr(e, "code", "ODOO_API_ERROR"), "message": str(e), "details": getattr(e, "details", None)},
+        )
+
+    except Exception as e:
+        logger.error(f"Unexpected error: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail={"code": "INTERNAL_SERVER_ERROR", "message": str(e)},
+        )
+
+# Rota para upload de documento
+@router.post(
+    "/documents",
+    response_model=APIResponse,
+    summary="Faz upload de um documento",
+    description="Faz upload de um documento para extração de regras de negócio.",
+)
+async def upload_document(
+    request: Request,
+    name: str = Query(..., description="Nome do documento"),
+    description: str = Query(..., description="Descrição do documento"),
+    document_type: str = Query(..., description="Tipo do documento (pdf, docx)"),
+    file: UploadFile = File(..., description="Arquivo do documento"),
+    account_id: str = Query(..., description="ID da conta"),
+):
+    """
+    Faz upload de um documento.
+    """
+    try:
+        service = get_business_rules_service()
+
+        # Ler conteúdo do arquivo
+        content = await file.read()
+
+        # Codificar em base64
+        content_base64 = base64.b64encode(content).decode('utf-8')
+
+        # Criar requisição
+        document_request = DocumentUploadRequest(
+            name=name,
+            description=description,
+            document_type=document_type,
+            content_base64=content_base64,
+        )
+
+        # Fazer upload do documento
+        result = await service.upload_document(
+            account_id=account_id,
+            document_data=document_request,
+        )
+
+        # Construir resposta
+        return build_response(
+            success=True,
+            data=result,
+            meta={"request_id": getattr(request.state, "request_id", "unknown")},
+        )
+
+    except ValidationError as e:
+        logger.warning(f"Validation error: {e}")
+        raise HTTPException(
+            status_code=422,
+            detail={"code": getattr(e, "code", "VALIDATION_ERROR"), "message": str(e), "details": getattr(e, "details", None)},
+        )
+
+    except OdooAPIError as e:
+        logger.error(f"Odoo API error: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail={"code": getattr(e, "code", "ODOO_API_ERROR"), "message": str(e), "details": getattr(e, "details", None)},
+        )
+
+    except Exception as e:
+        logger.error(f"Unexpected error: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail={"code": "INTERNAL_SERVER_ERROR", "message": str(e)},
+        )
+
+# Rota para listar documentos
+@router.get(
+    "/documents",
+    response_model=APIResponse,
+    summary="Lista documentos",
+    description="Lista documentos de regras de negócio.",
+)
+async def list_documents(
+    request: Request,
+    account_id: str = Query(..., description="ID da conta"),
+):
+    """
+    Lista documentos.
+    """
+    try:
+        service = get_business_rules_service()
+
+        # Listar documentos
+        result = await service.list_documents(
+            account_id=account_id,
         )
 
         # Construir resposta
@@ -167,6 +393,118 @@ async def create_temporary_rule(
             status_code=500,
             detail={"code": "INTERNAL_SERVER_ERROR", "message": str(e)},
         )
+
+# Rota para listar regras de negócio
+@router.get(
+    "",
+    response_model=APIResponse,
+    summary="Lista regras de negócio",
+    description="Lista regras de negócio com paginação e filtros.",
+)
+async def list_business_rules(
+    request: Request,
+    account_id: str = Query(..., description="ID da conta"),
+    page: int = Query(1, description="Número da página"),
+    page_size: int = Query(20, description="Tamanho da página"),
+    active_only: bool = Query(False, description="Filtrar apenas regras ativas"),
+    rule_type: Optional[str] = Query(None, description="Filtrar por tipo de regra"),
+):
+    """
+    Lista regras de negócio.
+    """
+    try:
+        service = get_business_rules_service()
+
+        # Listar regras
+        result = await service.list_business_rules(
+            account_id=account_id,
+            page=page,
+            page_size=page_size,
+            active_only=active_only,
+            rule_type=rule_type,
+        )
+
+        # Construir resposta
+        return build_response(
+            success=True,
+            data=result,
+            meta={"request_id": getattr(request.state, "request_id", "unknown")},
+        )
+
+    except ValidationError as e:
+        logger.warning(f"Validation error: {e}")
+        raise HTTPException(
+            status_code=422,
+            detail={"code": getattr(e, "code", "VALIDATION_ERROR"), "message": str(e), "details": getattr(e, "details", None)},
+        )
+
+    except OdooAPIError as e:
+        logger.error(f"Odoo API error: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail={"code": getattr(e, "code", "ODOO_API_ERROR"), "message": str(e), "details": getattr(e, "details", None)},
+        )
+
+    except Exception as e:
+        logger.error(f"Unexpected error: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail={"code": "INTERNAL_SERVER_ERROR", "message": str(e)},
+        )
+
+# Rota para criar regra de negócio
+@router.post(
+    "",
+    response_model=APIResponse,
+    summary="Cria uma nova regra de negócio",
+    description="Cria uma nova regra de negócio permanente.",
+)
+async def create_business_rule(
+    request: Request,
+    body: BusinessRuleRequest,
+    account_id: str = Query(..., description="ID da conta"),
+):
+    """
+    Cria uma nova regra de negócio.
+    """
+    try:
+        service = get_business_rules_service()
+
+        # Criar regra
+        result = await service.create_business_rule(
+            account_id=account_id,
+            rule_data=body,
+        )
+
+        # Construir resposta
+        return build_response(
+            success=True,
+            data=result,
+            meta={"request_id": getattr(request.state, "request_id", "unknown")},
+        )
+
+    except ValidationError as e:
+        logger.warning(f"Validation error: {e}")
+        raise HTTPException(
+            status_code=422,
+            detail={"code": getattr(e, "code", "VALIDATION_ERROR"), "message": str(e), "details": getattr(e, "details", None)},
+        )
+
+    except OdooAPIError as e:
+        logger.error(f"Odoo API error: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail={"code": getattr(e, "code", "ODOO_API_ERROR"), "message": str(e), "details": getattr(e, "details", None)},
+        )
+
+    except Exception as e:
+        logger.error(f"Unexpected error: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail={"code": "INTERNAL_SERVER_ERROR", "message": str(e)},
+        )
+
+# IMPORTANTE: Definir rotas com parâmetros de caminho DEPOIS das rotas específicas
 
 # Rota para atualizar regra de negócio
 @router.put(
@@ -317,346 +655,6 @@ async def get_business_rule(
         raise HTTPException(
             status_code=404,
             detail={"code": getattr(e, "code", "NOT_FOUND"), "message": str(e), "details": getattr(e, "details", None)},
-        )
-
-    except OdooAPIError as e:
-        logger.error(f"Odoo API error: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail={"code": getattr(e, "code", "ODOO_API_ERROR"), "message": str(e), "details": getattr(e, "details", None)},
-        )
-
-    except Exception as e:
-        logger.error(f"Unexpected error: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail={"code": "INTERNAL_SERVER_ERROR", "message": str(e)},
-        )
-
-# Rota para listar regras de negócio
-@router.get(
-    "",
-    response_model=APIResponse,
-    summary="Lista regras de negócio",
-    description="Lista regras de negócio com paginação e filtros.",
-)
-async def list_business_rules(
-    request: Request,
-    account_id: str = Query(..., description="ID da conta"),
-    page: int = Query(1, description="Número da página"),
-    page_size: int = Query(20, description="Tamanho da página"),
-    active_only: bool = Query(False, description="Filtrar apenas regras ativas"),
-    rule_type: Optional[str] = Query(None, description="Filtrar por tipo de regra"),
-):
-    """
-    Lista regras de negócio.
-    """
-    try:
-        service = get_business_rules_service()
-
-        # Listar regras
-        result = await service.list_business_rules(
-            account_id=account_id,
-            page=page,
-            page_size=page_size,
-            active_only=active_only,
-            rule_type=rule_type,
-        )
-
-        # Construir resposta
-        return build_response(
-            success=True,
-            data=result,
-            meta={"request_id": getattr(request.state, "request_id", "unknown")},
-        )
-
-    except ValidationError as e:
-        logger.warning(f"Validation error: {e}")
-        raise HTTPException(
-            status_code=422,
-            detail={"code": getattr(e, "code", "VALIDATION_ERROR"), "message": str(e), "details": getattr(e, "details", None)},
-        )
-
-    except OdooAPIError as e:
-        logger.error(f"Odoo API error: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail={"code": getattr(e, "code", "ODOO_API_ERROR"), "message": str(e), "details": getattr(e, "details", None)},
-        )
-
-    except Exception as e:
-        logger.error(f"Unexpected error: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail={"code": "INTERNAL_SERVER_ERROR", "message": str(e)},
-        )
-
-# Rota para listar regras ativas
-@router.get(
-    "/active",
-    response_model=APIResponse,
-    summary="Lista regras de negócio ativas",
-    description="Lista regras de negócio ativas no momento.",
-)
-async def list_active_rules(
-    request: Request,
-    account_id: str = Query(..., description="ID da conta"),
-    rule_type: Optional[str] = Query(None, description="Filtrar por tipo de regra"),
-):
-    """
-    Lista regras de negócio ativas.
-    """
-    try:
-        service = get_business_rules_service()
-
-        # Listar regras ativas
-        result = await service.list_active_rules(
-            account_id=account_id,
-            rule_type=rule_type,
-        )
-
-        # Construir resposta
-        return build_response(
-            success=True,
-            data=result,
-            meta={"request_id": getattr(request.state, "request_id", "unknown")},
-        )
-
-    except ValidationError as e:
-        logger.warning(f"Validation error: {e}")
-        raise HTTPException(
-            status_code=422,
-            detail={"code": getattr(e, "code", "VALIDATION_ERROR"), "message": str(e), "details": getattr(e, "details", None)},
-        )
-
-    except OdooAPIError as e:
-        logger.error(f"Odoo API error: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail={"code": getattr(e, "code", "ODOO_API_ERROR"), "message": str(e), "details": getattr(e, "details", None)},
-        )
-
-    except Exception as e:
-        logger.error(f"Unexpected error: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail={"code": "INTERNAL_SERVER_ERROR", "message": str(e)},
-        )
-
-# Rota para sincronizar regras com o sistema de IA
-@router.post(
-    "/sync",
-    response_model=APIResponse,
-    summary="Sincroniza regras com o sistema de IA",
-    description="Sincroniza todas as regras ativas com o sistema de IA.",
-)
-async def sync_business_rules(
-    request: Request,
-    account_id: str = Query(..., description="ID da conta"),
-):
-    """
-    Sincroniza regras com o sistema de IA.
-    """
-    try:
-        service = get_business_rules_service()
-
-        # Sincronizar regras
-        result = await service.sync_business_rules(
-            account_id=account_id,
-        )
-
-        # Construir resposta
-        return build_response(
-            success=True,
-            data=result,
-            meta={"request_id": getattr(request.state, "request_id", "unknown")},
-        )
-
-    except ValidationError as e:
-        logger.warning(f"Validation error: {e}")
-        raise HTTPException(
-            status_code=422,
-            detail={"code": getattr(e, "code", "VALIDATION_ERROR"), "message": str(e), "details": getattr(e, "details", None)},
-        )
-
-    except OdooAPIError as e:
-        logger.error(f"Odoo API error: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail={"code": getattr(e, "code", "ODOO_API_ERROR"), "message": str(e), "details": getattr(e, "details", None)},
-        )
-
-    except Exception as e:
-        logger.error(f"Unexpected error: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail={"code": "INTERNAL_SERVER_ERROR", "message": str(e)},
-        )
-
-# Rota para upload de documento
-@router.post(
-    "/documents",
-    response_model=APIResponse,
-    summary="Faz upload de um documento",
-    description="Faz upload de um documento para extração de regras de negócio.",
-)
-async def upload_document(
-    request: Request,
-    name: str = Query(..., description="Nome do documento"),
-    description: str = Query(..., description="Descrição do documento"),
-    document_type: str = Query(..., description="Tipo do documento (pdf, docx)"),
-    file: UploadFile = File(..., description="Arquivo do documento"),
-    account_id: str = Query(..., description="ID da conta"),
-):
-    """
-    Faz upload de um documento.
-    """
-    try:
-        service = get_business_rules_service()
-
-        # Ler conteúdo do arquivo
-        content = await file.read()
-
-        # Codificar em base64
-        content_base64 = base64.b64encode(content).decode('utf-8')
-
-        # Criar requisição
-        document_request = DocumentUploadRequest(
-            name=name,
-            description=description,
-            document_type=document_type,
-            content_base64=content_base64,
-        )
-
-        # Fazer upload do documento
-        result = await service.upload_document(
-            account_id=account_id,
-            document_data=document_request,
-        )
-
-        # Construir resposta
-        return build_response(
-            success=True,
-            data=result,
-            meta={"request_id": getattr(request.state, "request_id", "unknown")},
-        )
-
-    except ValidationError as e:
-        logger.warning(f"Validation error: {e}")
-        raise HTTPException(
-            status_code=422,
-            detail={"code": getattr(e, "code", "VALIDATION_ERROR"), "message": str(e), "details": getattr(e, "details", None)},
-        )
-
-    except OdooAPIError as e:
-        logger.error(f"Odoo API error: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail={"code": getattr(e, "code", "ODOO_API_ERROR"), "message": str(e), "details": getattr(e, "details", None)},
-        )
-
-    except Exception as e:
-        logger.error(f"Unexpected error: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail={"code": "INTERNAL_SERVER_ERROR", "message": str(e)},
-        )
-
-# Rota para listar documentos
-@router.get(
-    "/documents",
-    response_model=APIResponse,
-    summary="Lista documentos",
-    description="Lista documentos de regras de negócio.",
-)
-async def list_documents(
-    request: Request,
-    account_id: str = Query(..., description="ID da conta"),
-):
-    """
-    Lista documentos.
-    """
-    try:
-        service = get_business_rules_service()
-
-        # Listar documentos
-        result = await service.list_documents(
-            account_id=account_id,
-        )
-
-        # Construir resposta
-        return build_response(
-            success=True,
-            data=result,
-            meta={"request_id": getattr(request.state, "request_id", "unknown")},
-        )
-
-    except ValidationError as e:
-        logger.warning(f"Validation error: {e}")
-        raise HTTPException(
-            status_code=422,
-            detail={"code": getattr(e, "code", "VALIDATION_ERROR"), "message": str(e), "details": getattr(e, "details", None)},
-        )
-
-    except OdooAPIError as e:
-        logger.error(f"Odoo API error: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail={"code": getattr(e, "code", "ODOO_API_ERROR"), "message": str(e), "details": getattr(e, "details", None)},
-        )
-
-    except Exception as e:
-        logger.error(f"Unexpected error: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail={"code": "INTERNAL_SERVER_ERROR", "message": str(e)},
-        )
-
-# Rota para busca semântica de regras
-@router.get(
-    "/search",
-    response_model=APIResponse,
-    summary="Busca semântica de regras",
-    description="Busca regras de negócio semanticamente similares a uma consulta.",
-)
-async def search_business_rules(
-    request: Request,
-    query: str = Query(..., description="Consulta para busca semântica"),
-    limit: int = Query(5, description="Número máximo de resultados"),
-    score_threshold: float = Query(0.7, description="Limiar de similaridade (0.0 a 1.0)"),
-    account_id: str = Query(..., description="ID da conta"),
-):
-    """
-    Busca semântica de regras de negócio.
-    """
-    try:
-        service = get_business_rules_service()
-
-        # Buscar regras
-        result = await service.search_business_rules(
-            account_id=account_id,
-            query=query,
-            limit=limit,
-            score_threshold=score_threshold,
-        )
-
-        # Construir resposta
-        return build_response(
-            success=True,
-            data=result,
-            meta={
-                "request_id": getattr(request.state, "request_id", "unknown"),
-                "query": query,
-                "limit": limit,
-                "score_threshold": score_threshold,
-            },
-        )
-
-    except ValidationError as e:
-        logger.warning(f"Validation error: {e}")
-        raise HTTPException(
-            status_code=422,
-            detail={"code": getattr(e, "code", "VALIDATION_ERROR"), "message": str(e), "details": getattr(e, "details", None)},
         )
 
     except OdooAPIError as e:

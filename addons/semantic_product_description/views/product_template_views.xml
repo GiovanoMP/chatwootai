@@ -103,11 +103,52 @@
                                         type="object"
                                         class="btn btn-success"
                                         icon="fa-cloud-upload"/>
+                                <button name="action_view_customer_support"
+                                        string="Ver Suporte ao Cliente"
+                                        type="object"
+                                        class="btn btn-info"
+                                        icon="fa-life-ring"/>
                             </div>
                         </div>
 
                         <!-- Campo oculto para ID do vetor -->
                         <field name="semantic_vector_id" invisible="1"/>
+                    </page>
+                    <page string="Documentos de Suporte ao Cliente" name="customer_support_docs">
+                        <div class="alert alert-info" role="alert">
+                            <p><strong>Informação:</strong> Nesta aba você pode gerenciar documentos relacionados ao suporte ao cliente para este produto.</p>
+                        </div>
+
+                        <!-- Documentos de Suporte -->
+                        <div class="row">
+                            <div class="col-12">
+                                <h3>Documentos de Suporte</h3>
+                                <field name="customer_support_doc_ids" widget="many2many" nolabel="1">
+                                    <tree>
+                                        <field name="name"/>
+                                        <field name="document_type"/>
+                                        <field name="create_date"/>
+                                        <field name="status"/>
+                                    </tree>
+                                </field>
+                            </div>
+                        </div>
+
+                        <!-- Botões de Ação -->
+                        <div class="row mt-3">
+                            <div class="col-12">
+                                <button name="action_upload_support_document"
+                                        string="Adicionar Documento"
+                                        type="object"
+                                        class="btn btn-primary"
+                                        icon="fa-upload"/>
+                                <button name="action_sync_support_documents"
+                                        string="Sincronizar Documentos"
+                                        type="object"
+                                        class="btn btn-success"
+                                        icon="fa-refresh"/>
+                            </div>
+                        </div>
                     </page>
                 </notebook>
             </field>

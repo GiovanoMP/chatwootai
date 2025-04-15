@@ -87,6 +87,16 @@ class ProductTemplate(models.Model):
         help='ID do vetor no banco de dados vetorial'
     )
 
+    # Campos para documentos de suporte ao cliente
+    customer_support_doc_ids = fields.Many2many(
+        'ir.attachment',
+        'product_template_support_doc_rel',
+        'product_id',
+        'attachment_id',
+        string='Documentos de Suporte',
+        help='Documentos relacionados ao suporte ao cliente para este produto'
+    )
+
     @api.model
     def generate_semantic_description(self):
         """Gera automaticamente uma descrição inteligente baseada nos metadados do produto usando IA."""
@@ -480,3 +490,123 @@ class ProductTemplate(models.Model):
                 'type': 'success'
             }
         }
+
+    def action_view_customer_support(self):
+        """Abre a visualização de suporte ao cliente."""
+        self.ensure_one()
+        return {
+            'name': 'Suporte ao Cliente',
+            'type': 'ir.actions.act_window',
+            'res_model': 'ir.attachment',
+            'view_mode': 'tree,form',
+            'domain': [('id', 'in', self.customer_support_doc_ids.ids)],
+            'context': {'default_res_model': 'product.template', 'default_res_id': self.id}
+        }
+
+    def action_upload_support_document(self):
+        """Abre o assistente para upload de documentos de suporte."""
+        self.ensure_one()
+        return {
+            'name': 'Adicionar Documento de Suporte',
+            'type': 'ir.actions.act_window',
+            'res_model': 'ir.attachment',
+            'view_mode': 'form',
+            'target': 'new',
+            'context': {
+                'default_res_model': 'product.template',
+                'default_res_id': self.id,
+                'default_name': f'Suporte - {self.name}'
+            }
+        }
+
+    def action_sync_support_documents(self):
+        """Sincroniza os documentos de suporte com o sistema de IA."""
+        self.ensure_one()
+        try:
+            # Chamar o MCP-Odoo para sincronizar documentos
+            result = self._call_mcp_sync_support_docs(self.id)
+
+            if result and result.get('success'):
+                return {
+                    'type': 'ir.actions.client',
+                    'tag': 'display_notification',
+                    'params': {
+                        'title': 'Sincronização Concluída',
+                        'message': f'Documentos sincronizados com sucesso.',
+                        'sticky': False,
+                        'type': 'success'
+                    }
+                }
+            else:
+                error_msg = result.get('error') if result else "Erro desconhecido"
+                return {
+                    'type': 'ir.actions.client',
+                    'tag': 'display_notification',
+                    'params': {
+                        'title': 'Falha na Sincronização',
+                        'message': error_msg,
+                        'sticky': False,
+                        'type': 'danger'
+                    }
+                }
+        except Exception as e:
+            return {
+                'type': 'ir.actions.client',
+                'tag': 'display_notification',
+                'params': {
+                    'title': 'Erro',
+                    'message': str(e),
+                    'sticky': False,
+                    'type': 'danger'
+                }
+            }
+
+    def _call_mcp_sync_support_docs(self, product_id):
+        """Chama o MCP-Odoo para sincronizar documentos de suporte."""
+        try:
+            import requests
+
+            # Obter configurações do MCP-Odoo
+            mcp_url, mcp_token, account_id = self._get_mcp_credentials()
+
+            # Preparar a requisição
+            headers = {
+                'Content-Type': 'application/json',
+                'Authorization': f'Bearer {mcp_token}' if mcp_token else ''
+            }
+
+            # Obter informações dos documentos
+            docs_data = []
+            for doc in self.customer_support_doc_ids:
+                docs_data.append({
+                    'id': doc.id,
+                    'name': doc.name,
+                    'mimetype': doc.mimetype,
+                    'url': f'/web/content/{doc.id}?download=true',
+                    'create_date': fields.Datetime.to_string(doc.create_date) if doc.create_date else '',
+                })
+
+            payload = {
+                'account_id': account_id,
+                'product_id': product_id,
+                'documents': docs_data
+            }
+
+            # Fazer a requisição ao MCP-Odoo
+            _logger.info(f"Chamando MCP-Odoo para sincronizar documentos de suporte para o produto {product_id}")
+            response = requests.post(
+                f"{mcp_url}/tools/sync_support_documents",
+                headers=headers,
+                json=payload,
+                timeout=30  # Timeout de 30 segundos
+            )
+
+            # Verificar resposta
+            if response.status_code == 200:
+                return response.json()
+            else:
+                _logger.error(f"Erro na chamada ao MCP-Odoo: {response.status_code} - {response.text}")
+                return None
+        except Exception as e:
+            _logger.error(f"Exceção ao chamar MCP-Odoo: {str(e)}")
+            return None

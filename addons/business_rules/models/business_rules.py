@@ -59,11 +59,17 @@ class BusinessRules(models.Model):
 
     # Modelo de Negócio
     business_model = fields.Selection([
-        ('restaurant', 'Restaurante/Pizzaria'),
+        ('retail', 'Varejo/Loja Física'),
         ('ecommerce', 'E-commerce/Loja Virtual'),
-        ('clinic', 'Clínica/Consultório'),
-        ('retail', 'Loja Física'),
-        ('service', 'Prestador de Serviços'),
+        ('healthcare', 'Saúde/Clínica/Consultório'),
+        ('education', 'Educação'),
+        ('manufacturing', 'Indústria'),
+        ('services', 'Prestador de Serviços'),
+        ('restaurant', 'Restaurante/Pizzaria'),
+        ('financial', 'Serviços Financeiros'),
+        ('technology', 'Tecnologia'),
+        ('hospitality', 'Hotelaria'),
+        ('real_estate', 'Imobiliário'),
         ('other', 'Outro')
     ], string='Modelo de Negócio', required=True, tracking=True)
 

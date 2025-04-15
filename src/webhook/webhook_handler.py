@@ -820,17 +820,33 @@ class ChatwootWebhookHandler:
 
             # Verificar se o diretório do account_id existe
             account_dir = os.path.join(domain_dir, account_id)
-            if not os.path.exists(account_dir):
-                os.makedirs(account_dir, exist_ok=True)
-
-            # Verificar se o arquivo de configuração existe
             config_path = os.path.join(account_dir, "config.yaml")
             config = {}
 
+            # Verificar se o arquivo de configuração existe
             if os.path.exists(config_path):
                 # Carregar configuração existente
                 with open(config_path, 'r') as f:
                     config = yaml.safe_load(f) or {}
+
+                # Verificar se o token no arquivo corresponde ao token enviado
+                stored_token = None
+                if "integrations" in config and "mcp" in config["integrations"] and "config" in config["integrations"]["mcp"]:
+                    stored_token = config["integrations"]["mcp"]["config"].get("credential_ref")
+
+                if stored_token and stored_token != token:
+                    logger.warning(f"Token no arquivo ({stored_token}) não corresponde ao token enviado ({token})")
+                    self._log_credentials_access(account_id, "sync", False, "Token no arquivo não corresponde ao token enviado")
+                    return {"success": False, "error": "Token de autenticação não corresponde ao token armazenado"}
+            else:
+                # Se o arquivo não existe, rejeitar a criação
+                logger.warning(f"Tentativa de criar novo arquivo de configuração para {account_id} rejeitada")
+                self._log_credentials_access(account_id, "sync", False, "Criação de novo arquivo rejeitada")
+                return {"success": False, "error": "Criação de novo arquivo de configuração não permitida. Entre em contato com o administrador do sistema."}
+
+            # Garantir que o diretório existe para atualização
+            if not os.path.exists(account_dir):
+                os.makedirs(account_dir, exist_ok=True)
 
             # Atualizar configuração com as credenciais
             config.update({

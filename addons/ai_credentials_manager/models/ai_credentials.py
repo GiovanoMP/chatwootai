@@ -75,10 +75,16 @@ class AISystemCredentials(models.Model):
                              help="Nome do cliente para referência")
     business_area = fields.Selection([
         ('retail', 'Varejo'),
+        ('ecommerce', 'E-commerce'),
         ('healthcare', 'Saúde'),
         ('education', 'Educação'),
-        ('manufacturing', 'Manufatura'),
+        ('manufacturing', 'Indústria'),
         ('services', 'Serviços'),
+        ('restaurant', 'Restaurante'),
+        ('financial', 'Serviços Financeiros'),
+        ('technology', 'Tecnologia'),
+        ('hospitality', 'Hotelaria'),
+        ('real_estate', 'Imobiliário'),
         ('other', 'Outro')
     ], string='Área de Negócio', default='retail', tracking=True)
     business_area_other = fields.Char('Outra Área de Negócio', tracking=True)

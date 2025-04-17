@@ -16,7 +16,7 @@ import traceback
 
 from src.core.hub import HubCrew
 from src.core.data_service_hub import DataServiceHub
-from src.api.chatwoot.client import ChatwootClient
+from odoo_api.integrations.chatwoot import ChatwootClient
 from src.core.domain import DomainManager
 
 logger = logging.getLogger(__name__)

@@ -360,47 +360,6 @@ class ChatwootClient:
         endpoint = f"accounts/{account_id}/canned_responses"
         response = self._make_request("GET", endpoint)
         return response.get('payload', [])
-    
-    def check_connection(self) -> Dict[str, Any]:
-        """
-        Check if the connection to the Chatwoot API is working.
-        
-        Returns:
-            Dictionary with status information:
-            - success: Boolean indicating if the connection is working
-            - message: Status message
-            - error: Error message if any
-        """
-        try:
-            # Tentamos fazer uma requisição simples para verificar a conexão
-            # Usamos o endpoint de verificação do token, que é leve e rápido
-            response = requests.get(
-                f"{self.base_url}/api/v1/profile",
-                headers=self.headers,
-                timeout=5  # Timeout curto para falhar rápido
-            )
-            
-            if response.status_code == 200:
-                return {
-                    "success": True,
-                    "message": "Conexão com a API do Chatwoot estabelecida com sucesso",
-                    "status_code": response.status_code
-                }
-            else:
-                return {
-                    "success": False,
-                    "message": "Falha na conexão com a API do Chatwoot",
-                    "status_code": response.status_code,
-                    "error": f"Status code: {response.status_code}"
-                }
-                
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Erro ao verificar conexão com a API do Chatwoot: {e}")
-            return {
-                "success": False,
-                "message": "Erro ao conectar com a API do Chatwoot",
-                "error": str(e)
-            }
 
 
 class ChatwootWebhookHandler:

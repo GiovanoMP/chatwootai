@@ -62,7 +62,11 @@ class BusinessRulesSyncController(http.Controller):
 
                 raise ValueError("Token de API não encontrado. Configure o módulo ai_credentials_manager primeiro.")
 
-            sync_endpoint = f"{api_url}/api/v1/business-rules/sync"
+            # Construir o endpoint correto
+            # A URL base já deve incluir o protocolo e o domínio (ex: http://localhost:8001)
+            # O router já está registrado com o prefixo /api/v1 no main.py
+            # Adicionar /webhook para compatibilidade com a configuração do servidor
+            sync_endpoint = f"{api_url}/webhook/api/v1/business-rules/sync"
 
             try:
                 # Preparar os dados para a API
@@ -293,6 +297,10 @@ class BusinessRulesSyncController(http.Controller):
                     ai_system_url = None
 
                 if ai_system_url:
+                    # Remover '/webhook' do final da URL se existir
+                    if ai_system_url.endswith('/webhook'):
+                        ai_system_url = ai_system_url[:-8]  # Remove '/webhook'
+
                     _logger.info(f"URL encontrada para account_id {account_id}: {ai_system_url}")
                     return ai_system_url
                 else:

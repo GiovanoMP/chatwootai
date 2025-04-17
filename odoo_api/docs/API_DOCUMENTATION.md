@@ -1,166 +1,92 @@
-# Odoo API
-
-API REST para integração com Odoo, permitindo a comunicação entre os módulos Odoo e o sistema de IA.
+# API Odoo - Documentação
 
 ## Visão Geral
 
-Esta API fornece endpoints para:
+A API Odoo é um serviço RESTful que fornece uma interface para integração entre o Odoo ERP e o sistema de IA. Esta API permite que módulos Odoo se comuniquem com o sistema de IA para realizar operações como sincronização de credenciais, gerenciamento de regras de negócio, busca semântica de produtos e muito mais.
 
-- Geração de descrições semânticas para produtos
-- Sincronização de produtos com banco de dados vetorial
-- Busca semântica de produtos
-- Gerenciamento em massa de produtos
-- Gerenciamento de regras de negócio
-- Gerenciamento seguro de credenciais
+## Arquitetura
 
-## Estrutura do Projeto
+A API Odoo é construída usando o framework FastAPI e segue uma arquitetura modular:
 
 ```
-odoo_api/
-├── __init__.py
-├── main.py                  # Ponto de entrada da aplicação
-├── config/                  # Configurações
+odoo/
+├── api/                   # Implementação da API REST
 │   ├── __init__.py
-│   └── settings.py          # Configurações da aplicação
-├── core/                    # Componentes centrais
-│   ├── __init__.py
-│   ├── auth.py              # Autenticação e autorização
-│   ├── exceptions.py        # Exceções personalizadas
-│   ├── odoo_connector.py    # Conector base para Odoo
-│   └── middleware.py        # Middlewares da aplicação
-├── modules/                 # Módulos da API
-│   ├── __init__.py
-│   ├── semantic_product/    # API para descrições semânticas
+│   ├── main.py            # Ponto de entrada da API
+│   ├── core/              # Componentes centrais
 │   │   ├── __init__.py
-│   │   ├── routes.py        # Endpoints da API
-│   │   ├── schemas.py       # Modelos de dados
-│   │   └── services.py      # Lógica de negócio
-│   ├── product_management/  # API para gerenciamento de produtos
+│   │   ├── auth.py        # Autenticação e autorização
+│   │   ├── exceptions.py  # Exceções personalizadas
+│   │   └── middleware.py  # Middlewares da aplicação
+│   ├── modules/           # Módulos específicos da API
 │   │   ├── __init__.py
-│   │   ├── routes.py
-│   │   ├── schemas.py
-│   │   └── services.py
-│   ├── business_rules/      # API para regras de negócio
-│   │   ├── __init__.py
-│   │   ├── routes.py
-│   │   ├── schemas.py
-│   │   └── services.py
-│   └── credentials/         # API para gerenciamento de credenciais
+│   │   ├── business_rules/# Módulo de regras de negócio
+│   │   ├── credentials/   # Módulo de gerenciamento de credenciais
+│   │   └── products/      # Módulo de gerenciamento de produtos
+│   └── services/          # Serviços compartilhados
 │       ├── __init__.py
-│       └── routes.py
-├── services/                # Serviços compartilhados
+│       ├── cache.py       # Serviço de cache
+│       └── vector.py      # Serviço de vetorização
+├── connectors/            # Conectores para Odoo e outros sistemas
 │   ├── __init__.py
-│   ├── cache_service.py     # Serviço de cache com Redis
-│   ├── vector_service.py    # Serviço de vetorização e Qdrant
-│   └── notification_service.py  # Serviço de notificações
-├── utils/                   # Utilitários
+│   ├── odoo_connector.py  # Conector para Odoo
+│   └── qdrant_connector.py# Conector para Qdrant
+├── models/                # Modelos de dados
 │   ├── __init__.py
-│   ├── logging.py           # Configuração de logging
-│   ├── validators.py        # Validadores comuns
-│   └── helpers.py           # Funções auxiliares
-├── tests/                   # Testes automatizados
+│   ├── business_rule.py   # Modelo de regra de negócio
+│   └── product.py         # Modelo de produto
+├── utils/                 # Utilitários
 │   ├── __init__.py
-│   ├── conftest.py          # Configurações de teste
-│   ├── unit/                # Testes unitários
-│   └── integration/         # Testes de integração
-└── docs/                    # Documentação
-    ├── PLANO_DE_ACAO.md     # Plano de ação
-    ├── API_REFERENCE.md     # Referência da API
-    └── ARCHITECTURE.md      # Detalhes da arquitetura
+│   ├── logging.py         # Configuração de logging
+│   └── helpers.py         # Funções auxiliares
+└── docs/                  # Documentação
+    ├── inicializacao_rapida_servidor_unificado.md  # Guia de inicialização rápida
+    └── API_REFERENCE.md   # Referência da API
 ```
 
-## Requisitos
+## Tecnologias Utilizadas
 
-- Python 3.8+
-- Redis
-- Qdrant
-- Odoo 14+
+- **FastAPI**: Framework web para construção de APIs
+- **Pydantic**: Validação de dados e serialização
+- **Redis**: Cache para melhorar o desempenho
+- **Qdrant**: Banco de dados vetorial para busca semântica
+- **OpenAI**: Geração de embeddings para busca semântica
+- **XMLRPC**: Comunicação com o Odoo
 
-## Instalação
+## Módulos Disponíveis
 
-1. Clone o repositório:
+### 1. Business Rules
 
-```bash
-git clone https://github.com/seu-usuario/odoo-api.git
-cd odoo-api
-```
+Gerencia regras de negócio que podem ser usadas pelo sistema de IA para tomar decisões.
 
-2. Crie um ambiente virtual:
-
-```bash
-python -m venv venv
-source venv/bin/activate  # Linux/Mac
-# ou
-venv\Scripts\activate  # Windows
-```
-
-3. Instale as dependências:
-
-```bash
-pip install -r requirements.txt
-```
-
-4. Configure as variáveis de ambiente:
-
-```bash
-cp .env.example .env
-# Edite o arquivo .env com suas configurações
-```
-
-## Execução
-
-Para iniciar o servidor de desenvolvimento:
-
-```bash
-uvicorn odoo_api.main:app --reload
-```
-
-A API estará disponível em http://localhost:8000.
-
-A documentação da API estará disponível em http://localhost:8000/docs.
-
-## Endpoints Principais
-
-### Módulo Semantic Product
-
-- `POST /api/v1/products/{product_id}/description`: Gera uma descrição semântica para um produto
-- `POST /api/v1/products/{product_id}/sync`: Sincroniza um produto com o banco de dados vetorial
-- `POST /api/v1/products/search`: Realiza uma busca semântica de produtos
-
-### Módulo Product Management
-
-- `POST /api/v1/products/sync-batch`: Sincroniza múltiplos produtos
-- `POST /api/v1/products/update-prices`: Atualiza preços em massa
-- `GET /api/v1/products/sync-status`: Verifica o status de sincronização
-
-### Módulo Business Rules
-
+**Endpoints principais:**
+- `GET /api/v1/business-rules`: Lista regras de negócio
 - `POST /api/v1/business-rules`: Cria uma nova regra de negócio
-- `POST /api/v1/business-rules/temporary`: Cria uma nova regra temporária
+- `GET /api/v1/business-rules/{rule_id}`: Obtém uma regra específica
+- `PUT /api/v1/business-rules/{rule_id}`: Atualiza uma regra existente
+- `DELETE /api/v1/business-rules/{rule_id}`: Remove uma regra
+- `GET /api/v1/business-rules/semantic-search`: Busca semântica de regras
 - `POST /api/v1/business-rules/sync`: Sincroniza regras com o sistema de IA
-- `GET /api/v1/business-rules/active`: Lista regras ativas
 
-### Módulo Credentials
+### 2. Credentials
 
-- `POST /api/v1/credentials/get`: Recupera uma credencial usando sua referência
+Gerencia credenciais para acesso ao sistema de IA.
 
-## Testes
+**Endpoints principais:**
+- `POST /api/v1/credentials/sync`: Sincroniza credenciais com o sistema de IA
+- `GET /api/v1/credentials/verify`: Verifica se as credenciais são válidas
 
-Para executar os testes:
+### 3. Products
 
-```bash
-pytest
-```
+Gerencia produtos no Odoo.
 
-## Documentação
-
-A documentação completa está disponível na pasta `docs/`:
-
-- [Plano de Ação](docs/PLANO_DE_ACAO.md): Plano detalhado para o desenvolvimento da API
-- [Referência da API](docs/API_REFERENCE.md): Documentação dos endpoints da API
-- [Arquitetura](docs/ARCHITECTURE.md): Detalhes da arquitetura do sistema
-- [Sistema de Referências para Credenciais](docs/credential_reference_system.md): Explicação do sistema de referências para credenciais
-- [Inicialização Rápida do Servidor Unificado](docs/inicializacao_rapida_servidor_unificado.md): Guia passo a passo para inicializar o servidor unificado
+**Endpoints principais:**
+- `GET /api/v1/products`: Lista produtos
+- `POST /api/v1/products`: Cria um novo produto
+- `GET /api/v1/products/{product_id}`: Obtém um produto específico
+- `PUT /api/v1/products/{product_id}`: Atualiza um produto existente
+- `GET /api/v1/products/search`: Busca semântica de produtos
+- `POST /api/v1/products/sync`: Sincroniza produtos com o sistema de IA
 
 ## Como Adicionar um Novo Módulo
 
@@ -168,11 +94,11 @@ Para adicionar um novo módulo à API Odoo, siga os passos abaixo:
 
 ### 1. Criar a Estrutura de Diretórios
 
-Crie um novo diretório dentro de `odoo_api/modules/` com o nome do seu módulo:
+Crie um novo diretório dentro de `odoo/api/modules/` com o nome do seu módulo:
 
 ```bash
-mkdir -p odoo_api/modules/seu_modulo
-touch odoo_api/modules/seu_modulo/__init__.py
+mkdir -p odoo/api/modules/seu_modulo
+touch odoo/api/modules/seu_modulo/__init__.py
 ```
 
 ### 2. Criar os Arquivos Básicos
@@ -230,10 +156,10 @@ Serviços para o módulo seu_modulo.
 import logging
 from typing import Dict, List, Optional, Any
 
-from odoo_api.core.exceptions import ValidationError, NotFoundError, OdooOperationError
-from odoo_api.core.odoo_connector import OdooConnectorFactory
-from odoo_api.services.cache_service import get_cache_service
-from odoo_api.modules.seu_modulo.schemas import SeuModeloResponse, SeuModeloRequest
+from odoo.api.core.exceptions import ValidationError, NotFoundError, OdooOperationError
+from odoo.connectors.odoo_connector import OdooConnectorFactory
+from odoo.api.services.cache import get_cache_service
+from odoo.api.modules.seu_modulo.schemas import SeuModeloResponse, SeuModeloRequest
 
 logger = logging.getLogger(__name__)
 
@@ -247,16 +173,16 @@ class SeuModuloService:
         try:
             # Obter conector Odoo
             odoo = await OdooConnectorFactory.create_connector(account_id)
-
+            
             # Implementar lógica para obter o item
             # ...
-
+            
             return SeuModeloResponse(...)
-
+            
         except Exception as e:
             logger.error(f"Failed to get item: {e}")
             raise ValidationError(f"Failed to get item: {e}")
-
+    
     # Implementar outros métodos conforme necessário
 
 # Singleton para o serviço
@@ -286,9 +212,9 @@ import time
 from typing import Dict, Any, Optional
 from fastapi import APIRouter, HTTPException, Query, Path, Request
 
-from odoo_api.core.exceptions import OdooAPIError, NotFoundError, ValidationError
-from odoo_api.modules.seu_modulo.schemas import SeuModeloRequest, SeuModeloResponse, APIResponse
-from odoo_api.modules.seu_modulo.services import get_seu_modulo_service
+from odoo.api.core.exceptions import OdooAPIError, NotFoundError, ValidationError
+from odoo.api.modules.seu_modulo.schemas import SeuModeloRequest, SeuModeloResponse, APIResponse
+from odoo.api.modules.seu_modulo.services import get_seu_modulo_service
 
 logger = logging.getLogger(__name__)
 
@@ -310,9 +236,9 @@ def build_response(
     """
     if meta is None:
         meta = {}
-
+    
     meta["timestamp"] = time.time()
-
+    
     return APIResponse(
         success=success,
         data=data,
@@ -337,41 +263,41 @@ async def get_item(
     """
     try:
         service = await get_seu_modulo_service()
-
+        
         # Obter item
         result = await service.get_item(
             account_id=account_id,
             item_id=item_id,
         )
-
+        
         # Construir resposta
         return build_response(
             success=True,
             data=result,
             meta={"request_id": getattr(request.state, "request_id", "unknown")},
         )
-
+        
     except NotFoundError as e:
         logger.warning(f"Item not found: {e}")
         raise HTTPException(
             status_code=404,
             detail={"code": getattr(e, "code", "NOT_FOUND"), "message": str(e)},
         )
-
+        
     except ValidationError as e:
         logger.warning(f"Validation error: {e}")
         raise HTTPException(
             status_code=422,
             detail={"code": getattr(e, "code", "VALIDATION_ERROR"), "message": str(e)},
         )
-
+        
     except OdooAPIError as e:
         logger.error(f"Odoo API error: {e}")
         raise HTTPException(
             status_code=500,
             detail={"code": getattr(e, "code", "ODOO_API_ERROR"), "message": str(e)},
         )
-
+        
     except Exception as e:
         logger.error(f"Unexpected error: {e}")
         raise HTTPException(
@@ -384,11 +310,11 @@ async def get_item(
 
 ### 6. Registrar o Módulo no Arquivo Principal (main.py)
 
-Edite o arquivo `odoo_api/main.py` para incluir o seu módulo:
+Edite o arquivo `odoo/api/main.py` para incluir o seu módulo:
 
 ```python
 # Importar e incluir rotas dos módulos
-from odoo_api.modules.seu_modulo.routes import router as seu_modulo_router
+from odoo.api.modules.seu_modulo.routes import router as seu_modulo_router
 
 # Incluir rotas
 app.include_router(seu_modulo_router, prefix="/api/v1")
@@ -396,7 +322,7 @@ app.include_router(seu_modulo_router, prefix="/api/v1")
 
 ### 7. Atualizar o Arquivo __init__.py
 
-Atualize o arquivo `odoo_api/modules/seu_modulo/__init__.py`:
+Atualize o arquivo `odoo/api/modules/seu_modulo/__init__.py`:
 
 ```python
 # -*- coding: utf-8 -*-
@@ -405,7 +331,7 @@ Atualize o arquivo `odoo_api/modules/seu_modulo/__init__.py`:
 Módulo seu_modulo.
 """
 
-from odoo_api.modules.seu_modulo import routes, schemas, services
+from odoo.api.modules.seu_modulo import routes, schemas, services
 ```
 
 ## Comunicação com o Módulo Odoo
@@ -420,13 +346,13 @@ import json
 def call_api(self, endpoint, method="GET", data=None, params=None):
     """
     Chama a API Odoo.
-
+    
     Args:
         endpoint: Endpoint da API (ex: "/api/v1/seu-modulo")
         method: Método HTTP (GET, POST, PUT, DELETE)
         data: Dados para enviar no corpo da requisição
         params: Parâmetros de consulta
-
+        
     Returns:
         Resposta da API
     """
@@ -434,21 +360,21 @@ def call_api(self, endpoint, method="GET", data=None, params=None):
     base_url = self.env['ai.credentials'].get_api_url()
     token = self.env['ai.credentials'].get_api_token()
     account_id = self.env['ai.credentials'].get_account_id()
-
+    
     # Adicionar account_id aos parâmetros
     if params is None:
         params = {}
     params['account_id'] = account_id
-
+    
     # Construir URL
     url = f"{base_url}{endpoint}"
-
+    
     # Configurar headers
     headers = {
         "Content-Type": "application/json",
         "Authorization": f"Bearer {token}",
     }
-
+    
     # Fazer requisição
     try:
         if method == "GET":
@@ -461,16 +387,91 @@ def call_api(self, endpoint, method="GET", data=None, params=None):
             response = requests.delete(url, params=params, headers=headers)
         else:
             raise ValueError(f"Método HTTP não suportado: {method}")
-
+        
         # Verificar status code
         response.raise_for_status()
-
+        
         # Retornar resposta
         return response.json()
-
+        
     except requests.exceptions.RequestException as e:
         # Tratar erro
         raise Exception(f"Erro ao chamar API: {e}")
+```
+
+## Exemplos de Uso
+
+### Exemplo 1: Busca Semântica de Produtos
+
+```python
+# No módulo Odoo
+def search_products(self, query, limit=5, score_threshold=0.7):
+    """
+    Busca produtos semanticamente similares a uma consulta.
+    
+    Args:
+        query: Consulta para busca semântica
+        limit: Número máximo de resultados
+        score_threshold: Limiar de similaridade (0.0 a 1.0)
+        
+    Returns:
+        Lista de produtos
+    """
+    # Chamar API
+    response = self.call_api(
+        endpoint="/api/v1/products/search",
+        method="GET",
+        params={
+            "query": query,
+            "limit": limit,
+            "score_threshold": score_threshold,
+        },
+    )
+    
+    # Verificar sucesso
+    if not response.get("success"):
+        error = response.get("error", {})
+        raise Exception(f"Erro na busca semântica: {error.get('message')}")
+    
+    # Retornar dados
+    return response.get("data", [])
+```
+
+### Exemplo 2: Sincronização de Credenciais
+
+```python
+# No módulo Odoo
+def sync_credentials(self):
+    """
+    Sincroniza credenciais com o sistema de IA.
+    
+    Returns:
+        True se a sincronização foi bem-sucedida
+    """
+    # Obter dados das credenciais
+    credentials_data = {
+        "api_key": self.api_key,
+        "api_secret": self.api_secret,
+        "domain": self.domain,
+        "business_area": self.business_area,
+        "company_name": self.company_name,
+        # Adicionar outros campos conforme necessário
+    }
+    
+    # Chamar API
+    response = self.call_api(
+        endpoint="/api/v1/credentials/sync",
+        method="POST",
+        data=credentials_data,
+    )
+    
+    # Verificar sucesso
+    if not response.get("success"):
+        error = response.get("error", {})
+        raise Exception(f"Erro na sincronização de credenciais: {error.get('message')}")
+    
+    # Retornar sucesso
+    return True
 ```
 
 ## Boas Práticas para Desenvolvimento de Módulos
@@ -502,6 +503,40 @@ def call_api(self, endpoint, method="GET", data=None, params=None):
    - Verifique sempre o `account_id` nas requisições
    - Valide permissões de acesso quando necessário
 
-## Licença
+## Documentação
 
-Este projeto está licenciado sob a licença MIT - veja o arquivo [LICENSE](LICENSE) para detalhes.
+A documentação completa está disponível na pasta `docs/`:
+
+- [Inicialização Rápida do Servidor Unificado](docs/inicializacao_rapida_servidor_unificado.md): Guia passo a passo para inicializar o servidor unificado
+- [Referência da API](docs/API_REFERENCE.md): Documentação detalhada dos endpoints da API
+
+## Solução de Problemas
+
+### Problema: Erro de Conexão com a API
+
+Verifique se:
+1. O servidor da API está rodando
+2. A URL da API está correta
+3. O token de autenticação é válido
+4. O account_id está sendo passado corretamente
+
+### Problema: Erro de Validação de Dados
+
+Verifique se:
+1. Os dados enviados estão no formato correto
+2. Todos os campos obrigatórios estão presentes
+3. Os valores dos campos estão dentro dos limites esperados
+
+### Problema: Erro no Odoo
+
+Verifique se:
+1. O conector Odoo está configurado corretamente
+2. As credenciais do Odoo são válidas
+3. O modelo Odoo existe e tem os campos esperados
+
+## Recursos Adicionais
+
+- [Documentação do FastAPI](https://fastapi.tiangolo.com/)
+- [Documentação do Pydantic](https://pydantic-docs.helpmanual.io/)
+- [Documentação do Odoo XML-RPC](https://www.odoo.com/documentation/14.0/developer/reference/external_api.html)
+- [Documentação do Qdrant](https://qdrant.tech/documentation/)

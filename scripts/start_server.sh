@@ -11,5 +11,10 @@ echo -e "\n=====================================================================
 echo "🚀 INICIANDO SISTEMA INTEGRADO ODOO-AI"
 echo "======================================================================="
 
-# Executar o servidor
-python main.py
+# Configurar o sistema de logs
+echo "🔧 Configurando sistema de logs..."
+python scripts/setup_logging.py
+
+# Executar o servidor com redirecionamento de saída para logs
+echo "🔄 Iniciando servidor unificado..."
+python main.py 2>&1 | tee -a logs/server.log

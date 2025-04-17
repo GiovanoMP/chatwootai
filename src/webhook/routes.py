@@ -38,6 +38,7 @@ async def health_check():
     }
 
 @router.post("/webhook")
+@router.post("/")
 async def webhook(request: Request, handler: ChatwootWebhookHandler = Depends(get_webhook_handler)):
     """Endpoint para receber webhooks do Chatwoot"""
     try:

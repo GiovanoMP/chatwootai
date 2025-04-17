@@ -45,7 +45,7 @@ from src.webhook.webhook_handler import ChatwootWebhookHandler
 from src.core.hub import HubCrew
 from src.core.data_service_hub import DataServiceHub
 from src.core.domain import DomainManager
-from src.api.chatwoot.client import ChatwootClient  # Usando a implementação da arquitetura hub-and-spoke
+from odoo_api.integrations.chatwoot import ChatwootClient  # Usando a implementação da arquitetura hub-and-spoke
 from src.core.data_proxy_agent import DataProxyAgent
 from src.core.crews.crew_factory import get_crew_factory
 

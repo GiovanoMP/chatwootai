@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+
+# Porta do servidor: 8001
+
 """
 Servidor Unificado para o Sistema Integrado Odoo-AI.
 
@@ -13,7 +16,7 @@ import os
 import logging
 import time
 import uuid
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from dotenv import load_dotenv
@@ -151,8 +154,20 @@ async def health_check():
 # Importar rotas do webhook
 try:
     from src.webhook.routes import router as webhook_router
+    from src.webhook.webhook_handler import ChatwootWebhookHandler
+    from src.webhook.init import get_webhook_handler
+
     # Incluir rotas do webhook
     app.include_router(webhook_router, prefix="/webhook")
+
+    # Adicionar rota direta para o webhook (para compatibilidade com configurações antigas)
+    @app.post("/webhook")
+    async def webhook_direct(request: Request, handler: ChatwootWebhookHandler = Depends(get_webhook_handler)):
+        """Endpoint direto para receber webhooks do Chatwoot (para compatibilidade)"""
+        # Redirecionar para a implementação em src.webhook.routes
+        from src.webhook.routes import webhook as webhook_handler
+        return await webhook_handler(request, handler)
+
     logger.info("✅ Rotas do webhook carregadas com sucesso")
 except ImportError as e:
     logger.warning(f"⚠️ Não foi possível carregar as rotas do webhook: {str(e)}")
@@ -190,7 +205,7 @@ if __name__ == "__main__":
     import uvicorn
 
     # Usar valores de .env ou padrões
-    port = int(os.getenv("SERVER_PORT", "8000"))
+    port = int(os.getenv("SERVER_PORT", "8001"))  # Alterado para 8001 para compatibilidade com Ngrok e VPS
     host = os.getenv("SERVER_HOST", "0.0.0.0")
 
     print("\n" + "="*70)

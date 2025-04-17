@@ -1,18 +1,45 @@
 account_id: account_1
-name: Sandra Cosméticos
-description: Configuração para Sandra Cosméticos
-
+crew:
+  domain_crew:
+    agents:
+    - backstory: "Especialista em entender as necessidades dos clientes de lojas de\
+        \ cosm\xE9ticos"
+      goal: "Entender corretamente a inten\xE7\xE3o do cliente e garantir o melhor\
+        \ atendimento"
+      id: intent_agent
+      memory: true
+      name: Intent Agent
+      role: "Identificar a inten\xE7\xE3o do cliente e direcionar para o agente apropriado"
+      verbose: true
+    - backstory: "Conhecedor profundo do cat\xE1logo de produtos e especifica\xE7\xF5\
+        es t\xE9cnicas"
+      goal: "Fornecer informa\xE7\xF5es precisas sobre produtos, pre\xE7os e disponibilidade"
+      id: product_agent
+      memory: true
+      name: Product Agent
+      role: "Especialista em produtos e cat\xE1logo de cosm\xE9ticos"
+      verbose: true
+    description: "Crew especializada em atendimento para a loja Sandra Cosm\xE9ticos"
+    name: "Sandra Cosm\xE9ticos Crew"
+    tasks:
+    - agent: intent_agent
+      description: Analisar a consulta do cliente e identificar necessidades
+      expected_output: "An\xE1lise das necessidades do cliente"
+    - agent: product_agent
+      description: "Fornecer informa\xE7\xF5es detalhadas sobre produtos cosm\xE9\
+        ticos"
+      expected_output: "Informa\xE7\xF5es detalhadas sobre produtos relevantes"
+description: "Configura\xE7\xE3o para Sandra Cosm\xE9ticos"
 integrations:
   mcp:
-    type: odoo-mcp
     config:
-      url: http://localhost:8069
+      credential_ref: account_1-00bfe67a
       db: account_1
-      username: givoano@sprintia.com.br
-      credential_ref: account_1-00bfe67a  # Token de referência para autenticação
-
+      url: http://localhost:8069
+      username: giovano@sprintia.com.br
+    type: odoo-mcp
   qdrant:
     collection: business_rules_account_1
-
   redis:
     prefix: account_1
+name: "Sandra Cosm\xE9ticos"

@@ -435,37 +435,30 @@ class BusinessRulesService:
             # Obter conector Odoo
             odoo = await OdooConnectorFactory.create_connector(account_id)
 
-            # Construir domínio de busca
-            domain = [('active', '=', True)]
-
+            # Construir domínio de busca para regras permanentes
+            domain_permanent = [('active', '=', True)]
             if rule_type:
-                domain.append(('rule_type', '=', rule_type))
+                domain_permanent.append(('rule_type', '=', rule_type))
 
-            # Obter data atual
-            today = date.today().isoformat()
-
-            # Adicionar condições para regras temporárias
-            domain_permanent = domain + [('is_temporary', '=', False)]
-            domain_temporary = domain + [
-                ('is_temporary', '=', True),
-                ('start_date', '<=', today),
-                ('end_date', '>=', today),
-            ]
+            # Construir domínio de busca para regras temporárias
+            domain_temporary = [('active', '=', True), ('state', '=', 'active')]
+            if rule_type:
+                domain_temporary.append(('rule_type', '=', rule_type))
 
             # Obter IDs das regras permanentes
             permanent_rule_ids = await odoo.execute_kw(
-                'business.rule',
+                'business.rule.item',  # Nome correto do modelo no Odoo
                 'search',
                 [domain_permanent],
-                {'order': 'priority desc, name'},
+                {'order': 'name'},  # Removido 'priority desc' pois o campo foi removido
             )
 
             # Obter IDs das regras temporárias
             temporary_rule_ids = await odoo.execute_kw(
-                'business.rule',
+                'business.temporary.rule',  # Nome correto do modelo no Odoo
                 'search',
                 [domain_temporary],
-                {'order': 'priority desc, name'},
+                {'order': 'name'},  # Removido 'priority desc' pois o campo foi removido
             )
 
             # Combinar IDs
@@ -474,13 +467,87 @@ class BusinessRulesService:
             # Obter dados das regras
             rules = []
             for rule_id in rule_ids:
-                rule = await self._get_rule_by_id(odoo, rule_id)
-                rules.append(rule)
+                # Determinar o modelo correto com base no ID
+                model_name = 'business.rule.item' if rule_id in permanent_rule_ids else 'business.temporary.rule'
 
-            # Armazenar em cache
+                # Obter dados da regra
+                rule_data = await odoo.execute_kw(
+                    model_name,
+                    'read',
+                    [[rule_id]],
+                    {'fields': [
+                        'name', 'description', 'rule_type', 'active',
+                        'create_date', 'write_date'
+                    ]},
+                )
+
+                if rule_data and rule_data[0]:
+                    rule_data = rule_data[0]
+
+                    # Determinar se é uma regra temporária com base no modelo
+                    is_temporary = model_name == 'business.temporary.rule'
+
+                    # Obter datas de início e fim para regras temporárias
+                    start_date = None
+                    end_date = None
+
+                    if is_temporary:
+                        # Para regras temporárias, obter datas de início e fim
+                        date_fields = await odoo.execute_kw(
+                            model_name,
+                            'read',
+                            [[rule_id]],
+                            {'fields': ['date_start', 'date_end']},
+                        )
+
+                        if date_fields and date_fields[0]:
+                            date_start_str = date_fields[0].get('date_start')
+                            date_end_str = date_fields[0].get('date_end')
+
+                            if date_start_str:
+                                start_date = datetime.fromisoformat(date_start_str).date()
+                            if date_end_str:
+                                end_date = datetime.fromisoformat(date_end_str).date()
+
+                    # Criar objeto BusinessRuleResponse
+                    rule = BusinessRuleResponse(
+                        id=rule_id,
+                        name=rule_data['name'],
+                        description=rule_data['description'],
+                        type=rule_data['rule_type'],
+                        priority=1,  # Valor padrão, já que o campo foi removido
+                        active=rule_data['active'],
+                        rule_data={},  # Objeto vazio, já que o campo foi removido
+                        is_temporary=is_temporary,
+                        start_date=start_date,
+                        end_date=end_date,
+                        created_at=datetime.fromisoformat(rule_data['create_date']),
+                        updated_at=datetime.fromisoformat(rule_data['write_date']),
+                    )
+                    rules.append(rule)
+
+            # Armazenar em cache - converter datetime para string para evitar erro de serialização JSON
+            rules_for_cache = []
+            for rule in rules:
+                rule_dict = {
+                    'id': rule.id,
+                    'name': rule.name,
+                    'description': rule.description,
+                    'type': rule.type,
+                    'priority': rule.priority,
+                    'active': rule.active,
+                    'rule_data': rule.rule_data,
+                    'is_temporary': rule.is_temporary,
+                    'start_date': rule.start_date.isoformat() if rule.start_date else None,
+                    'end_date': rule.end_date.isoformat() if rule.end_date else None,
+                    'created_at': rule.created_at.isoformat(),
+                    'updated_at': rule.updated_at.isoformat()
+                }
+                rules_for_cache.append(rule_dict)
+
             await cache.set(
                 cache_key,
-                [rule.dict() for rule in rules],
+                rules_for_cache,
                 ttl=300,  # 5 minutos
             )
 
@@ -506,8 +573,112 @@ class BusinessRulesService:
             Resultado da sincronização
         """
         try:
-            # Obter regras ativas
-            active_rules = await self.list_active_rules(account_id)
+            # Obter regras ativas - usando uma nova chamada para evitar reutilização de coroutine
+            try:
+                # Obter conector Odoo
+                odoo = await OdooConnectorFactory.create_connector(account_id)
+
+                # Construir domínio de busca para regras permanentes
+                domain_permanent = [('active', '=', True)]
+
+                # Obter data atual
+                today = date.today().isoformat()
+
+                # Construir domínio de busca para regras temporárias
+                domain_temporary = [
+                    ('active', '=', True),
+                    ('state', '=', 'active')  # Usar o campo state em vez de datas
+                ]
+
+                # Obter IDs das regras permanentes
+                permanent_rule_ids = await odoo.execute_kw(
+                    'business.rule.item',  # Nome correto do modelo no Odoo
+                    'search',
+                    [domain_permanent],
+                    {'order': 'name'},  # Removido 'priority desc' pois o campo foi removido
+                )
+
+                # Obter IDs das regras temporárias
+                temporary_rule_ids = await odoo.execute_kw(
+                    'business.temporary.rule',  # Nome correto do modelo no Odoo
+                    'search',
+                    [domain_temporary],
+                    {'order': 'name'},  # Removido 'priority desc' pois o campo foi removido
+                )
+
+                # Combinar IDs
+                rule_ids = permanent_rule_ids + temporary_rule_ids
+
+                # Obter dados das regras
+                active_rules = []
+                for rule_id in rule_ids:
+                    # Obter dados da regra diretamente aqui para evitar reutilização de coroutine
+                    try:
+                        # Determinar o modelo correto com base no ID
+                        # Assumimos que os IDs das regras permanentes vêm primeiro na lista
+                        model_name = 'business.rule.item' if rule_id in permanent_rule_ids else 'business.temporary.rule'
+
+                        # Obter dados da regra
+                        rule_data = await odoo.execute_kw(
+                            model_name,
+                            'read',
+                            [[rule_id]],
+                            {'fields': [
+                                'name', 'description', 'rule_type', 'active',
+                                'create_date', 'write_date'
+                            ]},
+                        )
+
+                        if rule_data:
+                            rule_data = rule_data[0]
+
+                            # Determinar se é uma regra temporária com base no modelo
+                            is_temporary = model_name == 'business.temporary.rule'
+
+                            # Obter datas de início e fim para regras temporárias
+                            start_date = None
+                            end_date = None
+
+                            if is_temporary:
+                                # Para regras temporárias, obter datas de início e fim
+                                date_fields = await odoo.execute_kw(
+                                    model_name,
+                                    'read',
+                                    [[rule_id]],
+                                    {'fields': ['date_start', 'date_end']},
+                                )
+
+                                if date_fields and date_fields[0]:
+                                    date_start_str = date_fields[0].get('date_start')
+                                    date_end_str = date_fields[0].get('date_end')
+
+                                    if date_start_str:
+                                        start_date = datetime.fromisoformat(date_start_str).date()
+                                    if date_end_str:
+                                        end_date = datetime.fromisoformat(date_end_str).date()
+
+                            # Criar objeto BusinessRuleResponse
+                            rule = BusinessRuleResponse(
+                                id=rule_id,
+                                name=rule_data['name'],
+                                description=rule_data['description'],
+                                type=rule_data['rule_type'],
+                                priority=1,  # Valor padrão, já que o campo foi removido
+                                active=rule_data['active'],
+                                rule_data={},  # Objeto vazio, já que o campo foi removido
+                                is_temporary=is_temporary,
+                                start_date=start_date,
+                                end_date=end_date,
+                                created_at=datetime.fromisoformat(rule_data['create_date']),
+                                updated_at=datetime.fromisoformat(rule_data['write_date']),
+                            )
+                            active_rules.append(rule)
+                    except Exception as e:
+                        logger.error(f"Failed to get rule {rule_id}: {e}")
+
+            except Exception as e:
+                logger.error(f"Failed to get active rules: {e}")
+                raise ValidationError(f"Failed to get active rules: {e}")
 
             # Contar regras permanentes e temporárias
             permanent_rules = sum(1 for rule in active_rules if not rule.is_temporary)
@@ -521,7 +692,22 @@ class BusinessRulesService:
             for rule in active_rules:
                 if rule.type not in rules_by_type:
                     rules_by_type[rule.type] = []
-                rules_by_type[rule.type].append(rule.model_dump())
+                # Converter datetime para string para evitar erro de serialização JSON
+                rule_dict = {
+                    'id': rule.id,
+                    'name': rule.name,
+                    'description': rule.description,
+                    'type': rule.type,
+                    'priority': rule.priority,
+                    'active': rule.active,
+                    'rule_data': rule.rule_data,
+                    'is_temporary': rule.is_temporary,
+                    'start_date': rule.start_date.isoformat() if rule.start_date else None,
+                    'end_date': rule.end_date.isoformat() if rule.end_date else None,
+                    'created_at': rule.created_at.isoformat(),
+                    'updated_at': rule.updated_at.isoformat()
+                }
+                rules_by_type[rule.type].append(rule_dict)
 
             # Armazenar cada tipo de regra separadamente no Redis
             for rule_type, rules in rules_by_type.items():
@@ -532,9 +718,28 @@ class BusinessRulesService:
                 )
 
             # Armazenar todas as regras juntas no Redis
+            all_rules = []
+            for rule in active_rules:
+                # Converter datetime para string para evitar erro de serialização JSON
+                rule_dict = {
+                    'id': rule.id,
+                    'name': rule.name,
+                    'description': rule.description,
+                    'type': rule.type,
+                    'priority': rule.priority,
+                    'active': rule.active,
+                    'rule_data': rule.rule_data,
+                    'is_temporary': rule.is_temporary,
+                    'start_date': rule.start_date.isoformat() if rule.start_date else None,
+                    'end_date': rule.end_date.isoformat() if rule.end_date else None,
+                    'created_at': rule.created_at.isoformat(),
+                    'updated_at': rule.updated_at.isoformat()
+                }
+                all_rules.append(rule_dict)
+
             await cache.set(
                 f"{account_id}:ai:rules:all",
-                [rule.model_dump() for rule in active_rules],
+                all_rules,
                 ttl=86400,  # 24 horas
             )
 
@@ -564,8 +769,9 @@ class BusinessRulesService:
                 embedding = await vector_service.generate_embedding(processed_text)
 
                 # Armazenar no Qdrant
-                point_id = f"rule_{rule.id}"
-                await vector_service.qdrant_client.upsert(
+                point_id = rule.id  # Usar o ID numérico diretamente
+                # Não usar await aqui, pois o método não retorna uma coroutine
+                vector_service.qdrant_client.upsert(
                     collection_name=collection_name,
                     points=[
                         models.PointStruct(
@@ -860,23 +1066,34 @@ class BusinessRulesService:
             Área de negócio ou None se não encontrada
         """
         try:
-            # Obter conector Odoo
+            # Criar um novo conector Odoo para cada chamada
             odoo_connector = await OdooConnectorFactory.create_connector(account_id)
 
             # Buscar configurações da empresa
-            company_settings = await odoo_connector.search_read(
-                model="business.rules",
-                domain=[],
-                fields=["business_model", "business_model_other"],
-                limit=1
+            # Usar execute_kw diretamente para evitar reutilização de coroutine
+            company_settings_ids = await odoo_connector.execute_kw(
+                'business.rules',
+                'search',
+                [[]],
+                {'limit': 1}
+            )
+
+            if not company_settings_ids:
+                return None
+
+            company_settings = await odoo_connector.execute_kw(
+                'business.rules',
+                'read',
+                [company_settings_ids],
+                {'fields': ['business_area', 'business_area_other']}
             )
 
             if company_settings and len(company_settings) > 0:
-                business_model = company_settings[0].get("business_model")
+                business_model = company_settings[0].get("business_area")
 
-                # Se for "other", usar o campo business_model_other
+                # Se for "other", usar o campo business_area_other
                 if business_model == "other":
-                    return company_settings[0].get("business_model_other")
+                    return company_settings[0].get("business_area_other")
 
                 return business_model
 
@@ -1001,7 +1218,7 @@ class BusinessRulesService:
             collection_name = f"business_rules_{account_id}"
 
             # Verificar se a coleção existe
-            collections = await vector_service.qdrant_client.get_collections()
+            collections = vector_service.qdrant_client.get_collections()
             if collection_name not in [c.name for c in collections.collections]:
                 # Se não existir, sincronizar regras primeiro
                 logger.info(f"Collection {collection_name} not found. Syncing rules first.")
@@ -1011,7 +1228,7 @@ class BusinessRulesService:
             query_embedding = await vector_service.generate_embedding(query)
 
             # Buscar regras semanticamente similares
-            search_results = await vector_service.qdrant_client.search(
+            search_results = vector_service.qdrant_client.search(
                 collection_name=collection_name,
                 query_vector=query_embedding,
                 limit=limit,

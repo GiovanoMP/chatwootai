@@ -289,7 +289,6 @@ class OdooConnectorFactory:
         return connector
 
     @staticmethod
-    @lru_cache(maxsize=32)
     async def _load_config_from_yaml(account_id: str) -> Dict[str, Any]:
         """
         Carrega a configuração do arquivo YAML.
@@ -307,8 +306,7 @@ class OdooConnectorFactory:
             return None
 
         # Construir caminho para o arquivo de configuração
-        config_dir = os.path.join(settings.CONFIG_DIR, "domains", domain, account_id)
-        config_file = os.path.join(config_dir, "config.yaml")
+        config_file = os.path.join(settings.CONFIG_DIR, "domains", domain, account_id, "config.yaml")
 
         if not os.path.exists(config_file):
             logger.error(f"Configuration file {config_file} not found")
@@ -333,7 +331,12 @@ class OdooConnectorFactory:
                     }
 
                     # Obter a senha real usando a referência
-                    password = await OdooConnectorFactory._get_credential_by_ref(db_config["credential_ref"], account_id)
+                    password = await OdooConnectorFactory._get_credential_by_ref(
+                        db_config["credential_ref"],
+                        account_id,
+                        domain
+                    )
+
                     if password:
                         db_config["password"] = password
                     else:
@@ -375,37 +378,64 @@ class OdooConnectorFactory:
             except Exception as e:
                 logger.error(f"Failed to load account mapping: {e}")
 
-        # Se não encontrar no mapeamento, usar o domínio padrão
-        return "cosmetics"  # Domínio padrão
+        # Se não encontrar no mapeamento, verificar no chatwoot_mapping.yaml
+        chatwoot_mapping_file = os.path.join(settings.CONFIG_DIR, "chatwoot_mapping.yaml")
+
+        if os.path.exists(chatwoot_mapping_file):
+            try:
+                with open(chatwoot_mapping_file, "r") as f:
+                    mapping = yaml.safe_load(f)
+
+                if mapping and "clients" in mapping and account_id in mapping["clients"]:
+                    return mapping["clients"][account_id]["domain"]
+            except Exception as e:
+                logger.error(f"Failed to load chatwoot mapping: {e}")
+
+        # Se não encontrar em nenhum lugar, usar o domínio padrão
+        return "retail"  # Domínio padrão
 
     @staticmethod
-    async def _get_credential_by_ref(credential_ref: str, account_id: str) -> str:
+    async def _get_credential_by_ref(credential_ref: str, account_id: str, domain: str = None) -> str:
         """
         Recupera a credencial real usando a referência.
 
         Args:
             credential_ref: Referência da credencial
             account_id: ID da conta
+            domain: Domínio da conta (opcional, será determinado se não fornecido)
 
         Returns:
             Credencial real
         """
-        # Em um ambiente de produção, isso deve consultar um serviço seguro de gerenciamento de credenciais
-        # Por enquanto, vamos usar uma abordagem simplificada para desenvolvimento
+        if not domain:
+            domain = await OdooConnectorFactory._determine_domain(account_id)
+            if not domain:
+                logger.error(f"Could not determine domain for account_id {account_id}")
+                return None
 
-        # Verificar se existe um arquivo de credenciais
-        credentials_file = os.path.join(settings.CONFIG_DIR, "credentials.yaml")
+        # Construir caminho para o arquivo de configuração
+        config_file = os.path.join(settings.CONFIG_DIR, "domains", domain, account_id, "config.yaml")
 
-        if os.path.exists(credentials_file):
+        if os.path.exists(config_file):
             try:
-                with open(credentials_file, "r") as f:
-                    credentials = yaml.safe_load(f)
+                with open(config_file, "r") as f:
+                    config = yaml.safe_load(f)
 
-                if credentials and account_id in credentials and credential_ref in credentials[account_id]:
-                    return credentials[account_id][credential_ref]
+                # Verificar se a credencial existe na seção de credenciais
+                if "credentials" in config and credential_ref in config["credentials"]:
+                    return config["credentials"][credential_ref]
+
+                # Verificar se a credencial existe no nível raiz do arquivo
+                if credential_ref in config:
+                    return config[credential_ref]
+
+                logger.error(f"Credential reference {credential_ref} not found in {config_file}")
+                return None
+
             except Exception as e:
-                logger.error(f"Failed to load credentials: {e}")
+                logger.error(f"Failed to load credentials from {config_file}: {e}")
+                return None
 
-        # Se não encontrar no arquivo, usar a própria referência como senha (para desenvolvimento)
+        # Se não encontrar o arquivo, usar a própria referência como senha (para desenvolvimento)
         logger.warning(f"Using credential_ref as password for development: {credential_ref}")
         return credential_ref

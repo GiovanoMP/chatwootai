@@ -5,7 +5,7 @@
         <field name="name">business.rules.dashboard.form</field>
         <field name="model">business.rules.dashboard</field>
         <field name="arch" type="xml">
-            <form string="Regras Ativas">
+            <form string="Regras de Negócio">
                 <sheet>
                     <h1><field name="business_rule_id" readonly="1"/></h1>
                     <group>
@@ -19,7 +19,7 @@
                         </group>
                     </group>
                     <notebook>
-                        <page string="Regras Permanentes Ativas">
+                        <page string="Regras de Negócio Ativas">
                             <field name="active_permanent_rules" readonly="1">
                                 <tree>
                                     <field name="name"/>
@@ -28,7 +28,7 @@
                                 </tree>
                             </field>
                         </page>
-                        <page string="Regras Temporárias Ativas">
+                        <page string="Promoções e Regras Temporárias Ativas">
                             <field name="active_temporary_rules" readonly="1">
                                 <tree>
                                     <field name="name"/>

@@ -89,6 +89,13 @@ class VectorService:
                 )
             )
 
+            # Criar índice para account_id para facilitar filtragem por tenant
+            self.qdrant_client.create_payload_index(
+                collection_name=collection_name,
+                field_name="account_id",
+                field_schema=models.PayloadSchemaType.KEYWORD,
+            )
+
             logger.info(f"Created collection {collection_name}")
 
         except Exception as e:
@@ -244,22 +251,22 @@ class VectorService:
         description = product_data.get("description", "")
         default_code = product_data.get("default_code", "")
         barcode = product_data.get("barcode", "")
-        
+
         # Extrair categoria
         categ_id = product_data.get("categ_id", [0, ""])
         category = categ_id[1] if isinstance(categ_id, list) and len(categ_id) > 1 else ""
-        
+
         # Extrair preços
         list_price = product_data.get("list_price", 0.0)
         standard_price = product_data.get("standard_price", 0.0)
-        
+
         # Extrair atributos
         attributes = product_data.get("attributes", {})
         attributes_text = ""
         if attributes:
             for attr_name, attr_value in attributes.items():
                 attributes_text += f"{attr_name}: {attr_value}\n"
-        
+
         # Combinar tudo em um texto
         product_text = f"""
         Nome: {name}
@@ -268,14 +275,14 @@ class VectorService:
         Categoria: {category}
         Preço de Venda: {list_price}
         Preço de Custo: {standard_price}
-        
+
         Descrição:
         {description}
-        
+
         Atributos:
         {attributes_text}
         """
-        
+
         return product_text
 
     async def search_vectors(

@@ -7,7 +7,6 @@
         <field name="arch" type="xml">
             <form string="Documento de Suporte">
                 <header>
-                    <button name="action_sync_document" string="Sincronizar com IA" type="object" class="btn-success" attrs="{'invisible': [('sync_status', '=', 'syncing')]}"/>
                     <field name="sync_status" widget="statusbar" statusbar_visible="not_synced,syncing,synced,error"/>
                 </header>
                 <sheet>
@@ -60,7 +59,8 @@
                 <field name="business_rule_ids" widget="many2many_tags"/>
                 <field name="last_sync_date"/>
                 <field name="sync_status" decoration-success="sync_status == 'synced'" decoration-danger="sync_status == 'error'" decoration-info="sync_status == 'not_synced'"/>
-                <field name="active" invisible="1"/>
+                <field name="active" widget="boolean_toggle"/>
+                <button name="unlink" type="object" icon="fa-trash-o"/>
             </tree>
         </field>
     </record>

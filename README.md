@@ -25,7 +25,7 @@ A arquitetura do ChatwootAI segue o modelo **Hub and Spoke** (Centro e Raios), c
    - `SupportCrew`: Suporte técnico e atendimento a reclamações
    - `MarketingCrew`: Campanhas, promoções e engajamento
    - `SchedulingCrew`: Agendamentos e compromissos
-   
+
    > **Importante**: Todas as crews, agentes e tarefas são definidos exclusivamente em arquivos YAML, não mais no código-fonte. O HubCrew apenas referencia essas definições para direcionar as conversas para as crews apropriadas.
 
 3. **Camada de Dados**
@@ -306,7 +306,7 @@ mappings:
     "3":
       client_id: "client_3"
       domain: "health"
-  
+
   # Mapeamento por inbox_id (fallback)
   inboxes:
     "101":
@@ -393,6 +393,34 @@ python scripts/testing/run_e2e_test.py
 
 Estas ferramentas ajudam a verificar se o sistema está identificando corretamente os clientes e processando as mensagens conforme esperado.
 
+## Arquitetura Multi-Tenant para Vetorização
+
+O sistema implementa uma arquitetura multi-tenant para o armazenamento e busca de dados vetorizados no Qdrant, seguindo as melhores práticas da indústria:
+
+### Abordagem de Multi-Tenancy
+
+O sistema utiliza uma abordagem de **multi-tenancy em nível de coleção** com **particionamento lógico por account_id**:
+
+1. **Coleções Compartilhadas**: Todas as empresas (tenants) compartilham as mesmas coleções no Qdrant
+2. **Separação Lógica**: Os dados são separados usando o campo `account_id` em cada documento
+3. **Filtragem Automática**: Todas as consultas são filtradas por `account_id` para garantir o isolamento dos dados
+
+### Coleções Principais
+
+O sistema utiliza três coleções compartilhadas:
+
+1. **company_metadata**: Metadados gerais da empresa
+2. **business_rules**: Regras de negócio (permanentes e temporárias)
+3. **support_documents**: Documentos de suporte ao cliente
+
+### Vantagens da Abordagem
+
+- **Eficiência de recursos**: Reduz a sobrecarga de gerenciar muitas coleções separadas
+- **Escalabilidade**: Suporta um número muito maior de tenants sem criar milhares de coleções
+- **Simplicidade operacional**: Facilita backups, monitoramento e manutenção
+
+Para mais detalhes sobre a implementação, consulte a documentação em `docs/MULTI_TENANT_ARCHITECTURE.md`.
+
 ## Próximos Passos
 
 - Finalização dos testes de fluxo completo com GenericCrew
@@ -400,6 +428,7 @@ Estas ferramentas ajudam a verificar se o sistema está identificando corretamen
 - Expansão do sistema de plugins para funcionalidades avançadas
 - Otimização de performance para processamento em larga escala
 - Integração com sistemas adicionais de análise e relatórios
+- Implementação de módulos adicionais para descrição de produtos
 
 ## Contribuição
 

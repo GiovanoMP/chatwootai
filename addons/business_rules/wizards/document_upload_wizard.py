@@ -22,25 +22,18 @@ class DocumentUploadWizard(models.TransientModel):
         ('question', 'Dúvida'),
         ('suggestion', 'Sugestão'),
         ('other', 'Outro')
-    ], string='Tipo de Mensagem', default='support', required=True)
+    ], string='Tipo de Documento', default='support', required=True)
     
-    message = fields.Text(string='Mensagem', help='Digite sua mensagem ou dúvida')
+    message = fields.Text(string='Descrição', help='Descrição ou contexto do documento')
 
     document_file = fields.Binary(string='Arquivo', required=True)
     document_filename = fields.Char(string='Nome do Arquivo')
 
-    state = fields.Selection([
-        ('upload', 'Upload'),
-        ('review', 'Revisão'),
-        ('done', 'Concluído')
-    ], default='upload', string='Estado')
-
-    # Campos para revisão
-    extracted_content = fields.Text(string='Conteúdo Extraído')
-    extracted_rules = fields.One2many('business.document.extracted.rule', 'wizard_id', string='Regras Extraídas')
+    name = fields.Char(string='Nome do Documento', required=True)
+    content = fields.Text(string='Conteúdo do Documento', help='Conteúdo do documento em texto')
 
     def action_extract_content(self):
-        """Extrair conteúdo do documento e processar como FAQ para suporte ao cliente"""
+        """Extrair conteúdo do documento para suporte ao cliente"""
         self.ensure_one()
 
         if not self.document_file:
@@ -80,201 +73,52 @@ class DocumentUploadWizard(models.TransientModel):
 
             # Adicionar a mensagem do usuário ao conteúdo, se fornecida
             if self.message:
-                content = f"Mensagem do usuário:\n{self.message}\n\nConteúdo do documento:\n{content}"
+                content = f"Descrição do documento:\n{self.message}\n\nConteúdo do documento:\n{content}"
 
-            # Processar o conteúdo para extrair FAQs
-            extracted_rules = self._extract_rules_from_content(content)
+            # Usar o nome do arquivo como nome do documento se não for fornecido
+            if not self.name and self.document_filename:
+                self.name = self.document_filename.split('.')[0]
+            elif not self.name:
+                self.name = "Documento de Suporte"
 
-            # Limpar regras existentes
-            self.extracted_rules.unlink()
-
-            # Criar novas regras extraídas
-            for rule in extracted_rules:
-                self.env['business.document.extracted.rule'].create({
-                    'wizard_id': self.id,
-                    'name': rule['name'],
-                    'description': rule['description'],
-                    'selected': True
-                })
-
-            # Atualizar estado e conteúdo extraído
+            # Atualizar conteúdo
             self.write({
-                'state': 'review',
-                'extracted_content': content[:1000] + ('...' if len(content) > 1000 else '')
+                'content': content
             })
 
-            return {
-                'type': 'ir.actions.act_window',
-                'res_model': self._name,
-                'res_id': self.id,
-                'view_mode': 'form',
-                'target': 'new',
-            }
+            return self.action_create_document()
 
         except Exception as e:
             _logger.error("Erro ao extrair conteúdo do documento: %s", str(e))
             raise UserError(_("Erro ao processar o documento: %s") % str(e))
 
-    def _extract_rules_from_content(self, content):
-        """Extrair FAQs e informações de suporte do conteúdo do documento"""
-        rules = []
-
-        # Implementação para processar diferentes tipos de mensagens
-        
-        # Para suporte técnico e dúvidas, procurar por padrões de pergunta e resposta
-        if self.document_type in ['support', 'question']:
-            # Dividir por linhas
-            lines = content.split('\n')
-            current_question = None
-            current_answer = []
-
-            for line in lines:
-                line = line.strip()
-                if not line:
-                    continue
-
-                # Verificar se é uma pergunta
-                if line.endswith('?') or re.match(r'^[0-9]+[\.\)]\s', line) or re.match(r'^P[0-9]*:', line) or re.match(r'^Pergunta[0-9]*:', line):
-                    # Se já temos uma pergunta anterior, salvar
-                    if current_question and current_answer:
-                        rules.append({
-                            'name': current_question[:100],
-                            'description': '\n'.join(current_answer)
-                        })
-
-                    # Nova pergunta
-                    current_question = line
-                    current_answer = []
-                else:
-                    # Adicionar à resposta atual
-                    if current_question:
-                        current_answer.append(line)
-
-            # Adicionar a última pergunta/resposta
-            if current_question and current_answer:
-                rules.append({
-                    'name': current_question[:100],
-                    'description': '\n'.join(current_answer)
-                })
-                
-            # Se não encontrou perguntas e respostas, criar uma regra com o conteúdo completo
-            if not rules and content.strip():
-                title = "Dúvida de Suporte"
-                if self.message:
-                    # Usar as primeiras palavras da mensagem como título
-                    words = self.message.split()
-                    if len(words) > 3:
-                        title = " ".join(words[:5]) + "..."
-                    else:
-                        title = self.message[:100]
-                        
-                rules.append({
-                    'name': title,
-                    'description': content.strip()
-                })
-
-        # Para feedback e sugestões, processar como seções
-        elif self.document_type in ['feedback', 'suggestion']:
-            sections = re.split(r'\n\s*\n', content)
-            
-            # Se há apenas uma seção, usar a mensagem como título
-            if len(sections) == 1 and self.message:
-                rules.append({
-                    'name': self.message[:100],
-                    'description': sections[0].strip()
-                })
-            else:
-                for i, section in enumerate(sections):
-                    if len(section.strip()) < 20:  # Ignorar seções muito curtas
-                        continue
-
-                    # Tentar extrair um título
-                    lines = section.split('\n')
-                    title = lines[0].strip()
-
-                    if title and len(title) < 100:
-                        description = '\n'.join(lines[1:]).strip()
-                        if description:
-                            rules.append({
-                                'name': title,
-                                'description': description
-                            })
-                    else:
-                        # Se não conseguir extrair um título, usar um genérico
-                        rules.append({
-                            'name': f"{self.document_type.capitalize()} {i+1}",
-                            'description': section.strip()
-                        })
-
-        # Para outros tipos, dividir em seções
-        else:
-            # Se tiver mensagem, usar como título principal
-            if self.message:
-                rules.append({
-                    'name': self.message[:100],
-                    'description': content.strip()
-                })
-            else:
-                sections = re.split(r'\n\s*\n', content)
-
-                for i, section in enumerate(sections):
-                    if len(section.strip()) < 30:
-                        continue
-
-                    rules.append({
-                        'name': f"Informação {i+1}",
-                        'description': section.strip()
-                    })
-
-        return rules
-
-    def action_create_rules(self):
-        """Criar regras a partir do conteúdo extraído"""
+    def action_create_document(self):
+        """Criar documento de suporte a partir do conteúdo extraído"""
         self.ensure_one()
 
-        # Filtrar regras selecionadas
-        selected_rules = self.extracted_rules.filtered(lambda r: r.selected)
+        if not self.content:
+            raise UserError(_("O conteúdo do documento não pode estar vazio."))
 
-        if not selected_rules:
-            raise UserError(_("Por favor, selecione pelo menos uma regra para criar."))
+        # Criar documento de suporte
+        doc = self.env['business.support.document'].create({
+            'name': self.name,
+            'document_type': self.document_type,
+            'content': self.content,
+            'business_rule_ids': [(4, self.business_rule_id.id)],
+            'sync_status': 'not_synced',
+            'active': True
+        })
 
-        # Determinar o tipo de regra com base no tipo de documento
-        rule_type_mapping = {
-            'support': 'general',
-            'feedback': 'general',
-            'question': 'general',
-            'suggestion': 'general',
-            'other': 'other'
-        }
-        rule_type = rule_type_mapping.get(self.document_type, 'general')
-
-        # Criar regras permanentes
-        for rule in selected_rules:
-            self.env['business.rule.item'].create({
-                'business_rule_id': self.business_rule_id.id,
-                'name': rule.name,
-                'description': rule.description,
-                'rule_type': rule_type,
-                'priority': '0',
-                'active': True
-            })
+        # Sincronizar documento com o sistema de IA
+        self.business_rule_id.action_sync_support_documents()
 
         return {
             'type': 'ir.actions.client',
             'tag': 'display_notification',
             'params': {
-                'title': _('Regras Criadas'),
-                'message': _('%s regras foram criadas com sucesso.') % len(selected_rules),
+                'title': _('Documento Criado'),
+                'message': _('Documento "%s" foi criado e sincronizado com sucesso.') % self.name,
                 'sticky': False,
                 'type': 'success',
             }
         }
-
-class DocumentExtractedRule(models.TransientModel):
-    _name = 'business.document.extracted.rule'
-    _description = 'Regra Extraída de Documento'
-
-    wizard_id = fields.Many2one('business.document.upload.wizard', string='Wizard', required=True, ondelete='cascade')
-    name = fields.Char(string='Nome da Regra', required=True)
-    description = fields.Text(string='Descrição', required=True)
-    selected = fields.Boolean(string='Selecionada', default=True)

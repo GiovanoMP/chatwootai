@@ -1,0 +1,6 @@
+# Agentes de embeddings
+from odoo_api.embedding_agents.business_rules_agent import get_business_rules_agent
+from odoo_api.embedding_agents.support_document_agent import get_support_document_agent
+from odoo_api.embedding_agents.company_metadata_agent import get_company_metadata_agent
+from odoo_api.embedding_agents.product_description_agent import get_product_description_agent
+from odoo_api.embedding_agents.product_mass_agent import get_product_mass_agent

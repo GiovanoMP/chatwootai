@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Vista de Formulário para o Wizard de Upload de Documentos -->
+    <record id="view_business_document_upload_wizard_form" model="ir.ui.view">
+        <field name="name">business.document.upload.wizard.form</field>
+        <field name="model">business.document.upload.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Adicionar Documento de Suporte">
+                <sheet>
+                    <div class="alert alert-info" role="alert">
+                        <p><strong>Importante:</strong> Os documentos de suporte são utilizados pelo agente de IA para responder dúvidas dos clientes. Você pode fazer upload de arquivos PDF, DOCX, DOC ou TXT.</p>
+                    </div>
+
+                    <group>
+                        <field name="business_rule_id" invisible="1"/>
+                        <field name="name" placeholder="Nome do documento"/>
+                        <field name="document_type"/>
+                        <field name="document_file" filename="document_filename"/>
+                        <field name="document_filename" invisible="1"/>
+                        <field name="message" placeholder="Digite uma descrição para este documento..."/>
+                    </group>
+                </sheet>
+                <footer>
+                    <button name="action_extract_content" string="Processar Documento" type="object" class="btn-primary"/>
+                    <button string="Cancelar" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+</odoo>

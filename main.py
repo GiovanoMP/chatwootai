@@ -105,29 +105,43 @@ async def add_process_time_header(request: Request, call_next):
             },
         )
 
-# Middleware para verificação de account_id para rotas da API Odoo
+# Importar o middleware de autenticação
+from odoo_api.core.auth_middleware import AuthMiddleware
+
+# Adicionar o middleware de autenticação
+app.add_middleware(AuthMiddleware)
+
+# Middleware para compatibilidade com código legado que espera account_id na URL
 @app.middleware("http")
-async def verify_account_id(request: Request, call_next):
+async def legacy_account_id_middleware(request: Request, call_next):
     # Verificar se é uma rota de API (ignorar rotas de documentação, etc.)
     if request.url.path.startswith("/api/v1/") and not request.url.path.startswith("/api/v1/credentials"):
-        account_id = request.query_params.get("account_id")
-        if not account_id:
-            return JSONResponse(
-                status_code=400,
-                content={
-                    "success": False,
-                    "error": {
-                        "code": "MISSING_ACCOUNT_ID",
-                        "message": "account_id is required",
+        # Se o account_id já foi definido pelo middleware de autenticação, usar esse valor
+        if hasattr(request.state, "account_id"):
+            # Nada a fazer, o middleware de autenticação já definiu o account_id
+            pass
+        else:
+            # Para compatibilidade com código legado, verificar se o account_id está na URL
+            account_id = request.query_params.get("account_id")
+            if account_id:
+                # Armazenar account_id no estado da requisição
+                request.state.account_id = account_id
+                logger.warning(f"Usando account_id da URL (legado): {account_id}")
+            else:
+                # Se não tiver account_id na URL e não foi autenticado, retornar erro
+                return JSONResponse(
+                    status_code=400,
+                    content={
+                        "success": False,
+                        "error": {
+                            "code": "MISSING_ACCOUNT_ID",
+                            "message": "account_id is required",
+                        },
+                        "meta": {
+                            "request_id": getattr(request.state, "request_id", "unknown"),
+                        },
                     },
-                    "meta": {
-                        "request_id": getattr(request.state, "request_id", "unknown"),
-                    },
-                },
-            )
-
-        # Armazenar account_id no estado da requisição
-        request.state.account_id = account_id
+                )
 
     return await call_next(request)
 

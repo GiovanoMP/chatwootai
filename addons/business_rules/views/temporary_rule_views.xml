@@ -21,10 +21,11 @@
                         <group>
                             <field name="business_rule_id"/>
                             <field name="rule_type"/>
+                            <field name="is_temporary"/>
                         </group>
                         <group>
-                            <field name="date_start"/>
-                            <field name="date_end"/>
+                            <field name="date_start" attrs="{'invisible': [('is_temporary', '=', False)], 'required': [('is_temporary', '=', True)]}"/>
+                            <field name="date_end" attrs="{'invisible': [('is_temporary', '=', False)], 'required': [('is_temporary', '=', True)]}"/>
                             <field name="active"/>
                         </group>
                     </group>
@@ -44,11 +45,13 @@
             <tree string="Regras Temporárias" decoration-success="state == 'active'" decoration-warning="state == 'draft'" decoration-danger="state == 'expired'" decoration-muted="state == 'cancelled'">
                 <field name="name"/>
                 <field name="business_rule_id"/>
-                <field name="rule_type"/>
-                <field name="date_start"/>
-                <field name="date_end"/>
+                <field name="rule_type_display"/>
+                <field name="date_start" attrs="{'invisible': [('is_temporary', '=', False)]}"/>
+                <field name="date_end" attrs="{'invisible': [('is_temporary', '=', False)]}"/>
                 <field name="state"/>
+                <field name="is_temporary" invisible="1"/>
                 <field name="active" widget="boolean_toggle"/>
+                <button name="unlink" type="object" icon="fa-trash-o"/>
             </tree>
         </field>
     </record>

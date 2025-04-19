@@ -1,0 +1,141 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Vista de Formulário para Regras de Agendamento -->
+    <record id="view_scheduling_rule_form" model="ir.ui.view">
+        <field name="name">business.scheduling.rule.form</field>
+        <field name="model">business.scheduling.rule</field>
+        <field name="arch" type="xml">
+            <form string="Regra de Agendamento">
+                <header>
+                    <field name="sync_status" widget="statusbar" statusbar_visible="not_synced,synced,error"/>
+                </header>
+                <sheet>
+                    <div class="oe_button_box" name="button_box">
+                        <button name="toggle_active" type="object" class="oe_stat_button" icon="fa-archive">
+                            <field name="active" widget="boolean_button" options="{'terminology': 'archive'}"/>
+                        </button>
+                    </div>
+                    <div class="oe_title">
+                        <h1>
+                            <field name="name" placeholder="Nome da Regra de Agendamento"/>
+                        </h1>
+                    </div>
+                    <group>
+                        <group>
+                            <field name="service_type"/>
+                            <field name="service_type_other" attrs="{'invisible': [('service_type', '!=', 'other')], 'required': [('service_type', '=', 'other')]}"/>
+                            <field name="sequence" invisible="1"/>
+                        </group>
+                        <group>
+                            <field name="duration" widget="float_time"/>
+                            <field name="min_interval" widget="float_time"/>
+                            <field name="min_advance_time"/>
+                            <field name="max_advance_time"/>
+                        </group>
+                    </group>
+                    <notebook>
+
+                        <page string="Disponibilidade">
+                            <group>
+                                <group string="Horário de Funcionamento">
+                                    <field name="morning_start" string="Horário de Início" widget="float_time"/>
+                                    <field name="afternoon_end" string="Horário de Término" widget="float_time"/>
+                                    <field name="has_lunch_break"/>
+                                    <field name="morning_end" string="Fim Manhã" widget="float_time" attrs="{'invisible': [('has_lunch_break', '=', False)]}"/>
+                                    <field name="afternoon_start" string="Início Tarde" widget="float_time" attrs="{'invisible': [('has_lunch_break', '=', False)]}"/>
+                                </group>
+                            </group>
+                            <group string="Dias de Funcionamento">
+                                <group>
+                                    <field name="monday_available" string="Segunda-feira"/>
+                                    <field name="tuesday_available" string="Terça-feira"/>
+                                    <field name="wednesday_available" string="Quarta-feira"/>
+                                    <field name="thursday_available" string="Quinta-feira"/>
+                                    <field name="friday_available" string="Sexta-feira"/>
+                                </group>
+                                <group>
+                                    <field name="saturday_available" string="Sábado"/>
+                                    <field name="saturday_morning_start" string="Início Sábado" widget="float_time" attrs="{'invisible': [('saturday_available', '=', False)], 'required': [('saturday_available', '=', True)]}"/>
+                                    <field name="saturday_afternoon_end" string="Término Sábado" widget="float_time" attrs="{'invisible': [('saturday_available', '=', False)], 'required': [('saturday_available', '=', True)]}"/>
+                                    <field name="sunday_available" string="Domingo"/>
+                                    <field name="sunday_morning_start" string="Início Domingo" widget="float_time" attrs="{'invisible': [('sunday_available', '=', False)], 'required': [('sunday_available', '=', True)]}"/>
+                                    <field name="sunday_afternoon_end" string="Término Domingo" widget="float_time" attrs="{'invisible': [('sunday_available', '=', False)], 'required': [('sunday_available', '=', True)]}"/>
+                                </group>
+                            </group>
+                        </page>
+                        <page string="Políticas">
+                            <group>
+                                <field name="cancellation_policy" placeholder="Descreva a política de cancelamento..."/>
+                                <field name="rescheduling_policy" placeholder="Descreva a política de reagendamento..."/>
+                            </group>
+                        </page>
+                        <page string="Instruções">
+                            <group>
+                                <field name="required_information" placeholder="Informações que o cliente precisa fornecer ao agendar..."/>
+                                <field name="confirmation_instructions" placeholder="Instruções enviadas ao cliente após confirmação do agendamento..."/>
+                            </group>
+                        </page>
+                    </notebook>
+                </sheet>
+                <div class="oe_chatter">
+                    <field name="message_follower_ids" widget="mail_followers"/>
+                    <field name="message_ids" widget="mail_thread"/>
+                </div>
+            </form>
+        </field>
+    </record>
+
+    <!-- Vista de Árvore para Regras de Agendamento -->
+    <record id="view_scheduling_rule_tree" model="ir.ui.view">
+        <field name="name">business.scheduling.rule.tree</field>
+        <field name="model">business.scheduling.rule</field>
+        <field name="arch" type="xml">
+            <tree string="Regras de Agendamento" decoration-muted="active == False">
+                <field name="sequence" widget="handle"/>
+                <field name="name"/>
+                <field name="service_type"/>
+                <field name="duration" widget="float_time"/>
+                <field name="sync_status" decoration-success="sync_status == 'synced'" decoration-danger="sync_status == 'error'" decoration-info="sync_status == 'not_synced'"/>
+                <field name="active" widget="boolean_toggle"/>
+                <button name="unlink" type="object" icon="fa-trash-o"/>
+            </tree>
+        </field>
+    </record>
+
+    <!-- Vista de Pesquisa para Regras de Agendamento -->
+    <record id="view_scheduling_rule_search" model="ir.ui.view">
+        <field name="name">business.scheduling.rule.search</field>
+        <field name="model">business.scheduling.rule</field>
+        <field name="arch" type="xml">
+            <search string="Regras de Agendamento">
+                <field name="name"/>
+                <field name="service_type"/>
+                <filter string="Sincronizadas" name="synced" domain="[('sync_status', '=', 'synced')]"/>
+                <filter string="Não Sincronizadas" name="not_synced" domain="[('sync_status', '=', 'not_synced')]"/>
+                <filter string="Com Erro" name="error" domain="[('sync_status', '=', 'error')]"/>
+                <separator/>
+                <filter string="Arquivadas" name="inactive" domain="[('active', '=', False)]"/>
+                <group expand="0" string="Agrupar Por">
+                    <filter string="Tipo de Serviço" name="group_by_type" context="{'group_by': 'service_type'}"/>
+                    <filter string="Status de Sincronização" name="group_by_sync" context="{'group_by': 'sync_status'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <!-- Ação para Regras de Agendamento -->
+    <record id="action_scheduling_rules" model="ir.actions.act_window">
+        <field name="name">Regras de Agendamento</field>
+        <field name="res_model">business.scheduling.rule</field>
+        <field name="view_mode">tree,form</field>
+        <field name="search_view_id" ref="view_scheduling_rule_search"/>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Crie sua primeira regra de agendamento!
+            </p>
+            <p>
+                As regras de agendamento permitem configurar como os agentes de IA devem lidar com solicitações de agendamento de clientes.
+            </p>
+        </field>
+    </record>
+</odoo>

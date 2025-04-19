@@ -31,6 +31,31 @@ class BusinessRuleItem(models.Model):
     write_date = fields.Datetime(string='Última Atualização', readonly=True)
     write_uid = fields.Many2one('res.users', string='Atualizado por', readonly=True)
 
+    # Status de sincronização com o sistema de IA
+    sync_status = fields.Selection([
+        ('not_synced', 'Não Sincronizado'),
+        ('synced', 'Sincronizado'),
+        ('error', 'Erro na Sincronização')
+    ], string='Status de Sincronização', default='not_synced', readonly=True)
+
+    def write(self, vals):
+        """Sobrescrever método write para atualizar status de sincronização da regra principal"""
+        # Lista de campos que afetam a sincronização
+        sync_fields = [
+            'name', 'description', 'rule_type', 'active'
+        ]
+
+        result = super(BusinessRuleItem, self).write(vals)
+
+        # Verificar se algum campo relevante foi alterado
+        if any(field in vals for field in sync_fields):
+            # Atualizar o status de sincronização da regra principal
+            for record in self:
+                if record.business_rule_id and record.business_rule_id.sync_status == 'synced':
+                    record.business_rule_id.write({'sync_status': 'not_synced'})
+
+        return result
+
     def toggle_active(self):
         """Alternar o status ativo/inativo da regra"""
         for record in self:

@@ -16,6 +16,11 @@ class BusinessRulesSyncController(http.Controller):
         """Endpoint HTTP para sincronizar regras de negócio"""
         return self.sync_business_rules(business_rule_id)
 
+    @http.route('/business_rules/sync_metadata', type='json', auth='user')
+    def sync_company_metadata_http(self, business_rule_id):
+        """Endpoint HTTP para sincronizar metadados da empresa"""
+        return self.sync_company_metadata(business_rule_id)
+
     def sync_business_rules(self, business_rule_id, env=None):
         """Endpoint para sincronizar regras de negócio com o sistema de IA"""
         try:
@@ -65,8 +70,8 @@ class BusinessRulesSyncController(http.Controller):
             # Construir o endpoint correto
             # A URL base já deve incluir o protocolo e o domínio (ex: http://localhost:8001)
             # O router já está registrado com o prefixo /api/v1 no main.py
-            # Adicionar /webhook para compatibilidade com a configuração do servidor
-            sync_endpoint = f"{api_url}/webhook/api/v1/business-rules/sync"
+            # Não adicionar /webhook para o endpoint de sincronização
+            sync_endpoint = f"{api_url}/api/v1/business-rules/sync"
 
             try:
                 # Preparar os dados para a API
@@ -314,6 +319,138 @@ class BusinessRulesSyncController(http.Controller):
             _logger.error(f"Erro ao obter URL da API do ai_credentials_manager: {str(e)}")
             # Não usar fallback - falhar de forma segura
             return None
+
+    def sync_company_metadata(self, business_rule_id, env=None):
+        """Endpoint para sincronizar metadados da empresa com o sistema de IA"""
+        try:
+            # Obter o ambiente Odoo
+            if env is None:
+                env = request.env if hasattr(request, 'env') else None
+
+            if env is None:
+                raise ValueError("Ambiente Odoo não disponível")
+
+            # Obter a regra de negócio
+            business_rule = env['business.rules'].browse(int(business_rule_id))
+            if not business_rule.exists():
+                return {'success': False, 'error': _('Regra de negócio não encontrada')}
+
+            # Chamar a API para sincronizar os metadados
+            api_url = self._get_api_url(env)
+
+            # Se não encontrar URL válida, falhar de forma segura
+            if not api_url:
+                raise ValueError("URL do sistema de IA não encontrada. Configure o módulo ai_credentials_manager primeiro.")
+
+            # Obter o token de autenticação
+            token = self._get_api_token(env)
+            _logger.info(f"Token obtido para sincronização de metadados: {token if token else 'None'}")
+
+            if not token:
+                raise ValueError("Token de API não encontrado. Configure o módulo ai_credentials_manager primeiro.")
+
+            # Construir o endpoint correto
+            sync_metadata_endpoint = f"{api_url}/api/v1/business-rules/sync-company-metadata"
+
+            try:
+                # Obter o account_id correto do módulo ai_credentials_manager
+                account_id = self._get_account_id(env)
+
+                # Se não encontrar credenciais, falhar de forma segura
+                if not account_id:
+                    raise ValueError("Nenhuma credencial válida encontrada. Configure o módulo ai_credentials_manager primeiro.")
+
+                headers = {
+                    'Content-Type': 'application/json',
+                    'Authorization': f"Bearer {token}"
+                }
+
+                # Preparar os metadados da empresa
+                metadata = self._prepare_company_metadata(business_rule)
+
+                # Fazer a chamada para a API
+                response = requests.post(
+                    sync_metadata_endpoint,
+                    params={'account_id': account_id},
+                    headers=headers,
+                    json=metadata,
+                    timeout=30
+                )
+
+                if response.status_code == 200:
+                    result = response.json()
+                    # Atualizar o status de sincronização
+                    business_rule.write({
+                        'last_sync_date': fields.Datetime.now(),
+                        'sync_status': 'synced'
+                    })
+
+                    return {
+                        'success': True,
+                        'message': _('Metadados da empresa sincronizados com sucesso'),
+                    }
+                else:
+                    _logger.error("Erro na API ao sincronizar metadados: %s", response.text)
+                    return {'success': False, 'error': f"Erro na API: {response.status_code} - {response.text}"}
+
+            except requests.RequestException as req_err:
+                _logger.error("Erro de conexão com a API: %s", str(req_err))
+                return {'success': False, 'error': f"Erro de conexão com a API: {str(req_err)}"}
+
+        except Exception as e:
+            _logger.error("Erro ao sincronizar metadados da empresa: %s", str(e))
+            return {'success': False, 'error': str(e)}
+
+    def _prepare_company_metadata(self, business_rule):
+        """Preparar metadados da empresa para envio ao sistema de IA"""
+        # Informações básicas da empresa
+        metadata = {
+            'company_info': {
+                'company_name': business_rule.name,
+                'website': business_rule.website,
+                'description': business_rule.description,
+                'company_values': business_rule.company_values,
+                'business_area': business_rule.business_area,
+                'business_area_other': business_rule.business_area_other,
+            },
+            'customer_service': {
+                'greeting_message': business_rule.greeting_message,
+                'communication_style': business_rule.communication_style,
+                'emoji_usage': business_rule.emoji_usage,
+                'inform_promotions_at_start': business_rule.inform_promotions_at_start,
+            },
+            'business_hours': {
+                'start': business_rule.business_hours_start,
+                'end': business_rule.business_hours_end,
+                'lunch_break': {
+                    'enabled': business_rule.has_lunch_break,
+                    'start': business_rule.lunch_break_start if business_rule.has_lunch_break else 0.0,
+                    'end': business_rule.lunch_break_end if business_rule.has_lunch_break else 0.0
+                },
+                'days': {
+                    'monday': business_rule.monday,
+                    'tuesday': business_rule.tuesday,
+                    'wednesday': business_rule.wednesday,
+                    'thursday': business_rule.thursday,
+                    'friday': business_rule.friday,
+                    'saturday': business_rule.saturday,
+                    'sunday': business_rule.sunday,
+                    'saturday_hours': {
+                        'start': business_rule.saturday_hours_start if business_rule.saturday else 0.0,
+                        'end': business_rule.saturday_hours_end if business_rule.saturday else 0.0
+                    }
+                }
+            },
+            'social_media': {
+                'show_website': business_rule.show_website,
+                'show_instagram': business_rule.show_instagram,
+                'show_facebook': business_rule.show_facebook,
+                'instagram_url': business_rule.instagram_url,
+                'facebook_url': business_rule.facebook_url,
+            }
+        }
+
+        return metadata
 
     def _prepare_rules_data(self, business_rule):
         """Preparar dados das regras para envio ao sistema de IA"""

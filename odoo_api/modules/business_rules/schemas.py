@@ -217,6 +217,44 @@ class DocumentListResponse(BaseModel):
     total: int = Field(description="Total de documentos")
 
 
+class GreetingStyleConfig(BaseModel):
+    """Configuração de saudação."""
+
+    enabled: bool = Field(description="Se a saudação está habilitada")
+    message: str = Field(description="Mensagem de saudação")
+
+
+class FarewellStyleConfig(BaseModel):
+    """Configuração de despedida."""
+
+    enabled: bool = Field(description="Se a despedida está habilitada")
+    message: str = Field(description="Mensagem de despedida")
+
+
+class EmojisStyleConfig(BaseModel):
+    """Configuração de emojis."""
+
+    enabled: bool = Field(description="Se o uso de emojis está habilitado")
+    frequency: str = Field(description="Frequência de uso de emojis (none, minimal, moderate, frequent)")
+
+
+class ToneStyleConfig(BaseModel):
+    """Configuração de tom."""
+
+    formal: int = Field(description="Nível de formalidade (1-5)")
+    friendly: int = Field(description="Nível de amigabilidade (1-5)")
+    technical: int = Field(description="Nível técnico (1-5)")
+
+
+class CustomerServiceStyleConfig(BaseModel):
+    """Configuração de estilo para a crew de atendimento ao cliente."""
+
+    greeting: GreetingStyleConfig = Field(description="Configuração de saudação")
+    farewell: FarewellStyleConfig = Field(description="Configuração de despedida")
+    emojis: EmojisStyleConfig = Field(description="Configuração de emojis")
+    tone: ToneStyleConfig = Field(description="Configuração de tom")
+
+
 class APIResponse(BaseModel):
     """Resposta padrão da API."""
 

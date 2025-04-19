@@ -9,9 +9,6 @@
                 <header>
                     <button name="action_sync_with_ai" string="Sincronizar com IA" type="object" class="btn-success" attrs="{'invisible': [('sync_status', '=', 'syncing')]}"/>
                     <field name="sync_status" widget="statusbar" statusbar_visible="not_synced,syncing,synced,error"/>
-                    <button name="action_view_active_rules" string="Ver Regras Ativas" type="object"/>
-                    <button name="action_scrape_website" string="Extrair do Website" type="object" attrs="{'invisible': [('website', '=', False)]}"/>
-                    <button name="action_view_customer_support" string="Ver Suporte ao Cliente" type="object"/>
                 </header>
                 <sheet>
                     <div class="oe_button_box" name="button_box">
@@ -38,9 +35,29 @@
                     </group>
                     <notebook>
                         <page string="Informações Básicas">
+                            <div class="alert alert-info" role="alert">
+                                <p>Configure aqui as informações básicas da empresa que serão utilizadas pelo agente de IA.</p>
+                            </div>
+
                             <group>
-                                <field name="description" placeholder="Breve descrição da empresa e seus serviços..."/>
-                                <field name="company_values" placeholder="Valores que sua marca representa..."/>
+                                <group>
+                                    <field name="description" placeholder="Descrição da empresa e seus serviços..."/>
+                                    <field name="company_values" placeholder="Valores que sua marca representa..."/>
+                                </group>
+                            </group>
+
+                            <group string="Endereço da Empresa">
+                                <group>
+                                    <field name="street" placeholder="Rua, número"/>
+                                    <field name="street2" placeholder="Complemento"/>
+                                    <field name="city" placeholder="Cidade"/>
+                                </group>
+                                <group>
+                                    <field name="state" placeholder="Estado"/>
+                                    <field name="zip" placeholder="CEP"/>
+                                    <field name="country"/>
+                                    <field name="share_address"/>
+                                </group>
                             </group>
                         </page>
                         <page string="Configurações de Atendimento">
@@ -77,67 +94,91 @@
                                 </group>
                             </group>
                         </page>
-                        <page string="Regras Permanentes">
+                        <page string="Regras de Negócio e Promoções">
                             <div class="alert alert-info" role="alert">
-                                <p>As regras permanentes definem o comportamento padrão do agente de IA. Estas regras estarão sempre ativas, a menos que sejam explicitamente desativadas.</p>
+                                <p>Configure aqui as regras que definem o comportamento do agente de IA. Você pode criar regras permanentes ou temporárias/promoções com período de validade definido.</p>
                             </div>
-                            <field name="rule_ids">
-                                <tree editable="bottom">
-                                    <field name="name"/>
-                                    <field name="rule_type"/>
-                                    <field name="description"/>
-                                    <field name="active" widget="boolean_toggle"/>
-                                </tree>
-                            </field>
-                        </page>
-                        <page string="Regras Temporárias">
-                            <div class="alert alert-info" role="alert">
-                                <p>As regras temporárias têm um período de validade definido e são úteis para situações excepcionais ou promoções.</p>
-                            </div>
+
+                            <group>
+                                <field name="inform_promotions_at_start" widget="boolean_toggle"/>
+                            </group>
+
+                            <h3>Regras de Negócio e Promoções</h3>
                             <field name="temporary_rule_ids">
                                 <tree>
                                     <field name="name"/>
-                                    <field name="rule_type"/>
-                                    <field name="date_start"/>
-                                    <field name="date_end"/>
+                                    <field name="rule_type_display"/>
+                                    <field name="is_temporary" invisible="1"/>
+                                    <field name="date_start" attrs="{'invisible': [('is_temporary', '=', False)]}"/>
+                                    <field name="date_end" attrs="{'invisible': [('is_temporary', '=', False)]}"/>
                                     <field name="state" decoration-success="state == 'active'" decoration-warning="state == 'draft'" decoration-danger="state == 'expired'" decoration-muted="state == 'cancelled'"/>
+                                    <field name="active" widget="boolean_toggle"/>
+                                </tree>
+                                <form>
+                                    <sheet>
+                                        <group>
+                                            <group>
+                                                <field name="name"/>
+                                                <field name="rule_type"/>
+                                                <field name="is_temporary"/>
+                                            </group>
+                                            <group>
+                                                <field name="date_start" attrs="{'invisible': [('is_temporary', '=', False)], 'required': [('is_temporary', '=', True)]}"/>
+                                                <field name="date_end" attrs="{'invisible': [('is_temporary', '=', False)], 'required': [('is_temporary', '=', True)]}"/>
+                                                <field name="active"/>
+                                            </group>
+                                        </group>
+                                        <group string="Descrição">
+                                            <field name="description" nolabel="1" placeholder="Descreva a regra em detalhes..."/>
+                                        </group>
+                                    </sheet>
+                                </form>
+                            </field>
+                        </page>
+                        <page string="Regras de Agendamento">
+                            <div class="alert alert-info" role="alert">
+                                <p>Configure aqui as regras de agendamento que o agente de IA deve seguir ao lidar com solicitações de agendamento dos clientes.</p>
+                            </div>
+                            <field name="scheduling_rule_ids">
+                                <tree>
+                                    <field name="sequence" widget="handle"/>
+                                    <field name="name"/>
+                                    <field name="service_type"/>
+                                    <field name="duration" widget="float_time"/>
+                                    <field name="sync_status" decoration-success="sync_status == 'synced'" decoration-danger="sync_status == 'error'" decoration-info="sync_status == 'not_synced'"/>
                                     <field name="active" widget="boolean_toggle"/>
                                 </tree>
                             </field>
                         </page>
                         <page string="Documentos de Suporte ao Cliente">
                             <div class="alert alert-info" role="alert">
-                                <p>Nesta aba você pode gerenciar documentos relacionados ao suporte ao cliente.</p>
+                                <p><strong>Importante:</strong> Nesta aba você pode gerenciar documentos relacionados ao suporte ao cliente. Estes documentos serão vetorizados e utilizados pelo agente de IA para responder dúvidas dos clientes.</p>
+                            </div>
+
+                            <!-- Botões de Ação -->
+                            <div class="row mb-3">
+                                <div class="col-12">
+                                    <button name="action_upload_documents"
+                                            string="Adicionar Novo Documento"
+                                            type="object"
+                                            class="btn btn-primary"
+                                            icon="fa-upload"/>
+                                </div>
                             </div>
 
                             <!-- Documentos de Suporte -->
                             <div class="row">
                                 <div class="col-12">
-                                    <h3>Documentos de Suporte</h3>
-                                    <field name="support_document_ids" widget="many2many" nolabel="1">
+                                    <h3>Documentos Cadastrados</h3>
+                                    <field name="support_document_ids" options="{'no_create': True, 'no_create_edit': True}" widget="many2many" nolabel="1">
                                         <tree>
                                             <field name="name"/>
                                             <field name="document_type"/>
                                             <field name="create_date"/>
                                             <field name="sync_status" decoration-success="sync_status == 'synced'" decoration-danger="sync_status == 'error'" decoration-info="sync_status == 'not_synced'"/>
+                                            <field name="active" widget="boolean_toggle"/>
                                         </tree>
                                     </field>
-                                </div>
-                            </div>
-
-                            <!-- Botões de Ação -->
-                            <div class="row mt-3">
-                                <div class="col-12">
-                                    <button name="action_upload_documents"
-                                            string="Adicionar Documento"
-                                            type="object"
-                                            class="btn btn-primary"
-                                            icon="fa-upload"/>
-                                    <button name="action_sync_support_documents"
-                                            string="Sincronizar Documentos"
-                                            type="object"
-                                            class="btn btn-success"
-                                            icon="fa-refresh"/>
                                 </div>
                             </div>
                         </page>

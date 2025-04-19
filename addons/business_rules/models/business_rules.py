@@ -14,10 +14,36 @@ class BusinessRules(models.Model):
     _inherit = ['mail.thread', 'mail.activity.mixin']
 
     name = fields.Char(string='Nome da Empresa', required=True, tracking=True)
+
+    # Canais online da empresa
     website = fields.Char(string='Site da Empresa', tracking=True)
-    description = fields.Text(string='Descrição Curta', tracking=True)
+    mention_website_at_end = fields.Boolean(string='Mencionar site ao finalizar conversa', default=False, tracking=True,
+                                          help='Se marcado, o agente mencionará o site da empresa ao finalizar a conversa')
+
+    facebook_url = fields.Char(string='Página do Facebook', tracking=True,
+                              help='URL completa da página do Facebook (ex: https://www.facebook.com/suaempresa)')
+    mention_facebook_at_end = fields.Boolean(string='Mencionar Facebook ao finalizar conversa', default=False, tracking=True,
+                                           help='Se marcado, o agente mencionará a página do Facebook ao finalizar a conversa')
+
+    instagram_url = fields.Char(string='Perfil do Instagram', tracking=True,
+                               help='URL completa do perfil do Instagram (ex: https://www.instagram.com/suaempresa)')
+    mention_instagram_at_end = fields.Boolean(string='Mencionar Instagram ao finalizar conversa', default=False, tracking=True,
+                                            help='Se marcado, o agente mencionará o perfil do Instagram ao finalizar a conversa')
+
+    description = fields.Text(string='Descrição da Empresa', tracking=True)
     company_values = fields.Text(string='Valores da Marca', tracking=True,
                                 help='Descreva os principais valores que sua marca representa')
+
+    # Endereço da empresa
+    street = fields.Char(string='Endereço', tracking=True)
+    street2 = fields.Char(string='Complemento', tracking=True)
+    city = fields.Char(string='Cidade', tracking=True)
+    state = fields.Char(string='Estado', tracking=True)
+    zip = fields.Char(string='CEP', tracking=True)
+    country = fields.Char(string='País', default='Brasil', tracking=True)
+    share_address = fields.Boolean(string='Permitir ao agente informar o endereço quando solicitado',
+                                  default=True, tracking=True,
+                                  help='Se marcado, o agente poderá informar o endereço da empresa quando o cliente solicitar')
 
     # Configurações de Atendimento
     greeting_message = fields.Text(string='Saudação Inicial', tracking=True,
@@ -53,9 +79,11 @@ class BusinessRules(models.Model):
     saturday = fields.Boolean(string='Sábado', default=False, tracking=True)
     sunday = fields.Boolean(string='Domingo', default=False, tracking=True)
 
-    # Horários especiais para sábado
+    # Horários especiais para sábado e domingo
     saturday_hours_start = fields.Float(string='Início Sábado', default=8.0, tracking=True)
     saturday_hours_end = fields.Float(string='Término Sábado', default=12.0, tracking=True)
+    sunday_hours_start = fields.Float(string='Início Domingo', default=8.0, tracking=True)
+    sunday_hours_end = fields.Float(string='Término Domingo', default=12.0, tracking=True)
 
     # Área de Negócio
     business_area = fields.Selection([
@@ -76,8 +104,11 @@ class BusinessRules(models.Model):
     business_area_other = fields.Char(string='Outra Área de Negócio', tracking=True)
 
     # Regras e Sincronização
-    rule_ids = fields.One2many('business.rule.item', 'business_rule_id', string='Regras Permanentes')
-    temporary_rule_ids = fields.One2many('business.temporary.rule', 'business_rule_id', string='Regras Temporárias')
+    rule_ids = fields.One2many('business.rule.item', 'business_rule_id', string='Regras de Negócio')
+    temporary_rule_ids = fields.One2many('business.temporary.rule', 'business_rule_id', string='Regras Temporárias e Promoções')
+    scheduling_rule_ids = fields.One2many('business.scheduling.rule', 'business_rule_id', string='Regras de Agendamento')
+    inform_promotions_at_start = fields.Boolean(string='Informar Promoções e Regras Temporárias no início da conversa', default=False, tracking=True,
+                                              help='Se marcado, o agente informará sobre promoções e regras temporárias ativas no início da conversa com o cliente')
 
     # Documentos de Suporte ao Cliente
     support_document_ids = fields.Many2many(
@@ -101,8 +132,32 @@ class BusinessRules(models.Model):
     company_id = fields.Many2one('res.company', string='Empresa', default=lambda self: self.env.company)
 
     # Contagem de regras ativas
-    active_permanent_rules_count = fields.Integer(compute='_compute_active_rules_count', string='Regras Permanentes Ativas')
-    active_temporary_rules_count = fields.Integer(compute='_compute_active_rules_count', string='Regras Temporárias Ativas')
+    active_permanent_rules_count = fields.Integer(compute='_compute_active_rules_count', string='Regras de Negócio Ativas')
+    active_temporary_rules_count = fields.Integer(compute='_compute_active_rules_count', string='Promoções e Regras Temporárias Ativas')
+
+    def write(self, vals):
+        """Sobrescrever método write para atualizar status de sincronização"""
+        # Lista de campos que afetam a sincronização
+        sync_fields = [
+            'name', 'description', 'company_values', 'business_area', 'business_area_other',
+            'website', 'facebook_url', 'instagram_url', 'mention_website_at_end',
+            'mention_facebook_at_end', 'mention_instagram_at_end',
+            'greeting_message', 'communication_style', 'emoji_usage',
+            'business_hours_start', 'business_hours_end', 'has_lunch_break',
+            'lunch_break_start', 'lunch_break_end',
+            'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday',
+            'saturday_hours_start', 'saturday_hours_end', 'sunday_hours_start', 'sunday_hours_end',
+            'street', 'street2', 'city', 'state', 'zip', 'country', 'share_address',
+            'inform_promotions_at_start'
+        ]
+
+        # Verificar se algum campo relevante foi alterado
+        if any(field in vals for field in sync_fields):
+            # Se o status atual é 'synced', mudar para 'not_synced'
+            if self.sync_status == 'synced':
+                vals['sync_status'] = 'not_synced'
+
+        return super(BusinessRules, self).write(vals)
 
     @api.depends('rule_ids', 'temporary_rule_ids')
     def _compute_active_rules_count(self):
@@ -130,7 +185,7 @@ class BusinessRules(models.Model):
                 # Outras configurações padrão podem ser carregadas aqui
 
     def action_sync_with_ai(self):
-        """Sincronizar regras com o sistema de IA"""
+        """Sincronizar regras e metadados com o sistema de IA"""
         self.ensure_one()
 
         # Atualizar status para 'sincronizando'
@@ -138,33 +193,43 @@ class BusinessRules(models.Model):
         self.env.cr.commit()  # Commit imediato para atualizar a UI
 
         try:
-            # Chamar diretamente o método do controlador
             # Importar o controlador
             from ..controllers.sync_controller import BusinessRulesSyncController
 
             # Criar uma instância do controlador
             controller = BusinessRulesSyncController()
 
-            # Chamar o método diretamente, passando o ambiente
-            result = controller.sync_business_rules(self.id, env=self.env)
+            # 1. Primeiro sincronizar os metadados da empresa
+            _logger.info(f"Iniciando sincronização de metadados para a regra de negócio {self.id}")
+            metadata_result = controller.sync_company_metadata(self.id, env=self.env)
 
-            # Verificar resultado da sincronização
-            if result and result.get('success'):
+            if not metadata_result or not metadata_result.get('success'):
+                _logger.warning(f"Falha na sincronização de metadados: {metadata_result.get('error', 'Erro desconhecido')}")
+                # Continuar mesmo se a sincronização de metadados falhar
+            else:
+                _logger.info("Metadados da empresa sincronizados com sucesso")
+
+            # 2. Depois sincronizar as regras de negócio
+            _logger.info(f"Iniciando sincronização de regras para a regra de negócio {self.id}")
+            rules_result = controller.sync_business_rules(self.id, env=self.env)
+
+            # Verificar resultado da sincronização de regras
+            if rules_result and rules_result.get('success'):
                 self.write({
                     'last_sync_date': fields.Datetime.now(),
                     'sync_status': 'synced'
                 })
 
                 # Mensagem de sucesso com detalhes
-                rules_count = result.get('rules_count', 0)
-                vectorized_count = result.get('vectorized_rules', 0)
+                rules_count = rules_result.get('rules_count', 0)
+                vectorized_count = rules_result.get('vectorized_rules', 0)
 
                 return {
                     'type': 'ir.actions.client',
                     'tag': 'display_notification',
                     'params': {
                         'title': _('Sincronização Concluída'),
-                        'message': _(f'Sincronizadas {rules_count} regras, {vectorized_count} vetorizadas.'),
+                        'message': _(f'Sincronizadas {rules_count} regras, {vectorized_count} vetorizadas. Metadados da empresa também foram sincronizados.'),
                         'sticky': False,
                         'type': 'success',
                     }
@@ -181,7 +246,7 @@ class BusinessRules(models.Model):
                     'tag': 'display_notification',
                     'params': {
                         'title': _('Erro na Sincronização'),
-                        'message': _(f'Erro ao sincronizar: {result.get("error", "Erro desconhecido")}'),
+                        'message': _(f'Erro ao sincronizar regras: {rules_result.get("error", "Erro desconhecido")}'),
                         'sticky': True,
                         'type': 'danger',
                     }
@@ -219,20 +284,7 @@ class BusinessRules(models.Model):
             'context': {'default_business_rule_id': self.id}
         }
 
-    def action_scrape_website(self):
-        """Abrir wizard para fazer scraping do website"""
-        self.ensure_one()
-        if not self.website:
-            raise UserError(_("Por favor, informe o site da empresa antes de usar esta função."))
-
-        return {
-            'name': _('Extrair Informações do Website'),
-            'type': 'ir.actions.act_window',
-            'res_model': 'business.website.scraper.wizard',
-            'view_mode': 'form',
-            'target': 'new',
-            'context': {'default_business_rule_id': self.id, 'default_website': self.website}
-        }
+    # Método action_scrape_website removido pois não é mais necessário
 
     def action_view_customer_support(self):
         """Abre a visualização de suporte ao cliente."""
@@ -362,3 +414,98 @@ class BusinessRules(models.Model):
         except Exception as e:
             _logger.error(f"Exceção ao chamar MCP-Odoo: {str(e)}")
             return {'success': False, 'error': str(e)}
+
+    def action_view_business_rules(self):
+        """Visualiza as regras de negócio no Sistema de IA"""
+        self.ensure_one()
+
+        # Obter URL base e token de autenticação
+        IrConfigParam = self.env['ir.config_parameter'].sudo()
+        mcp_url = IrConfigParam.get_param('business_rules.mcp_url', 'http://localhost:8000')
+        account_id = IrConfigParam.get_param('business_rules.account_id', 'account_1')
+
+        # Construir URL para visualização
+        url = f"{mcp_url}/api/v1/business-rules/view?account_id={account_id}"
+
+        # Abrir URL em nova janela
+        return {
+            'type': 'ir.actions.act_url',
+            'url': url,
+            'target': 'new',
+        }
+
+    def action_view_temporary_rules(self):
+        """Visualiza as regras temporárias no Sistema de IA"""
+        self.ensure_one()
+
+        # Obter URL base e token de autenticação
+        IrConfigParam = self.env['ir.config_parameter'].sudo()
+        mcp_url = IrConfigParam.get_param('business_rules.mcp_url', 'http://localhost:8000')
+        account_id = IrConfigParam.get_param('business_rules.account_id', 'account_1')
+
+        # Construir URL para visualização
+        url = f"{mcp_url}/api/v1/business-rules/view-temporary-rules?account_id={account_id}"
+
+        # Abrir URL em nova janela
+        return {
+            'type': 'ir.actions.act_url',
+            'url': url,
+            'target': 'new',
+        }
+
+    def action_view_scheduling_rules(self):
+        """Visualiza as regras de agendamento no Sistema de IA"""
+        self.ensure_one()
+
+        # Obter URL base e token de autenticação
+        IrConfigParam = self.env['ir.config_parameter'].sudo()
+        mcp_url = IrConfigParam.get_param('business_rules.mcp_url', 'http://localhost:8000')
+        account_id = IrConfigParam.get_param('business_rules.account_id', 'account_1')
+
+        # Construir URL para visualização
+        url = f"{mcp_url}/api/v1/business-rules/view-scheduling-rules?account_id={account_id}"
+
+        # Abrir URL em nova janela
+        return {
+            'type': 'ir.actions.act_url',
+            'url': url,
+            'target': 'new',
+        }
+
+    def action_view_support_documents(self):
+        """Visualiza os documentos de suporte no Sistema de IA"""
+        self.ensure_one()
+
+        # Obter URL base e token de autenticação
+        IrConfigParam = self.env['ir.config_parameter'].sudo()
+        mcp_url = IrConfigParam.get_param('business_rules.mcp_url', 'http://localhost:8000')
+        account_id = IrConfigParam.get_param('business_rules.account_id', 'account_1')
+
+        # Construir URL para visualização
+        url = f"{mcp_url}/api/v1/business-rules/view-support-documents?account_id={account_id}"
+
+        # Abrir URL em nova janela
+        return {
+            'type': 'ir.actions.act_url',
+            'url': url,
+            'target': 'new',
+        }
+
+    def action_view_company_metadata(self):
+        """Visualiza os metadados da empresa no Sistema de IA"""
+        self.ensure_one()
+
+        # Obter URL base e token de autenticação
+        IrConfigParam = self.env['ir.config_parameter'].sudo()
+        mcp_url = IrConfigParam.get_param('business_rules.mcp_url', 'http://localhost:8000')
+        account_id = IrConfigParam.get_param('business_rules.account_id', 'account_1')
+
+        # Construir URL para visualização
+        url = f"{mcp_url}/api/v1/business-rules/view-company-metadata?account_id={account_id}"
+
+        # Abrir URL em nova janela
+        return {
+            'type': 'ir.actions.act_url',
+            'url': url,
+            'target': 'new',
+        }

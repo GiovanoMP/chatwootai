@@ -802,16 +802,19 @@ class BusinessRulesService:
                         'business.temporary.rule',
                         'read',
                         [temporary_rule_ids],
-                        {'fields': ['name', 'description', 'rule_type', 'active', 'date_start', 'date_end', 'create_date', 'write_date']}
+                        {'fields': ['name', 'description', 'rule_type', 'active', 'is_temporary', 'date_start', 'date_end', 'create_date', 'write_date']}
                     )
 
                     for rule_data in temporary_rules_data:
                         try:
-                            # Processar datas de início e fim
+                            # Verificar se a regra é realmente temporária
+                            is_temporary = rule_data.get('is_temporary', False)
+
+                            # Processar datas de início e fim apenas se for temporária
                             start_date = None
                             end_date = None
 
-                            if rule_data.get('date_start'):
+                            if is_temporary and rule_data.get('date_start'):
                                 try:
                                     # Converter string de data para objeto datetime e depois para date
                                     dt = datetime.fromisoformat(rule_data['date_start'].replace('Z', '+00:00'))
@@ -819,7 +822,7 @@ class BusinessRulesService:
                                 except (ValueError, TypeError) as e:
                                     logger.warning(f"Failed to parse start date {rule_data.get('date_start')}: {e}")
 
-                            if rule_data.get('date_end'):
+                            if is_temporary and rule_data.get('date_end'):
                                 try:
                                     # Converter string de data para objeto datetime e depois para date
                                     dt = datetime.fromisoformat(rule_data['date_end'].replace('Z', '+00:00'))
@@ -827,16 +830,19 @@ class BusinessRulesService:
                                 except (ValueError, TypeError) as e:
                                     logger.warning(f"Failed to parse end date {rule_data.get('date_end')}: {e}")
 
+                            # Definir prioridade com base no tipo de regra
+                            priority = 1 if is_temporary else 3  # 1 para temporárias (máxima), 3 para permanentes
+
                             # Criar objeto BusinessRuleResponse
                             rule = BusinessRuleResponse(
                                 id=rule_data['id'],
                                 name=rule_data['name'],
                                 description=rule_data.get('description', ''),
                                 type=rule_data.get('rule_type', 'general'),
-                                priority=1,  # Regras temporárias têm prioridade máxima
+                                priority=priority,
                                 active=rule_data.get('active', True),
                                 rule_data={},  # Dados específicos da regra
-                                is_temporary=True,
+                                is_temporary=is_temporary,
                                 start_date=start_date,
                                 end_date=end_date,
                                 created_at=datetime.fromisoformat(rule_data.get('create_date', datetime.now().isoformat())),
@@ -1213,6 +1219,8 @@ Conteúdo:
             if is_active_now:
                 text_parts.append("Esta regra está ATIVA no momento atual.")
         else:
+            # Adicionar informação de que é uma regra permanente
+            text_parts.append(f"REGRA PERMANENTE")
             text_parts.append("Regra permanente - aplica-se continuamente sem data de expiração.")
 
         # Adicionar dados específicos da regra

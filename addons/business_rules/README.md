@@ -4,6 +4,30 @@
 
 Este módulo permite configurar regras de negócio específicas para personalizar o comportamento dos agentes de IA de acordo com as necessidades de cada empresa. Através de uma interface intuitiva, os usuários podem definir como os agentes devem se comunicar, quais regras devem seguir e como devem responder em diferentes situações.
 
+## Novidades (Abril 2025)
+
+### Novos Endpoints para Consulta de Dados Processados
+
+Foram implementados novos endpoints para consultar dados processados pelo sistema de IA:
+
+- **GET /api/v1/business-rules/processed/company-metadata**: Retorna os metadados da empresa processados pelo sistema de IA
+- **GET /api/v1/business-rules/processed/service-config**: Retorna as configurações de atendimento processadas pelo sistema de IA
+- **GET /api/v1/business-rules/processed/scheduling-rules**: Retorna as regras de agendamento processadas pelo sistema de IA
+- **GET /api/v1/business-rules/processed/support-documents**: Retorna todos os documentos de suporte processados pelo sistema de IA
+- **GET /api/v1/business-rules/processed/support-document/{document_id}**: Retorna um documento de suporte específico processado pelo sistema de IA
+
+Estes endpoints permitem que aplicações externas acessem os dados processados pelo sistema de IA, facilitando a integração com outros sistemas.
+
+### Reorganização dos Agentes de Embedding
+
+Os agentes de embedding foram reorganizados em uma estrutura de diretórios mais modular, agrupados por módulo Odoo:
+
+- **BusinessRulesEmbeddingAgent**: Processa regras de negócio para vetorização
+- **SupportDocumentEmbeddingAgent**: Processa documentos de suporte para vetorização
+- **CompanyMetadataEmbeddingAgent**: Processa metadados da empresa para vetorização
+
+Esta reorganização facilita a manutenção e a adição de novos agentes no futuro.
+
 ## Características Principais
 
 ### 1. Informações da Empresa
@@ -97,6 +121,15 @@ Este módulo se integra com:
 - Módulo de Descrição Semântica de Produtos
 - Módulo de Gerenciador de Credenciais para IA
 
+### Integração com Sistema de IA
+
+O módulo se integra com o sistema de IA através de uma API REST, permitindo:
+
+1. **Sincronização de Regras**: Envio de regras de negócio para o sistema de IA
+2. **Vetorização de Dados**: Processamento e vetorização de regras, documentos e metadados
+3. **Busca Semântica**: Consulta de regras e documentos usando processamento de linguagem natural
+4. **Acesso a Dados Processados**: Consulta de dados processados pelo sistema de IA através dos novos endpoints
+
 ### Integração com Gerenciador de Credenciais
 
 O módulo agora se integra com o **Gerenciador de Credenciais para IA** para obter as credenciais de autenticação de forma segura:
@@ -111,9 +144,12 @@ O módulo agora se integra com o **Gerenciador de Credenciais para IA** para obt
 - O módulo utiliza PyPDF2 para processamento de arquivos PDF
 - O módulo utiliza python-docx para processamento de arquivos DOCX
 - A sincronização com o sistema de IA é feita via API REST
+- Os dados processados são armazenados no Qdrant para busca semântica
+- Os agentes de embedding utilizam OpenAI para processamento de linguagem natural
+- A estrutura modular dos agentes facilita a manutenção e a adição de novos agentes
 
 ---
 
 **Desenvolvido por:** ChatwootAI Team
-**Versão:** 1.0
+**Versão:** 1.2
 **Compatibilidade:** Odoo 14.0

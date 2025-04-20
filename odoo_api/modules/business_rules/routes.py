@@ -284,7 +284,7 @@ async def sync_support_documents(
             raise ValidationError("documents list is required")
 
         # Sincronizar documentos de suporte
-        result = await service.sync_support_documents(
+        result = await service.sync_support_documents_with_data(
             account_id=account_id,
             business_rule_id=business_rule_id,
             documents=documents,
@@ -984,7 +984,7 @@ async def get_business_rule(
 
 # Rota para obter documentos de suporte processados
 @router.get(
-    "/view-support-document/{document_id}",
+    "/processed/support-document/{document_id}",
     response_model=APIResponse,
     summary="Obtém um documento de suporte processado",
     description="Obtém um documento de suporte processado pelo sistema de IA.",
@@ -1043,7 +1043,7 @@ async def view_support_document(
 
 # Rota para obter metadados da empresa processados
 @router.get(
-    "/view-company-metadata",
+    "/processed/company-metadata",
     response_model=APIResponse,
     summary="Obtém os metadados da empresa processados",
     description="Obtém os metadados da empresa processados pelo sistema de IA.",
@@ -1067,6 +1067,177 @@ async def view_company_metadata(
 
         # Obter metadados processados
         result = await service.get_processed_company_metadata(
+            account_id=account_id,
+        )
+
+        # Construir resposta
+        return build_response(
+            success=True,
+            data=result,
+            meta={"request_id": getattr(request.state, "request_id", "unknown")},
+        )
+
+    except ValidationError as e:
+        logger.warning(f"Validation error: {e}")
+        raise HTTPException(
+            status_code=422,
+            detail={"code": getattr(e, "code", "VALIDATION_ERROR"), "message": str(e), "details": getattr(e, "details", None)},
+        )
+
+    except OdooAPIError as e:
+        logger.error(f"Odoo API error: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail={"code": getattr(e, "code", "ODOO_API_ERROR"), "message": str(e), "details": getattr(e, "details", None)},
+        )
+
+    except Exception as e:
+        logger.error(f"Unexpected error: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail={"code": "INTERNAL_SERVER_ERROR", "message": str(e)},
+        )
+
+# Rota para obter configurações de atendimento processadas
+@router.get(
+    "/processed/service-config",
+    response_model=APIResponse,
+    summary="Obtém as configurações de atendimento processadas",
+    description="Obtém as configurações de atendimento processadas pelo sistema de IA.",
+)
+async def view_service_config(
+    request: Request,
+    account_id: str = Query(None, description="ID da conta (opcional, para compatibilidade)"),
+):
+    """
+    Obtém as configurações de atendimento processadas pelo sistema de IA.
+    """
+    try:
+        service = get_business_rules_service()
+
+        # Obter account_id do estado da requisição (definido pelo middleware de autenticação)
+        # Se não estiver definido, usar o account_id da URL (para compatibilidade)
+        account_id = getattr(request.state, "account_id", account_id)
+
+        if not account_id:
+            raise ValidationError("account_id is required")
+
+        # Obter configurações de atendimento processadas
+        result = await service.get_processed_service_config(
+            account_id=account_id,
+        )
+
+        # Construir resposta
+        return build_response(
+            success=True,
+            data=result,
+            meta={"request_id": getattr(request.state, "request_id", "unknown")},
+        )
+
+    except ValidationError as e:
+        logger.warning(f"Validation error: {e}")
+        raise HTTPException(
+            status_code=422,
+            detail={"code": getattr(e, "code", "VALIDATION_ERROR"), "message": str(e), "details": getattr(e, "details", None)},
+        )
+
+    except OdooAPIError as e:
+        logger.error(f"Odoo API error: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail={"code": getattr(e, "code", "ODOO_API_ERROR"), "message": str(e), "details": getattr(e, "details", None)},
+        )
+
+    except Exception as e:
+        logger.error(f"Unexpected error: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail={"code": "INTERNAL_SERVER_ERROR", "message": str(e)},
+        )
+
+# Rota para obter regras de agendamento processadas
+@router.get(
+    "/processed/scheduling-rules",
+    response_model=APIResponse,
+    summary="Obtém as regras de agendamento processadas",
+    description="Obtém as regras de agendamento processadas pelo sistema de IA.",
+)
+async def view_scheduling_rules(
+    request: Request,
+    account_id: str = Query(None, description="ID da conta (opcional, para compatibilidade)"),
+):
+    """
+    Obtém as regras de agendamento processadas pelo sistema de IA.
+    """
+    try:
+        service = get_business_rules_service()
+
+        # Obter account_id do estado da requisição (definido pelo middleware de autenticação)
+        # Se não estiver definido, usar o account_id da URL (para compatibilidade)
+        account_id = getattr(request.state, "account_id", account_id)
+
+        if not account_id:
+            raise ValidationError("account_id is required")
+
+        # Obter regras de agendamento processadas
+        result = await service.get_processed_scheduling_rules(
+            account_id=account_id,
+        )
+
+        # Construir resposta
+        return build_response(
+            success=True,
+            data=result,
+            meta={"request_id": getattr(request.state, "request_id", "unknown")},
+        )
+
+    except ValidationError as e:
+        logger.warning(f"Validation error: {e}")
+        raise HTTPException(
+            status_code=422,
+            detail={"code": getattr(e, "code", "VALIDATION_ERROR"), "message": str(e), "details": getattr(e, "details", None)},
+        )
+
+    except OdooAPIError as e:
+        logger.error(f"Odoo API error: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail={"code": getattr(e, "code", "ODOO_API_ERROR"), "message": str(e), "details": getattr(e, "details", None)},
+        )
+
+    except Exception as e:
+        logger.error(f"Unexpected error: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail={"code": "INTERNAL_SERVER_ERROR", "message": str(e)},
+        )
+
+# Rota para obter todos os documentos de suporte processados
+@router.get(
+    "/processed/support-documents",
+    response_model=APIResponse,
+    summary="Obtém todos os documentos de suporte processados",
+    description="Obtém todos os documentos de suporte processados pelo sistema de IA.",
+)
+async def view_support_documents(
+    request: Request,
+    account_id: str = Query(None, description="ID da conta (opcional, para compatibilidade)"),
+):
+    """
+    Obtém todos os documentos de suporte processados pelo sistema de IA.
+    """
+    try:
+        service = get_business_rules_service()
+
+        # Obter account_id do estado da requisição (definido pelo middleware de autenticação)
+        # Se não estiver definido, usar o account_id da URL (para compatibilidade)
+        account_id = getattr(request.state, "account_id", account_id)
+
+        if not account_id:
+            raise ValidationError("account_id is required")
+
+        # Obter todos os documentos de suporte processados
+        result = await service.get_all_processed_support_documents(
             account_id=account_id,
         )
 

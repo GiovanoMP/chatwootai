@@ -310,6 +310,21 @@ class BusinessRules(models.Model):
             'context': {'default_business_rule_id': self.id}
         }
 
+    def action_add_service_config(self):
+        """Abre um formulário para adicionar configurações de atendimento"""
+        self.ensure_one()
+        # Como as configurações de atendimento são campos do próprio modelo business.rules,
+        # vamos apenas abrir o formulário atual em modo de edição
+        return {
+            'type': 'ir.actions.act_window',
+            'res_model': 'business.rules',
+            'res_id': self.id,
+            'view_mode': 'form',
+            'target': 'current',
+            'flags': {'mode': 'edit'},
+            'context': {'active_tab': 'service_config'}
+        }
+
     def action_sync_support_documents(self):
         """Sincroniza os documentos de suporte com o sistema de IA."""
         self.ensure_one()

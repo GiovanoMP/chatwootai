@@ -12,6 +12,39 @@ from datetime import datetime, date
 
 from qdrant_client import models
 
+
+def format_date_to_iso(date_str):
+    """Converte uma string de data para o formato ISO 8601 correto.
+
+    Args:
+        date_str: String de data no formato 'YYYY-MM-DD HH:MM:SS' ou similar
+
+    Returns:
+        String de data no formato ISO 8601 ou None se a conversão falhar
+    """
+    if not date_str:
+        return None
+
+    try:
+        # Tentar converter diretamente se já estiver em formato ISO
+        if 'T' in date_str:
+            datetime.fromisoformat(date_str)
+            return date_str
+
+        # Converter do formato 'YYYY-MM-DD HH:MM:SS' para ISO 8601
+        dt = datetime.strptime(date_str, '%Y-%m-%d %H:%M:%S')
+        return dt.isoformat()
+    except (ValueError, TypeError) as e:
+        # Registrar o erro para debug
+        logger.error(f"Failed to convert date '{date_str}' to ISO format: {e}")
+        # Tentar outros formatos comuns
+        try:
+            dt = datetime.strptime(date_str, '%Y-%m-%d')
+            return dt.isoformat()
+        except (ValueError, TypeError):
+            # Retornar None se a conversão falhar
+            return None
+
 from odoo_api.core.exceptions import ValidationError, NotFoundError
 from odoo_api.core.odoo_connector import OdooConnector, OdooConnectorFactory
 from odoo_api.services.cache_service import get_cache_service
@@ -780,14 +813,14 @@ class BusinessRulesService:
                                 name=rule_data['name'],
                                 description=rule_data.get('description', ''),
                                 type=rule_data.get('rule_type', 'general'),
-                                priority='high',  # Regras temporárias têm prioridade alta por padrão
+                                priority=3,  # Regras temporárias têm prioridade alta por padrão
                                 active=rule_data.get('active', True),
                                 rule_data={},  # Dados específicos da regra
                                 is_temporary=True,
-                                start_date=date.fromisoformat(rule_data['date_start']) if rule_data.get('date_start') else None,
-                                end_date=date.fromisoformat(rule_data['date_end']) if rule_data.get('date_end') else None,
-                                created_at=datetime.fromisoformat(rule_data['create_date']),
-                                updated_at=datetime.fromisoformat(rule_data['write_date']),
+                                start_date=None,
+                                end_date=None,
+                                created_at=datetime.now(),
+                                updated_at=datetime.now(),
                             )
 
                             # Preparar texto para vetorização
@@ -887,7 +920,7 @@ class BusinessRulesService:
                 'business.support.document',
                 'read',
                 [document_ids],
-                {'fields': ['name', 'description', 'document_type', 'content', 'file_data', 'file_name', 'create_date', 'write_date']},
+                {'fields': ['name', 'document_type', 'content', 'attachment_ids', 'create_date', 'write_date']},
             )
 
             # Obter serviço de vetorização
@@ -954,8 +987,6 @@ class BusinessRulesService:
                     # Preparar texto para vetorização
                     processed_text = f"""Documento de Suporte: {doc_data['name']}
 
-Descrição: {doc_data.get('description', '')}
-
 Tipo: {doc_data.get('document_type', '')}
 
 Conteúdo:
@@ -976,7 +1007,6 @@ Conteúdo:
                                     "account_id": account_id,  # Campo crucial para filtragem por tenant
                                     "document_id": doc_data['id'],
                                     "name": doc_data['name'],
-                                    "description": doc_data.get('description', ''),
                                     "document_type": doc_data.get('document_type', ''),
                                     "processed_text": processed_text,
                                     "last_updated": datetime.now().isoformat()
@@ -1565,7 +1595,7 @@ Conteúdo:
                     # Continuar mesmo se falhar a criação da coleção
 
             # Importar o agente de metadados da empresa
-            from odoo_api.embedding_agents.company_metadata_agent import get_company_metadata_agent
+            from odoo_api.embedding_agents.business_rules import get_company_metadata_agent
 
             # Obter a área de negócio da empresa
             business_area = await self._get_business_area(account_id)
@@ -1591,7 +1621,9 @@ Conteúdo:
 
                 # Gerar um ID único para o documento baseado no account_id
                 # Isso permite atualizar o documento existente em vez de criar duplicatas
-                document_id = f"{account_id}_metadata"
+                # Usar UUID para garantir compatibilidade com o Qdrant
+                import uuid
+                document_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, f"{account_id}_metadata"))
 
                 # Armazenar no Qdrant
                 vector_service.qdrant_client.upsert(
@@ -1969,14 +2001,14 @@ Conteúdo:
 
 
 
-    async def sync_support_documents(
+    async def sync_support_documents_with_data(
         self,
         account_id: str,
         business_rule_id: int,
         documents: List[Dict[str, Any]],
     ) -> Dict[str, Any]:
         """
-        Sincroniza documentos de suporte com o sistema de IA.
+        Sincroniza documentos de suporte específicos com o sistema de IA.
 
         Args:
             account_id: ID da conta
@@ -2026,7 +2058,7 @@ Conteúdo:
                     continue
 
                 # Importar o agente de documentos de suporte
-                from odoo_api.embedding_agents.support_document_agent import get_support_document_agent
+                from odoo_api.embedding_agents.business_rules import get_support_document_agent
 
                 # Obter a área de negócio da empresa
                 business_area = await self._get_business_area(account_id)
@@ -2188,6 +2220,78 @@ Conteúdo:
                 "error": str(e)
             }
 
+    async def get_all_processed_support_documents(self, account_id: str) -> Dict[str, Any]:
+        """
+        Obtém todos os documentos de suporte processados pelo sistema de IA para uma conta.
+
+        Args:
+            account_id: ID da conta
+
+        Returns:
+            Lista de documentos processados
+        """
+        try:
+            # Obter serviço de vetorização
+            vector_service = await get_vector_service()
+            collection_name = "support_documents"  # Coleção compartilhada para todos os tenants
+
+            # Filtrar por account_id
+            filter_condition = models.Filter(
+                must=[
+                    models.FieldCondition(
+                        key="account_id",
+                        match=models.MatchValue(
+                            value=account_id
+                        )
+                    )
+                ]
+            )
+
+            # Buscar documentos no Qdrant
+            points = vector_service.qdrant_client.scroll(
+                collection_name=collection_name,
+                scroll_filter=filter_condition,  # Usar scroll_filter em vez de filter
+                limit=100,  # Limite razoável para documentos
+                with_payload=True,
+                with_vectors=False,
+            )[0]
+
+            if not points:
+                logger.warning(f"No support documents found for account {account_id}")
+                return {
+                    "found": False,
+                    "message": "No support documents found"
+                }
+
+            # Extrair dados dos documentos
+            documents = []
+            for point in points:
+                document = point.payload
+                documents.append({
+                    "id": document.get("document_id"),
+                    "name": document.get("name"),
+                    "document_type": document.get("document_type"),
+                    "description": document.get("description", ""),
+                    "processed_text": document.get("processed_text"),
+                    "ai_processed": document.get("ai_processed", False),
+                    "last_updated": document.get("last_updated")
+                })
+
+            # Construir resposta
+            return {
+                "found": True,
+                "documents": documents,
+                "total": len(documents)
+            }
+
+        except Exception as e:
+            logger.error(f"Failed to get all processed support documents: {e}")
+            logger.exception("Detailed traceback:")
+            return {
+                "found": False,
+                "error": str(e)
+            }
+
     async def get_processed_company_metadata(self, account_id: str) -> Dict[str, Any]:
         """
         Obtém os metadados da empresa processados pelo sistema de IA.
@@ -2252,6 +2356,132 @@ Conteúdo:
 
         except Exception as e:
             logger.error(f"Failed to get processed company metadata: {e}")
+            logger.exception("Detailed traceback:")
+            return {
+                "found": False,
+                "error": str(e)
+            }
+
+    async def get_processed_service_config(self, account_id: str) -> Dict[str, Any]:
+        """
+        Obtém as configurações de atendimento processadas pelo sistema de IA.
+
+        Args:
+            account_id: ID da conta
+
+        Returns:
+            Configurações de atendimento processadas
+        """
+        try:
+            # Obter os metadados da empresa, que incluem as configurações de atendimento
+            metadata_result = await self.get_processed_company_metadata(account_id)
+
+            if not metadata_result.get("found", False):
+                return {
+                    "found": False,
+                    "message": "Service configurations not found"
+                }
+
+            # Extrair apenas as configurações de atendimento
+            metadata = metadata_result.get("metadata", {})
+            customer_service = metadata.get("customer_service", {})
+            business_hours = metadata.get("business_hours", {})
+            online_channels = metadata.get("online_channels", {})
+
+            # Construir resposta específica para configurações de atendimento
+            return {
+                "found": True,
+                "service_config": {
+                    "customer_service": customer_service,
+                    "business_hours": business_hours,
+                    "online_channels": online_channels,
+                    "last_updated": metadata.get("last_updated")
+                }
+            }
+
+        except Exception as e:
+            logger.error(f"Failed to get processed service config: {e}")
+            logger.exception("Detailed traceback:")
+            return {
+                "found": False,
+                "error": str(e)
+            }
+
+    async def get_processed_scheduling_rules(self, account_id: str) -> Dict[str, Any]:
+        """
+        Obtém as regras de agendamento processadas pelo sistema de IA.
+
+        Args:
+            account_id: ID da conta
+
+        Returns:
+            Regras de agendamento processadas
+        """
+        try:
+            # Obter serviço de vetorização
+            vector_service = await get_vector_service()
+            collection_name = "business_rules"  # Coleção compartilhada para todos os tenants
+
+            # Filtrar por account_id e tipo de regra (agendamento)
+            filter_condition = models.Filter(
+                must=[
+                    models.FieldCondition(
+                        key="account_id",
+                        match=models.MatchValue(
+                            value=account_id
+                        )
+                    ),
+                    models.FieldCondition(
+                        key="type",
+                        match=models.MatchValue(
+                            value="scheduling"
+                        )
+                    )
+                ]
+            )
+
+            # Buscar regras no Qdrant
+            points = vector_service.qdrant_client.scroll(
+                collection_name=collection_name,
+                scroll_filter=filter_condition,  # Usar scroll_filter em vez de filter
+                limit=50,  # Limite razoável para regras
+                with_payload=True,
+                with_vectors=False,
+            )[0]
+
+            if not points:
+                logger.warning(f"No scheduling rules found for account {account_id}")
+                return {
+                    "found": False,
+                    "message": "No scheduling rules found"
+                }
+
+            # Extrair dados das regras
+            rules = []
+            for point in points:
+                rule = point.payload
+                rules.append({
+                    "id": rule.get("rule_id"),
+                    "name": rule.get("name"),
+                    "description": rule.get("description", ""),
+                    "priority": rule.get("priority"),
+                    "is_temporary": rule.get("is_temporary", False),
+                    "start_date": rule.get("start_date"),
+                    "end_date": rule.get("end_date"),
+                    "rule_data": rule.get("rule_data", {}),
+                    "processed_text": rule.get("processed_text"),
+                    "last_updated": rule.get("last_updated")
+                })
+
+            # Construir resposta
+            return {
+                "found": True,
+                "scheduling_rules": rules,
+                "total": len(rules)
+            }
+
+        except Exception as e:
+            logger.error(f"Failed to get processed scheduling rules: {e}")
             logger.exception("Detailed traceback:")
             return {
                 "found": False,

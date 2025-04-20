@@ -807,20 +807,40 @@ class BusinessRulesService:
 
                     for rule_data in temporary_rules_data:
                         try:
+                            # Processar datas de início e fim
+                            start_date = None
+                            end_date = None
+
+                            if rule_data.get('date_start'):
+                                try:
+                                    # Converter string de data para objeto datetime e depois para date
+                                    dt = datetime.fromisoformat(rule_data['date_start'].replace('Z', '+00:00'))
+                                    start_date = dt.date()  # Extrair apenas a parte da data
+                                except (ValueError, TypeError) as e:
+                                    logger.warning(f"Failed to parse start date {rule_data.get('date_start')}: {e}")
+
+                            if rule_data.get('date_end'):
+                                try:
+                                    # Converter string de data para objeto datetime e depois para date
+                                    dt = datetime.fromisoformat(rule_data['date_end'].replace('Z', '+00:00'))
+                                    end_date = dt.date()  # Extrair apenas a parte da data
+                                except (ValueError, TypeError) as e:
+                                    logger.warning(f"Failed to parse end date {rule_data.get('date_end')}: {e}")
+
                             # Criar objeto BusinessRuleResponse
                             rule = BusinessRuleResponse(
                                 id=rule_data['id'],
                                 name=rule_data['name'],
                                 description=rule_data.get('description', ''),
                                 type=rule_data.get('rule_type', 'general'),
-                                priority=3,  # Regras temporárias têm prioridade alta por padrão
+                                priority=1,  # Regras temporárias têm prioridade máxima
                                 active=rule_data.get('active', True),
                                 rule_data={},  # Dados específicos da regra
                                 is_temporary=True,
-                                start_date=None,
-                                end_date=None,
-                                created_at=datetime.now(),
-                                updated_at=datetime.now(),
+                                start_date=start_date,
+                                end_date=end_date,
+                                created_at=datetime.fromisoformat(rule_data.get('create_date', datetime.now().isoformat())),
+                                updated_at=datetime.fromisoformat(rule_data.get('write_date', datetime.now().isoformat())),
                             )
 
                             # Preparar texto para vetorização
@@ -1167,15 +1187,33 @@ Conteúdo:
         text_parts = [
             f"Nome da regra: {rule.name}",
             f"Descrição: {rule.description}",
-            f"Tipo: {rule.type}",
-            f"Prioridade: {rule.priority}"
+            f"Tipo: {rule.type}"
         ]
 
-        # Adicionar informações de temporalidade
+        # Adicionar informações de temporalidade com contexto enriquecido
         if rule.is_temporary:
-            text_parts.append(f"Regra temporária válida de {rule.start_date} até {rule.end_date}")
+            # Formatar datas para exibição
+            start_date_str = rule.start_date.strftime('%d/%m/%Y') if rule.start_date else "data não especificada"
+            end_date_str = rule.end_date.strftime('%d/%m/%Y') if rule.end_date else "data não especificada"
+
+            text_parts.append(f"REGRA TEMPORÁRIA - ALTA PRIORIDADE")
+            text_parts.append(f"Válida de {start_date_str} até {end_date_str}")
+            text_parts.append(f"Esta é uma regra temporária que deve ser verificada primeiro em qualquer consulta relacionada.")
+
+            # Verificar se a regra está ativa atualmente
+            now = datetime.now().date()  # Converter para date para comparar com start_date e end_date
+            is_active_now = True
+            if rule.start_date and rule.start_date > now:
+                is_active_now = False
+                text_parts.append(f"Atenção: Esta regra ainda não está ativa, ela começará a valer em {start_date_str}.")
+            if rule.end_date and rule.end_date < now:
+                is_active_now = False
+                text_parts.append(f"Atenção: Esta regra não está mais ativa, ela expirou em {end_date_str}.")
+
+            if is_active_now:
+                text_parts.append("Esta regra está ATIVA no momento atual.")
         else:
-            text_parts.append("Regra permanente")
+            text_parts.append("Regra permanente - aplica-se continuamente sem data de expiração.")
 
         # Adicionar dados específicos da regra
         if isinstance(rule.rule_data, dict):

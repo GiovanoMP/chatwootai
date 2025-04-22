@@ -34,6 +34,7 @@ Segurança:
         'views/menu_views.xml',
         'views/credentials_views.xml',
         'views/sync_queue_views.xml',
+        'data/webhook_secret.xml',
     ],
     'demo': [],
     'installable': True,

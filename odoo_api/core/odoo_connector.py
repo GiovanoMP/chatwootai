@@ -17,6 +17,17 @@ from tenacity import retry, stop_after_attempt, wait_exponential
 from odoo_api.config.settings import settings
 from odoo_api.core.exceptions import OdooConnectionError, OdooAuthenticationError, OdooOperationError
 
+# Importar o módulo de criptografia
+try:
+    from src.utils.encryption import credential_encryption
+    ENCRYPTION_AVAILABLE = True
+    logger = logging.getLogger(__name__)
+    logger.info("Encryption module loaded successfully. Credentials will be decrypted.")
+except ImportError:
+    ENCRYPTION_AVAILABLE = False
+    logger = logging.getLogger(__name__)
+    logger.warning("Encryption module not available. Credentials will not be decrypted.")
+
 logger = logging.getLogger(__name__)
 
 class OdooConnector:
@@ -426,7 +437,20 @@ class OdooConnectorFactory:
                 # Verificar se a credencial existe na seção de credenciais
                 if creds_config and "credentials" in creds_config and credential_ref in creds_config["credentials"]:
                     logger.info(f"Credential found in credentials.yaml: {credential_ref}")
-                    return creds_config["credentials"][credential_ref]
+                    credential_value = creds_config["credentials"][credential_ref]
+
+                    # Descriptografar a senha se estiver criptografada e o módulo de criptografia estiver disponível
+                    if ENCRYPTION_AVAILABLE and isinstance(credential_value, str) and credential_value.startswith("ENC:"):
+                        try:
+                            decrypted_value = credential_encryption.decrypt(credential_value)
+                            logger.info(f"Credential decrypted successfully for {credential_ref}")
+                            return decrypted_value
+                        except Exception as e:
+                            logger.error(f"Failed to decrypt credential {credential_ref}: {e}")
+                            # Retornar o valor criptografado como fallback
+                            return credential_value
+
+                    return credential_value
 
             except Exception as e:
                 logger.error(f"Failed to load credentials from {credentials_file}: {e}")
@@ -441,12 +465,38 @@ class OdooConnectorFactory:
                 # Verificar se a credencial existe na seção de credenciais
                 if "credentials" in config and credential_ref in config["credentials"]:
                     logger.warning(f"Credential found in config.yaml (deprecated): {credential_ref}")
-                    return config["credentials"][credential_ref]
+                    credential_value = config["credentials"][credential_ref]
+
+                    # Descriptografar a senha se estiver criptografada e o módulo de criptografia estiver disponível
+                    if ENCRYPTION_AVAILABLE and isinstance(credential_value, str) and credential_value.startswith("ENC:"):
+                        try:
+                            decrypted_value = credential_encryption.decrypt(credential_value)
+                            logger.info(f"Credential decrypted successfully for {credential_ref} (from config.yaml)")
+                            return decrypted_value
+                        except Exception as e:
+                            logger.error(f"Failed to decrypt credential {credential_ref} (from config.yaml): {e}")
+                            # Retornar o valor criptografado como fallback
+                            return credential_value
+
+                    return credential_value
 
                 # Verificar se a credencial existe no nível raiz do arquivo
                 if credential_ref in config:
                     logger.warning(f"Credential found at root level in config.yaml (deprecated): {credential_ref}")
-                    return config[credential_ref]
+                    credential_value = config[credential_ref]
+
+                    # Descriptografar a senha se estiver criptografada e o módulo de criptografia estiver disponível
+                    if ENCRYPTION_AVAILABLE and isinstance(credential_value, str) and credential_value.startswith("ENC:"):
+                        try:
+                            decrypted_value = credential_encryption.decrypt(credential_value)
+                            logger.info(f"Credential decrypted successfully for {credential_ref} (from config.yaml root)")
+                            return decrypted_value
+                        except Exception as e:
+                            logger.error(f"Failed to decrypt credential {credential_ref} (from config.yaml root): {e}")
+                            # Retornar o valor criptografado como fallback
+                            return credential_value
+
+                    return credential_value
 
                 logger.error(f"Credential reference {credential_ref} not found in {config_file} or {credentials_file}")
                 return None

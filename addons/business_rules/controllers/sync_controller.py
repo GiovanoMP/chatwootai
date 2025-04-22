@@ -87,10 +87,40 @@ class BusinessRulesSyncController(http.Controller):
                 if not token:
                     raise ValueError("Token de API não encontrado. Configure o módulo ai_credentials_manager primeiro.")
 
-                headers = {
-                    'Content-Type': 'application/json',
-                    'Authorization': f"Bearer {token}"
-                }
+                # Coletar todas as regras ativas
+                rules_data = self._prepare_rules_data(business_rule)
+
+                # Gerar assinatura HMAC para o payload
+                webhook_secret = env['ir.config_parameter'].sudo().get_param('webhook_secret_key', '')
+
+                if webhook_secret:
+                    import hmac
+                    import hashlib
+                    import json
+
+                    # Converter o payload para string ordenada
+                    payload_str = json.dumps(rules_data, sort_keys=True)
+
+                    # Gerar a assinatura HMAC
+                    signature = hmac.new(
+                        webhook_secret.encode(),
+                        payload_str.encode(),
+                        hashlib.sha256
+                    ).hexdigest()
+
+                    # Adicionar a assinatura ao header
+                    headers = {
+                        'Content-Type': 'application/json',
+                        'Authorization': f"Bearer {token}",
+                        'X-Webhook-Signature': signature
+                    }
+                    _logger.info(f"Assinatura HMAC gerada para o webhook: {signature[:10]}...")
+                else:
+                    headers = {
+                        'Content-Type': 'application/json',
+                        'Authorization': f"Bearer {token}"
+                    }
+                    _logger.warning("Nenhuma chave secreta configurada para assinatura de webhook")
 
                 # Fazer a chamada para a API
                 response = requests.post(
@@ -360,13 +390,40 @@ class BusinessRulesSyncController(http.Controller):
                 if not account_id:
                     raise ValueError("Nenhuma credencial válida encontrada. Configure o módulo ai_credentials_manager primeiro.")
 
-                headers = {
-                    'Content-Type': 'application/json',
-                    'Authorization': f"Bearer {token}"
-                }
-
                 # Preparar os metadados da empresa
                 metadata = self._prepare_company_metadata(business_rule)
+
+                # Gerar assinatura HMAC para o payload
+                webhook_secret = env['ir.config_parameter'].sudo().get_param('webhook_secret_key', '')
+
+                if webhook_secret:
+                    import hmac
+                    import hashlib
+                    import json
+
+                    # Converter o payload para string ordenada
+                    payload_str = json.dumps(metadata, sort_keys=True)
+
+                    # Gerar a assinatura HMAC
+                    signature = hmac.new(
+                        webhook_secret.encode(),
+                        payload_str.encode(),
+                        hashlib.sha256
+                    ).hexdigest()
+
+                    # Adicionar a assinatura ao header
+                    headers = {
+                        'Content-Type': 'application/json',
+                        'Authorization': f"Bearer {token}",
+                        'X-Webhook-Signature': signature
+                    }
+                    _logger.info(f"Assinatura HMAC gerada para o webhook: {signature[:10]}...")
+                else:
+                    headers = {
+                        'Content-Type': 'application/json',
+                        'Authorization': f"Bearer {token}"
+                    }
+                    _logger.warning("Nenhuma chave secreta configurada para assinatura de webhook")
 
                 # Fazer a chamada para a API
                 response = requests.post(

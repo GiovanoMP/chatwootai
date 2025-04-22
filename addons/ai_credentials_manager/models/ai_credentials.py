@@ -570,8 +570,34 @@ class AISystemCredentials(models.Model):
             if self.mercadolivre_access_token:
                 payload['credentials']['mercado_livre_access_token'] = self.mercadolivre_access_token
 
+            # Gerar assinatura HMAC para o payload
+            webhook_secret = self.env['ir.config_parameter'].sudo().get_param('webhook_secret_key', '')
+            if webhook_secret:
+                import hmac
+                import hashlib
+                import json
+
+                # Converter o payload para string ordenada
+                payload_str = json.dumps(payload, sort_keys=True)
+
+                # Gerar a assinatura HMAC
+                signature = hmac.new(
+                    webhook_secret.encode(),
+                    payload_str.encode(),
+                    hashlib.sha256
+                ).hexdigest()
+
+                # Adicionar a assinatura ao header
+                headers = {
+                    'Content-Type': 'application/json',
+                    'X-Webhook-Signature': signature
+                }
+                _logger.info(f"Assinatura HMAC gerada para o webhook: {signature[:10]}...")
+            else:
+                headers = {'Content-Type': 'application/json'}
+                _logger.warning("Nenhuma chave secreta configurada para assinatura de webhook")
+
             # Enviar requisição
-            headers = {'Content-Type': 'application/json'}
             response = requests.post(
                 webhook_url,
                 headers=headers,

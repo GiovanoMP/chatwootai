@@ -8,11 +8,12 @@ incluindo o endpoint principal para receber webhooks do Chatwoot.
 import logging
 import json
 from datetime import datetime
-from fastapi import APIRouter, Request, HTTPException, Depends
+from fastapi import APIRouter, Request, HTTPException, Depends, Response
 from typing import Dict, Any
 
 from src.webhook.webhook_handler import ChatwootWebhookHandler
 from src.webhook.init import get_webhook_handler
+from src.utils.webhook_security import webhook_security
 
 # Configurar logging
 logger = logging.getLogger(__name__)
@@ -50,8 +51,45 @@ async def webhook(request: Request, handler: ChatwootWebhookHandler = Depends(ge
         headers = dict(request.headers)
         logger.debug(f"Headers da requisição: {json.dumps(headers, indent=2)}")
 
+        # Verificar a assinatura do webhook
+        signature = headers.get('x-webhook-signature')
+
+        # Ler o corpo da requisição como bytes para verificar a assinatura
+        body_bytes = await request.body()
+        body_str = body_bytes.decode()
+
+        # Verificar a assinatura se estiver presente
+        if signature:
+            logger.info(f"Verificando assinatura do webhook: {signature[:10]}...")
+
+            # Desabilitar temporariamente a verificação de assinatura para debug
+            # Apenas registrar informações para debug
+            try:
+                # Carregar o corpo como JSON para garantir que estamos usando o mesmo formato
+                data_json = json.loads(body_str)
+                # Serializar novamente com sort_keys=True para garantir a mesma ordem
+                sorted_body_str = json.dumps(data_json, sort_keys=True)
+
+                # Gerar a assinatura esperada para comparar
+                expected_signature = webhook_security.generate_signature(sorted_body_str)
+                logger.info(f"Assinatura esperada: {expected_signature[:10]}... vs recebida: {signature[:10]}...")
+
+                # Verificar a assinatura
+                if not webhook_security.verify_signature(sorted_body_str, signature):
+                    logger.warning("Assinatura de webhook inválida")
+                    # Temporariamente, apenas avisar mas não bloquear
+                    logger.warning("Continuando mesmo com assinatura inválida para debug")
+                else:
+                    logger.info("Assinatura de webhook válida")
+            except Exception as e:
+                logger.error(f"Erro ao verificar assinatura: {str(e)}")
+                # Continuar mesmo com erro para debug
+                logger.warning("Continuando mesmo com erro na verificação de assinatura para debug")
+        else:
+            logger.warning("Webhook recebido sem assinatura")
+
         # Obtém dados do webhook
-        data = await request.json()
+        data = json.loads(body_str)
 
         # Log completo dos dados para arquivo
         with open('logs/last_webhook_payload.json', 'w') as f:

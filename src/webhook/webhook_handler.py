@@ -14,6 +14,8 @@ from datetime import datetime
 import asyncio
 import traceback
 
+from src.utils.encryption import credential_encryption
+
 from src.core.hub import HubCrew
 from src.core.data_service_hub import DataServiceHub
 from odoo_api.integrations.chatwoot import ChatwootClient
@@ -997,9 +999,15 @@ class ChatwootWebhookHandler:
             # Adicionar credenciais sensíveis
             # Odoo
             if credentials.get("odoo_password"):
-                creds_config["credentials"][token] = credentials.get("odoo_password")
+                # Criptografar a senha antes de salvar
+                encrypted_password = credential_encryption.encrypt(credentials.get("odoo_password"))
+                creds_config["credentials"][token] = encrypted_password
+                logger.info(f"Senha criptografada salva para {account_id}")
             elif credentials.get("password"):  # Compatibilidade com versões anteriores
-                creds_config["credentials"][token] = credentials.get("password")
+                # Criptografar a senha antes de salvar
+                encrypted_password = credential_encryption.encrypt(credentials.get("password"))
+                creds_config["credentials"][token] = encrypted_password
+                logger.info(f"Senha (campo legado) criptografada salva para {account_id}")
             else:
                 # Se não foi fornecida senha, usar o token como senha para desenvolvimento
                 creds_config["credentials"][token] = token
@@ -1007,21 +1015,33 @@ class ChatwootWebhookHandler:
 
             # Facebook
             if credentials.get("facebook_app_secret"):
-                creds_config["credentials"][f"fb_secret_{account_id}"] = credentials.get("facebook_app_secret")
+                encrypted_secret = credential_encryption.encrypt(credentials.get("facebook_app_secret"))
+                creds_config["credentials"][f"fb_secret_{account_id}"] = encrypted_secret
+                logger.info(f"Facebook app secret criptografado salvo para {account_id}")
             if credentials.get("facebook_access_token"):
-                creds_config["credentials"][f"fb_token_{account_id}"] = credentials.get("facebook_access_token")
+                encrypted_token = credential_encryption.encrypt(credentials.get("facebook_access_token"))
+                creds_config["credentials"][f"fb_token_{account_id}"] = encrypted_token
+                logger.info(f"Facebook access token criptografado salvo para {account_id}")
 
             # Instagram
             if credentials.get("instagram_client_secret"):
-                creds_config["credentials"][f"ig_secret_{account_id}"] = credentials.get("instagram_client_secret")
+                encrypted_secret = credential_encryption.encrypt(credentials.get("instagram_client_secret"))
+                creds_config["credentials"][f"ig_secret_{account_id}"] = encrypted_secret
+                logger.info(f"Instagram client secret criptografado salvo para {account_id}")
             if credentials.get("instagram_access_token"):
-                creds_config["credentials"][f"ig_token_{account_id}"] = credentials.get("instagram_access_token")
+                encrypted_token = credential_encryption.encrypt(credentials.get("instagram_access_token"))
+                creds_config["credentials"][f"ig_token_{account_id}"] = encrypted_token
+                logger.info(f"Instagram access token criptografado salvo para {account_id}")
 
             # Mercado Livre
             if credentials.get("mercado_livre_client_secret"):
-                creds_config["credentials"][f"ml_secret_{account_id}"] = credentials.get("mercado_livre_client_secret")
+                encrypted_secret = credential_encryption.encrypt(credentials.get("mercado_livre_client_secret"))
+                creds_config["credentials"][f"ml_secret_{account_id}"] = encrypted_secret
+                logger.info(f"Mercado Livre client secret criptografado salvo para {account_id}")
             if credentials.get("mercado_livre_access_token"):
-                creds_config["credentials"][f"ml_token_{account_id}"] = credentials.get("mercado_livre_access_token")
+                encrypted_token = credential_encryption.encrypt(credentials.get("mercado_livre_access_token"))
+                creds_config["credentials"][f"ml_token_{account_id}"] = encrypted_token
+                logger.info(f"Mercado Livre access token criptografado salvo para {account_id}")
 
             # Salvar configuração atualizada
             with open(config_path, 'w') as f:

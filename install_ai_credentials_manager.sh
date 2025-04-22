@@ -15,6 +15,7 @@ mkdir -p "$DEST_DIR/models"
 mkdir -p "$DEST_DIR/views"
 mkdir -p "$DEST_DIR/security"
 mkdir -p "$DEST_DIR/static/description"
+mkdir -p "$DEST_DIR/data"
 
 # Verificar se os diretórios foram criados
 echo "Verificando diretórios criados:"
@@ -42,11 +43,15 @@ cp "$SRC_DIR/views/menu_views.xml" "$DEST_DIR/views/"
 cp "$SRC_DIR/security/security.xml" "$DEST_DIR/security/"
 cp "$SRC_DIR/security/ir.model.access.csv" "$DEST_DIR/security/"
 
+# Copiar dados
+cp "$SRC_DIR/data/webhook_secret.xml" "$DEST_DIR/data/"
+
 # Verificar se os arquivos foram copiados
 echo "Verificando arquivos copiados:"
 ls -la "$DEST_DIR/models/"
 ls -la "$DEST_DIR/views/"
 ls -la "$DEST_DIR/security/"
+ls -la "$DEST_DIR/data/"
 
 # Instruções para instalar dependência cryptography
 echo "\n=== IMPORTANTE: Instalação de Dependências ==="

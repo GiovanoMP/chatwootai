@@ -1370,116 +1370,9 @@ Conteúdo:
             logger.error(f"Failed to update company config YAML: {e}")
             raise
 
-    async def _update_customer_service_yaml(self, account_id: str, customer_service_data: Dict[str, Any], online_channels: Optional[Dict[str, Any]] = None, promotions: Optional[Dict[str, Any]] = None) -> None:
-        """
-        Atualiza o arquivo YAML de configuração do customer service com os dados de atendimento, canais online e promoções.
-
-        Args:
-            account_id: ID da conta
-            customer_service_data: Dados de atendimento ao cliente
-            online_channels: Informações dos canais online (opcional)
-            promotions: Informações sobre promoções (opcional)
-        """
-        import os
-        import yaml
-
-        try:
-            # Definir o caminho do arquivo YAML
-            yaml_path = f"config/domains/retail/{account_id}/crews/customer_service/config.yaml"
-
-            # Verificar se o arquivo existe
-            if not os.path.exists(yaml_path):
-                logger.warning(f"Customer service YAML file not found: {yaml_path}")
-                # Criar diretórios se não existirem
-                os.makedirs(os.path.dirname(yaml_path), exist_ok=True)
-                # Criar um arquivo de configuração vazio
-                config = {}
-            else:
-                # Ler o arquivo YAML existente
-                with open(yaml_path, 'r', encoding='utf-8') as file:
-                    config = yaml.safe_load(file) or {}
-
-            # Atualizar as configurações de estilo
-            if 'style' not in config:
-                config['style'] = {}
-
-            # Atualizar a saudação
-            if 'greeting' not in config['style']:
-                config['style']['greeting'] = {}
-
-            config['style']['greeting']['enabled'] = True
-            if customer_service_data.get('greeting_message'):
-                config['style']['greeting']['message'] = customer_service_data['greeting_message']
-
-            # Atualizar o estilo de comunicação
-            if 'tone' not in config['style']:
-                config['style']['tone'] = {}
-
-            # Mapear o estilo de comunicação para os níveis de formalidade, amigabilidade e técnico
-            style_map = {
-                'formal': {'formal': 5, 'friendly': 2, 'technical': 3},
-                'casual': {'formal': 2, 'friendly': 4, 'technical': 2},
-                'friendly': {'formal': 2, 'friendly': 5, 'technical': 2},
-                'technical': {'formal': 4, 'friendly': 2, 'technical': 5}
-            }
-
-            style = customer_service_data.get('communication_style', 'friendly')
-            if style in style_map:
-                config['style']['tone'] = style_map[style]
-
-            # Atualizar o uso de emojis
-            if 'emojis' not in config['style']:
-                config['style']['emojis'] = {}
-
-            emoji_usage = customer_service_data.get('emoji_usage', 'moderate')
-            config['style']['emojis']['enabled'] = emoji_usage != 'none'
-            config['style']['emojis']['frequency'] = emoji_usage if emoji_usage != 'none' else 'minimal'
-
-            # Adicionar informações dos canais online
-            if online_channels:
-                if 'online_channels' not in config:
-                    config['online_channels'] = {}
-
-                # Site
-                website = online_channels.get('website', {})
-                if website and website.get('url'):
-                    config['online_channels']['website'] = {
-                        'url': website.get('url', ''),
-                        'mention_at_end': website.get('mention_at_end', False)
-                    }
-
-                # Facebook
-                facebook = online_channels.get('facebook', {})
-                if facebook and facebook.get('url'):
-                    config['online_channels']['facebook'] = {
-                        'url': facebook.get('url', ''),
-                        'mention_at_end': facebook.get('mention_at_end', False)
-                    }
-
-                # Instagram
-                instagram = online_channels.get('instagram', {})
-                if instagram and instagram.get('url'):
-                    config['online_channels']['instagram'] = {
-                        'url': instagram.get('url', ''),
-                        'mention_at_end': instagram.get('mention_at_end', False)
-                    }
-
-            # Adicionar informações sobre promoções
-            if promotions:
-                if 'promotions' not in config:
-                    config['promotions'] = {}
-
-                config['promotions']['inform_at_start'] = promotions.get('inform_at_start', False)
-
-            # Salvar o arquivo YAML atualizado
-            with open(yaml_path, 'w', encoding='utf-8') as file:
-                yaml.dump(config, file, default_flow_style=False, allow_unicode=True)
-
-            logger.info(f"Updated customer service YAML file: {yaml_path}")
-
-        except Exception as e:
-            logger.error(f"Failed to update customer service YAML: {e}")
-            raise
+    # O método _update_customer_service_yaml foi removido como parte da mudança arquitetural
+    # para usar uma única crew que acessa as configurações específicas de cada empresa
+    # a partir do arquivo config.yaml.
 
     async def _get_business_area(self, account_id: str) -> Optional[str]:
         """
@@ -1665,23 +1558,9 @@ Conteúdo:
                 'inform_at_start': business_rule_data.get('inform_promotions_at_start', False),
             }
 
-            # Atualizar o arquivo YAML de configuração do customer service
-            try:
-                # Criar uma cópia dos dados para evitar problemas de referência
-                customer_service_data = dict(metadata['customer_service'])
-                online_channels_data = dict(metadata['online_channels'])
-                promotions_data = dict(metadata['promotions'])
-
-                await self._update_customer_service_yaml(
-                    account_id=account_id,
-                    customer_service_data=customer_service_data,
-                    online_channels=online_channels_data,
-                    promotions=promotions_data
-                )
-                logger.info(f"Updated customer service YAML for account {account_id}")
-            except Exception as e:
-                logger.error(f"Failed to update customer service YAML: {e}")
-                # Continuar mesmo se falhar a atualização do YAML
+            # A geração do arquivo YAML de configuração do customer service foi removida
+            # como parte da mudança arquitetural para usar uma única crew que acessa
+            # as configurações específicas de cada empresa a partir do arquivo config.yaml
 
             # Atualizar o arquivo YAML principal de configuração da empresa
             try:

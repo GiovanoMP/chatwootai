@@ -142,14 +142,14 @@ Para estender estas implementações de segurança para novos módulos Odoo que 
            "module_api_key": self.api_key,
            # Outras credenciais sensíveis
        }
-       
+
        payload = {
            "event": "credentials_sync",
            "account_id": self.account_id,
            "credentials": credentials,
            # Outros dados não sensíveis
        }
-       
+
        # Gerar assinatura HMAC
        webhook_secret = self.env['ir.config_parameter'].sudo().get_param('webhook_secret_key', '')
        if webhook_secret:
@@ -166,7 +166,7 @@ Para estender estas implementações de segurança para novos módulos Odoo que 
            }
        else:
            headers = {'Content-Type': 'application/json'}
-       
+
        # Enviar para o sistema de IA
        response = requests.post(
            webhook_url,
@@ -186,7 +186,7 @@ Para estender estas implementações de segurança para novos módulos Odoo que 
        encrypted_password = credential_encryption.encrypt(credentials.get("module_password"))
        creds_config["credentials"][f"module_pwd_{account_id}"] = encrypted_password
        logger.info(f"Senha do módulo criptografada salva para {account_id}")
-   
+
    if credentials.get("module_api_key"):
        encrypted_key = credential_encryption.encrypt(credentials.get("module_api_key"))
        creds_config["credentials"][f"module_key_{account_id}"] = encrypted_key
@@ -200,10 +200,10 @@ Para estender estas implementações de segurança para novos módulos Odoo que 
    def get_module_credentials(self, account_id):
        password_ref = f"module_pwd_{account_id}"
        api_key_ref = f"module_key_{account_id}"
-       
+
        password = self._get_credential_by_ref(password_ref, account_id)
        api_key = self._get_credential_by_ref(api_key_ref, account_id)
-       
+
        return {
            "password": password,
            "api_key": api_key
@@ -222,7 +222,7 @@ Para estender estas implementações de segurança para novos módulos Odoo que 
            "account_id": self.account_id,
            "data": data
        }
-       
+
        # Gerar assinatura HMAC
        webhook_secret = self.env['ir.config_parameter'].sudo().get_param('webhook_secret_key', '')
        if webhook_secret:
@@ -239,7 +239,7 @@ Para estender estas implementações de segurança para novos módulos Odoo que 
            }
        else:
            headers = {'Content-Type': 'application/json'}
-       
+
        # Enviar para o sistema de IA
        response = requests.post(
            f"{ai_system_url}/{endpoint}",
@@ -259,19 +259,19 @@ Para estender estas implementações de segurança para novos módulos Odoo que 
        signature = request.headers.get('x-webhook-signature')
        body_bytes = await request.body()
        body_str = body_bytes.decode()
-       
+
        if signature:
            logger.info(f"Verificando assinatura do webhook: {signature[:10]}...")
            data_json = json.loads(body_str)
            sorted_body_str = json.dumps(data_json, sort_keys=True)
-           
+
            if not webhook_security.verify_signature(sorted_body_str, signature):
                logger.warning("Assinatura de webhook inválida")
                raise HTTPException(status_code=401, detail="Assinatura inválida")
            logger.info("Assinatura de webhook válida")
        else:
            logger.warning("Webhook recebido sem assinatura")
-       
+
        # Processar os dados
        data = json.loads(body_str)
        # ...
@@ -311,17 +311,17 @@ def rotate_encryption_key():
     """
     # Gerar nova chave
     new_key = os.urandom(32).hex()
-    
+
     # Obter todas as credenciais atuais
     all_credentials = {}
     for domain_dir in os.listdir("config/domains"):
         # Percorrer todos os arquivos de credenciais e descriptografar com a chave antiga
         # Re-criptografar com a nova chave
         # Salvar os arquivos atualizados
-    
+
     # Atualizar a variável de ambiente
     os.environ["ENCRYPTION_KEY"] = new_key
-    
+
     # Salvar a nova chave em um local seguro
 ```
 
@@ -345,14 +345,14 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         client_ip = request.client.host
         current_time = time.time()
-        
+
         # Limpar entradas antigas
-        self.requests = {ip: times for ip, times in self.requests.items() 
+        self.requests = {ip: times for ip, times in self.requests.items()
                          if any(t > current_time - self.window_seconds for t in times)}
-        
+
         # Verificar limite de requisições
         if client_ip in self.requests:
-            self.requests[client_ip] = [t for t in self.requests[client_ip] 
+            self.requests[client_ip] = [t for t in self.requests[client_ip]
                                        if t > current_time - self.window_seconds]
             if len(self.requests[client_ip]) >= self.max_requests:
                 return JSONResponse(
@@ -362,7 +362,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             self.requests[client_ip].append(current_time)
         else:
             self.requests[client_ip] = [current_time]
-        
+
         return await call_next(request)
 
 app = FastAPI()
@@ -409,7 +409,48 @@ async def protected_endpoint(account_id: str = Depends(verify_token)):
     return {"account_id": account_id}
 ```
 
-### 5. Auditoria de Segurança
+### 5. Proteção Contra Substituição de Tokens
+
+Implementar proteção contra substituição não autorizada de tokens para prevenir ataques de substituição e garantir a estabilidade do sistema.
+
+```python
+# No arquivo src/webhook/webhook_handler.py
+
+# Verificar se o token já existe e se a sobrescrita é permitida
+if token in creds_config["credentials"]:
+    # Verificar se a sobrescrita é permitida via configuração
+    allow_overwrite = os.environ.get("ALLOW_TOKEN_OVERWRITE", "false").lower() == "true"
+
+    if not allow_overwrite:
+        logger.warning(f"Tentativa de sobrescrever token existente para {account_id}. Operação negada.")
+        # Registrar tentativa de sobrescrita em log de auditoria
+        self._log_credentials_access(
+            account_id=account_id,
+            operation="token_overwrite_attempt",
+            success=False,
+            error_message="Sobrescrita de token não permitida pela configuração"
+        )
+        # Não atualizar o token, mas continuar com o resto do processamento
+    else:
+        # Sobrescrita permitida, mas registrar para auditoria
+        logger.info(f"Sobrescrevendo token existente para {account_id} (permitido por configuração)")
+        self._log_credentials_access(
+            account_id=account_id,
+            operation="token_overwrite",
+            success=True
+        )
+        # Atualizar o token normalmente
+        encrypted_password = credential_encryption.encrypt(credentials.get("odoo_password"))
+        creds_config["credentials"][token] = encrypted_password
+else:
+    # Token não existe, criar normalmente
+    encrypted_password = credential_encryption.encrypt(credentials.get("odoo_password"))
+    creds_config["credentials"][token] = encrypted_password
+```
+
+Esta proteção adiciona uma camada extra de segurança ao sistema, prevenindo que tokens legítimos sejam substituídos por tokens maliciosos em caso de comprometimento temporário do sistema Odoo. Também melhora a estabilidade do sistema e a auditoria, forçando que qualquer mudança de token seja um processo deliberado e documentado.
+
+### 6. Auditoria de Segurança
 
 Implementar logs de auditoria para todas as operações sensíveis.
 
@@ -417,7 +458,7 @@ Implementar logs de auditoria para todas as operações sensíveis.
 def audit_log(user_id, action, resource, success, details=None):
     """
     Registra uma ação de auditoria.
-    
+
     Args:
         user_id: ID do usuário ou sistema que realizou a ação
         action: Ação realizada (ex: "login", "access", "modify")
@@ -435,7 +476,7 @@ def audit_log(user_id, action, resource, success, details=None):
         "ip_address": request.client.host if 'request' in locals() else None,
         "user_agent": request.headers.get("user-agent") if 'request' in locals() else None
     }
-    
+
     # Salvar em um arquivo de log seguro ou banco de dados
     with open("logs/audit.log", "a") as f:
         f.write(json.dumps(log_entry) + "\n")
@@ -461,11 +502,11 @@ async def chatwoot_webhook(request: Request):
     signature = request.headers.get('x-chatwoot-signature')
     body_bytes = await request.body()
     body_str = body_bytes.decode()
-    
+
     if signature:
         if not webhook_security.verify_signature(body_str, signature):
             raise HTTPException(status_code=401, detail="Assinatura inválida")
-    
+
     # Processar a mensagem do Chatwoot
     data = json.loads(body_str)
     # ...

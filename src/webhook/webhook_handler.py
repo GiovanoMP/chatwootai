@@ -821,7 +821,13 @@ class ChatwootWebhookHandler:
             # Verificar se o diretório do account_id existe
             account_dir = os.path.join(domain_dir, account_id)
             config_path = os.path.join(account_dir, "config.yaml")
+            credentials_path = os.path.join(account_dir, "credentials.yaml")
             config = {}
+            creds_config = {}
+
+            # Garantir que o diretório existe para atualização
+            if not os.path.exists(account_dir):
+                os.makedirs(account_dir, exist_ok=True)
 
             # Verificar se o arquivo de configuração existe
             if os.path.exists(config_path):
@@ -839,14 +845,22 @@ class ChatwootWebhookHandler:
                     self._log_credentials_access(account_id, "sync", False, "Token no arquivo não corresponde ao token enviado")
                     return {"success": False, "error": "Token de autenticação não corresponde ao token armazenado"}
             else:
-                # Se o arquivo não existe, rejeitar a criação
-                logger.warning(f"Tentativa de criar novo arquivo de configuração para {account_id} rejeitada")
-                self._log_credentials_access(account_id, "sync", False, "Criação de novo arquivo rejeitada")
-                return {"success": False, "error": "Criação de novo arquivo de configuração não permitida. Entre em contato com o administrador do sistema."}
+                # Criar um novo arquivo de configuração
+                logger.info(f"Criando novo arquivo de configuração para {account_id}")
 
-            # Garantir que o diretório existe para atualização
-            if not os.path.exists(account_dir):
-                os.makedirs(account_dir, exist_ok=True)
+            # Verificar se o arquivo de credenciais existe
+            if os.path.exists(credentials_path):
+                # Carregar credenciais existentes
+                with open(credentials_path, 'r') as f:
+                    creds_config = yaml.safe_load(f) or {}
+            else:
+                # Criar um novo arquivo de credenciais
+                logger.info(f"Criando novo arquivo de credenciais para {account_id}")
+                # Inicializar com estrutura básica
+                creds_config = {
+                    "account_id": account_id,
+                    "credentials": {}
+                }
 
             # Atualizar configuração com as credenciais
             config.update({
@@ -975,11 +989,50 @@ class ChatwootWebhookHandler:
                     config["integrations"]["mercado_livre"] = {}
                 deep_merge(ml_config, config["integrations"]["mercado_livre"])
 
+            # Processar credenciais sensíveis para o arquivo credentials.yaml
+            # Inicializar a seção de credenciais se não existir
+            if "credentials" not in creds_config:
+                creds_config["credentials"] = {}
+
+            # Adicionar credenciais sensíveis
+            # Odoo
+            if credentials.get("odoo_password"):
+                creds_config["credentials"][token] = credentials.get("odoo_password")
+            elif credentials.get("password"):  # Compatibilidade com versões anteriores
+                creds_config["credentials"][token] = credentials.get("password")
+            else:
+                # Se não foi fornecida senha, usar o token como senha para desenvolvimento
+                creds_config["credentials"][token] = token
+                logger.warning(f"Nenhuma senha fornecida para {account_id}. Usando token como senha para desenvolvimento.")
+
+            # Facebook
+            if credentials.get("facebook_app_secret"):
+                creds_config["credentials"][f"fb_secret_{account_id}"] = credentials.get("facebook_app_secret")
+            if credentials.get("facebook_access_token"):
+                creds_config["credentials"][f"fb_token_{account_id}"] = credentials.get("facebook_access_token")
+
+            # Instagram
+            if credentials.get("instagram_client_secret"):
+                creds_config["credentials"][f"ig_secret_{account_id}"] = credentials.get("instagram_client_secret")
+            if credentials.get("instagram_access_token"):
+                creds_config["credentials"][f"ig_token_{account_id}"] = credentials.get("instagram_access_token")
+
+            # Mercado Livre
+            if credentials.get("mercado_livre_client_secret"):
+                creds_config["credentials"][f"ml_secret_{account_id}"] = credentials.get("mercado_livre_client_secret")
+            if credentials.get("mercado_livre_access_token"):
+                creds_config["credentials"][f"ml_token_{account_id}"] = credentials.get("mercado_livre_access_token")
+
             # Salvar configuração atualizada
             with open(config_path, 'w') as f:
                 yaml.dump(config, f, default_flow_style=False)
 
+            # Salvar credenciais atualizadas
+            with open(credentials_path, 'w') as f:
+                yaml.dump(creds_config, f, default_flow_style=False)
+
             logger.info(f"Configuração YAML atualizada em {config_path}")
+            logger.info(f"Credenciais YAML atualizadas em {credentials_path}")
 
             # Registrar o acesso
             self._log_credentials_access(account_id, "sync", True)
@@ -988,7 +1041,8 @@ class ChatwootWebhookHandler:
                 "success": True,
                 "message": "Credenciais sincronizadas com sucesso",
                 "account_id": account_id,
-                "config_path": config_path
+                "config_path": config_path,
+                "credentials_path": credentials_path
             }
 
         except Exception as e:

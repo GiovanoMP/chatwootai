@@ -1300,6 +1300,76 @@ Conteúdo:
         }
         return days.get(day_number, str(day_number))
 
+    async def _update_company_config_yaml(self, account_id: str, metadata: Dict[str, Any]) -> None:
+        """
+        Atualiza o arquivo YAML principal de configuração da empresa com os metadados.
+
+        Args:
+            account_id: ID da conta
+            metadata: Metadados da empresa
+        """
+        import os
+        import yaml
+
+        try:
+            # Definir o caminho do arquivo YAML
+            yaml_path = f"config/domains/retail/{account_id}/config.yaml"
+
+            # Verificar se o arquivo existe
+            if not os.path.exists(yaml_path):
+                logger.warning(f"Company config YAML file not found: {yaml_path}")
+                # Criar diretórios se não existirem
+                os.makedirs(os.path.dirname(yaml_path), exist_ok=True)
+                # Criar um arquivo de configuração vazio
+                config = {}
+            else:
+                # Ler o arquivo YAML existente
+                with open(yaml_path, 'r', encoding='utf-8') as file:
+                    config = yaml.safe_load(file) or {}
+
+            # Garantir que o account_id está definido
+            config['account_id'] = account_id
+
+            # Adicionar informações básicas da empresa
+            company_info = metadata.get('company_info', {})
+            if company_info.get('company_name'):
+                config['name'] = company_info.get('company_name')
+            if company_info.get('description'):
+                config['description'] = company_info.get('description')
+
+            # Adicionar metadados da empresa
+            if 'company_metadata' not in config:
+                config['company_metadata'] = {}
+
+            # Adicionar informações básicas
+            config['company_metadata']['company_info'] = company_info
+
+            # Adicionar horários de funcionamento
+            if 'business_hours' in metadata:
+                config['company_metadata']['business_hours'] = metadata['business_hours']
+
+            # Adicionar informações de atendimento ao cliente
+            if 'customer_service' in metadata:
+                config['company_metadata']['customer_service'] = metadata['customer_service']
+
+            # Adicionar informações sobre promoções
+            if 'promotions' in metadata:
+                config['company_metadata']['promotions'] = metadata['promotions']
+
+            # Adicionar informações dos canais online
+            if 'online_channels' in metadata:
+                config['company_metadata']['online_channels'] = metadata['online_channels']
+
+            # Salvar o arquivo YAML atualizado
+            with open(yaml_path, 'w', encoding='utf-8') as file:
+                yaml.dump(config, file, default_flow_style=False, allow_unicode=True)
+
+            logger.info(f"Updated company config YAML file: {yaml_path}")
+
+        except Exception as e:
+            logger.error(f"Failed to update company config YAML: {e}")
+            raise
+
     async def _update_customer_service_yaml(self, account_id: str, customer_service_data: Dict[str, Any], online_channels: Optional[Dict[str, Any]] = None, promotions: Optional[Dict[str, Any]] = None) -> None:
         """
         Atualiza o arquivo YAML de configuração do customer service com os dados de atendimento, canais online e promoções.
@@ -1611,6 +1681,17 @@ Conteúdo:
                 logger.info(f"Updated customer service YAML for account {account_id}")
             except Exception as e:
                 logger.error(f"Failed to update customer service YAML: {e}")
+                # Continuar mesmo se falhar a atualização do YAML
+
+            # Atualizar o arquivo YAML principal de configuração da empresa
+            try:
+                await self._update_company_config_yaml(
+                    account_id=account_id,
+                    metadata=metadata
+                )
+                logger.info(f"Updated main company config YAML for account {account_id}")
+            except Exception as e:
+                logger.error(f"Failed to update main company config YAML: {e}")
                 # Continuar mesmo se falhar a atualização do YAML
 
             # Obter uma nova instância do serviço de vetorização

@@ -413,9 +413,26 @@ class OdooConnectorFactory:
                 logger.error(f"Could not determine domain for account_id {account_id}")
                 return None
 
-        # Construir caminho para o arquivo de configuração
+        # Construir caminho para o arquivo de credenciais
+        credentials_file = os.path.join(settings.CONFIG_DIR, "domains", domain, account_id, "credentials.yaml")
         config_file = os.path.join(settings.CONFIG_DIR, "domains", domain, account_id, "config.yaml")
 
+        # Primeiro, tentar carregar do arquivo de credenciais
+        if os.path.exists(credentials_file):
+            try:
+                with open(credentials_file, "r") as f:
+                    creds_config = yaml.safe_load(f)
+
+                # Verificar se a credencial existe na seção de credenciais
+                if creds_config and "credentials" in creds_config and credential_ref in creds_config["credentials"]:
+                    logger.info(f"Credential found in credentials.yaml: {credential_ref}")
+                    return creds_config["credentials"][credential_ref]
+
+            except Exception as e:
+                logger.error(f"Failed to load credentials from {credentials_file}: {e}")
+                # Continuar para tentar o arquivo de configuração
+
+        # Se não encontrou no arquivo de credenciais, tentar no arquivo de configuração (para compatibilidade)
         if os.path.exists(config_file):
             try:
                 with open(config_file, "r") as f:
@@ -423,13 +440,15 @@ class OdooConnectorFactory:
 
                 # Verificar se a credencial existe na seção de credenciais
                 if "credentials" in config and credential_ref in config["credentials"]:
+                    logger.warning(f"Credential found in config.yaml (deprecated): {credential_ref}")
                     return config["credentials"][credential_ref]
 
                 # Verificar se a credencial existe no nível raiz do arquivo
                 if credential_ref in config:
+                    logger.warning(f"Credential found at root level in config.yaml (deprecated): {credential_ref}")
                     return config[credential_ref]
 
-                logger.error(f"Credential reference {credential_ref} not found in {config_file}")
+                logger.error(f"Credential reference {credential_ref} not found in {config_file} or {credentials_file}")
                 return None
 
             except Exception as e:

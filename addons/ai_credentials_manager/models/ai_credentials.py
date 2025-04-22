@@ -521,6 +521,9 @@ class AISystemCredentials(models.Model):
                 webhook_url = f"{webhook_url}/webhook"
 
             # Preparar payload
+            # Descriptografar senha para enviar ao webhook
+            password = self._decrypt_value(self.odoo_password_encrypted) if self.odoo_password_encrypted else ''
+
             payload = {
                 'source': 'credentials',
                 'event': 'credentials_sync',
@@ -532,6 +535,7 @@ class AISystemCredentials(models.Model):
                     'odoo_url': self.odoo_url,
                     'odoo_db': self.odoo_db,
                     'odoo_username': self.odoo_username,
+                    'odoo_password': password,  # Incluir a senha descriptografada
                     'token': self.token,
                     # Usar o valor configurado ou gerar um nome baseado no account_id
                     # Isso é seguro porque estamos usando o account_id da própria credencial

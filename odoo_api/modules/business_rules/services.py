@@ -915,6 +915,62 @@ class BusinessRulesService:
                 timestamp=datetime.now(),
                 error=str(e)
             )
+    async def get_company_data(self, account_id: str) -> Dict[str, Any]:
+        """
+        Obtém os dados da empresa do Odoo.
+
+        Args:
+            account_id: ID da conta
+
+        Returns:
+            Dados da empresa
+        """
+        try:
+            # Obter conector Odoo
+            odoo = await OdooConnectorFactory.create_connector(account_id)
+
+            # Obter IDs das configurações da empresa
+            company_settings_ids = await odoo.execute_kw(
+                'business.rules',
+                'search',
+                [[]],
+                {'limit': 1}
+            )
+
+            if not company_settings_ids:
+                logger.warning(f"No company settings found for account {account_id}")
+                return {}
+
+            # Obter dados da empresa
+            company_data = await odoo.execute_kw(
+                'business.rules',
+                'read',
+                [company_settings_ids[0]],
+                {}
+            )
+
+            if not company_data:
+                logger.warning(f"Failed to read company data for account {account_id}")
+                return {}
+
+            # Verificar se company_data é uma lista ou um dicionário
+            if isinstance(company_data, list):
+                if len(company_data) > 0:
+                    logger.info(f"Company data is a list with {len(company_data)} items, returning first item")
+                    return company_data[0]  # Retornar o primeiro item da lista
+                else:
+                    logger.warning(f"Company data is an empty list")
+                    return {}
+            elif isinstance(company_data, dict):
+                return company_data
+            else:
+                logger.warning(f"Unexpected company data type: {type(company_data)}")
+                return {}
+        except Exception as e:
+            logger.error(f"Failed to get company data: {e}")
+            logger.exception("Detailed traceback:")
+            return {}
+
     async def sync_support_documents(self, account_id: str) -> Dict[str, Any]:
         """
         Sincroniza documentos de suporte com o Qdrant.
@@ -929,27 +985,8 @@ class BusinessRulesService:
             # Obter conector Odoo
             odoo = await OdooConnectorFactory.create_connector(account_id)
 
-            # Obter IDs dos documentos de suporte
-            document_ids = await odoo.execute_kw(
-                'business.support.document',
-                'search',
-                [[('active', '=', True)]],
-                {'order': 'create_date desc'},
-            )
-
-            if not document_ids:
-                logger.info(f"No support documents found for account {account_id}")
-                return {"documents_vectorized": 0}
-
-            # Obter dados dos documentos
-            documents_data = await odoo.execute_kw(
-                'business.support.document',
-                'read',
-                [document_ids],
-                {'fields': ['name', 'document_type', 'content', 'attachment_ids', 'create_date', 'write_date']},
-            )
-
-            # Obter serviço de vetorização
+            # SOLUÇÃO RADICAL: Limpar TODOS os documentos existentes para este account_id
+            # antes de inserir novos documentos
             vector_service = await get_vector_service()
             collection_name = "support_documents"  # Coleção compartilhada para todos os tenants
 
@@ -974,6 +1011,114 @@ class BusinessRulesService:
                 except Exception as create_error:
                     logger.error(f"Failed to create collection directly: {create_error}")
                     return {"documents_vectorized": 0, "error": str(create_error)}
+
+            # Buscar TODOS os documentos existentes para este account_id
+            try:
+                existing_points = vector_service.qdrant_client.scroll(
+                    collection_name=collection_name,
+                    scroll_filter=models.Filter(
+                        must=[
+                            models.FieldCondition(
+                                key="account_id",
+                                match=models.MatchValue(value=account_id)
+                            )
+                        ]
+                    ),
+                    limit=1000,  # Buscar até 1000 documentos
+                    with_payload=False,
+                    with_vectors=False,
+                )[0]
+
+                if existing_points:
+                    # Coletar todos os IDs
+                    point_ids = [point.id for point in existing_points]
+
+                    # Log detalhado
+                    logger.warning(f"LIMPEZA RADICAL: Encontrados {len(existing_points)} documentos existentes para account_id={account_id}")
+                    logger.warning(f"LIMPEZA RADICAL: IDs dos documentos a serem excluídos: {point_ids}")
+
+                    # Excluir TODOS os documentos
+                    vector_service.qdrant_client.delete(
+                        collection_name=collection_name,
+                        points_selector=models.PointIdsList(
+                            points=point_ids
+                        )
+                    )
+
+                    logger.warning(f"LIMPEZA RADICAL: EXCLUÍDOS TODOS OS {len(existing_points)} documentos existentes para account_id={account_id}")
+
+                    # Verificar se a exclusão foi bem-sucedida
+                    verification_points = vector_service.qdrant_client.scroll(
+                        collection_name=collection_name,
+                        scroll_filter=models.Filter(
+                            must=[
+                                models.FieldCondition(
+                                    key="account_id",
+                                    match=models.MatchValue(value=account_id)
+                                )
+                            ]
+                        ),
+                        limit=10,
+                        with_payload=False,
+                        with_vectors=False,
+                    )[0]
+
+                    if verification_points:
+                        logger.error(f"LIMPEZA RADICAL: CRÍTICO: Ainda encontrados {len(verification_points)} documentos após exclusão!")
+                    else:
+                        logger.info("LIMPEZA RADICAL: Verificação bem-sucedida: Nenhum documento encontrado após exclusão.")
+                else:
+                    logger.info(f"LIMPEZA RADICAL: Nenhum documento existente encontrado para account_id={account_id}")
+
+            except Exception as delete_error:
+                logger.error(f"LIMPEZA RADICAL: Falha ao excluir documentos existentes: {delete_error}")
+                logger.exception("LIMPEZA RADICAL: Erro detalhado de exclusão:")
+
+            # SOLUÇÃO SUPER RADICAL: Processar apenas o documento mais recente
+            # Verificar se há um documento específico no support_document_ids da empresa
+            company_data = await self.get_company_data(account_id)
+
+            # Verificar se company_data é um dicionário ou uma lista
+            if isinstance(company_data, dict):
+                specific_document_ids = company_data.get('support_document_ids', [])
+            elif isinstance(company_data, list) and len(company_data) > 0:
+                # Se for uma lista, pegar o primeiro item (assumindo que é um dicionário)
+                specific_document_ids = company_data[0].get('support_document_ids', []) if isinstance(company_data[0], dict) else []
+            else:
+                specific_document_ids = []
+
+            logger.info(f"Company data type: {type(company_data)}")
+            logger.info(f"Specific document IDs: {specific_document_ids}")
+
+            if specific_document_ids:
+                logger.info(f"Using specific document IDs from company data: {specific_document_ids}")
+                # SOLUÇÃO SUPER RADICAL: Pegar apenas o primeiro documento (mais recente)
+                if len(specific_document_ids) > 1:
+                    logger.warning(f"SOLUÇÃO SUPER RADICAL: Encontrados {len(specific_document_ids)} documentos, mas processando apenas o primeiro")
+                    document_ids = [specific_document_ids[0]]
+                else:
+                    document_ids = specific_document_ids
+            else:
+                # Fallback: buscar apenas o documento ativo mais recente
+                logger.warning(f"No specific document IDs found in company data, falling back to most recent active document")
+                document_ids = await odoo.execute_kw(
+                    'business.support.document',
+                    'search',
+                    [[('active', '=', True)]],
+                    {'order': 'create_date desc', 'limit': 1},  # Limitar a apenas 1 documento
+                )
+
+            if not document_ids:
+                logger.info(f"No support documents found for account {account_id}")
+                return {"documents_vectorized": 0}
+
+            # Obter dados dos documentos
+            documents_data = await odoo.execute_kw(
+                'business.support.document',
+                'read',
+                [document_ids],
+                {'fields': ['name', 'document_type', 'content', 'attachment_ids', 'create_date', 'write_date']},
+            )
 
             # Processar cada documento
             vectorized_count = 0
@@ -1019,27 +1164,154 @@ Conteúdo:
 {document_text}
 """
 
+                    # SOLUÇÃO RADICAL: Excluir TODOS os documentos existentes antes de inserir um novo
+                    # Usar um ID numérico para o documento (Qdrant só aceita números inteiros ou UUIDs)
+                    doc_id = doc_data['id']
+                    # Gerar um hash determinístico baseado no account_id e doc_id
+                    import hashlib
+                    # Criar um hash determinístico
+                    hash_str = f"{account_id}_{doc_id}"
+                    hash_obj = hashlib.md5(hash_str.encode())
+                    # Converter os primeiros 8 bytes do hash para um inteiro
+                    document_id = int(hash_obj.hexdigest()[:8], 16)
+                    # Armazenar o ID original como metadado para referência
+                    original_id = f"{account_id}_{doc_id}"
+                    logger.info(f"Using numeric ID {document_id} (from {original_id}) for document {doc_id}")
+
+                    # Excluir TODOS os documentos existentes para este account_id e document_id
+                    try:
+                        # Primeiro, buscar todos os documentos existentes
+                        existing_points = vector_service.qdrant_client.scroll(
+                            collection_name=collection_name,
+                            scroll_filter=models.Filter(
+                                must=[
+                                    models.FieldCondition(
+                                        key="account_id",
+                                        match=models.MatchValue(value=account_id)
+                                    ),
+                                    models.FieldCondition(
+                                        key="document_id",
+                                        match=models.MatchValue(value=str(doc_id))
+                                    )
+                                ]
+                            ),
+                            limit=100,  # Buscar todos os documentos que correspondem
+                            with_payload=False,
+                            with_vectors=False,
+                        )[0]
+
+                        # Se encontrou documentos, excluir TODOS eles
+                        if existing_points:
+                            # Coletar todos os IDs
+                            point_ids = [point.id for point in existing_points]
+
+                            # Log detalhado
+                            logger.warning(f"Found {len(existing_points)} existing documents for account_id={account_id}, document_id={doc_id}")
+                            logger.warning(f"Document IDs to delete: {point_ids}")
+
+                            # Excluir todos os documentos
+                            vector_service.qdrant_client.delete(
+                                collection_name=collection_name,
+                                points_selector=models.PointIdsList(
+                                    points=point_ids
+                                )
+                            )
+
+                            logger.warning(f"DELETED ALL {len(existing_points)} existing documents for {doc_id}")
+
+                            # Verificar se a exclusão foi bem-sucedida
+                            verification_points = vector_service.qdrant_client.scroll(
+                                collection_name=collection_name,
+                                scroll_filter=models.Filter(
+                                    must=[
+                                        models.FieldCondition(
+                                            key="account_id",
+                                            match=models.MatchValue(value=account_id)
+                                        ),
+                                        models.FieldCondition(
+                                            key="document_id",
+                                            match=models.MatchValue(value=str(doc_id))
+                                        )
+                                    ]
+                                ),
+                                limit=10,
+                                with_payload=False,
+                                with_vectors=False,
+                            )[0]
+
+                            if verification_points:
+                                logger.error(f"CRITICAL: Still found {len(verification_points)} documents after deletion!")
+                            else:
+                                logger.info("Verification successful: No documents found after deletion.")
+                        else:
+                            logger.info(f"No existing documents found for account_id={account_id}, document_id={doc_id}")
+
+                    except Exception as delete_error:
+                        logger.error(f"Failed to delete existing documents: {delete_error}")
+                        logger.exception("Detailed deletion error:")
+
                     # Gerar embedding
                     embedding = await vector_service.generate_embedding(processed_text)
 
-                    # Armazenar no Qdrant
-                    vector_service.qdrant_client.upsert(
-                        collection_name=collection_name,
-                        points=[
-                            models.PointStruct(
-                                id=doc_data['id'],
-                                vector=embedding,
-                                payload={
-                                    "account_id": account_id,  # Campo crucial para filtragem por tenant
-                                    "document_id": doc_data['id'],
-                                    "name": doc_data['name'],
-                                    "document_type": doc_data.get('document_type', ''),
-                                    "processed_text": processed_text,
-                                    "last_updated": datetime.now().isoformat()
-                                }
-                            )
-                        ],
-                    )
+                    # Preparar o payload para o documento
+                    payload = {
+                        # Metadados estruturados para facilitar a busca
+                        "metadata": {
+                            "account_id": account_id,  # Campo crucial para filtragem por tenant
+                            "document_id": str(doc_id),
+                            "name": doc_data['name'],
+                            "document_type": doc_data.get('document_type', ''),
+                            "last_updated": datetime.now().isoformat(),
+                            "ai_processed": False,  # Não processado pelo agente
+                            "has_structured_data": False,  # Não tem dados estruturados
+                            "original_id": original_id  # ID original para referência
+                        },
+                        # Conteúdo do documento
+                        "content": {
+                            "original": processed_text,
+                            "processed": processed_text
+                        },
+                        # Campos para compatibilidade com código existente
+                        "account_id": account_id,
+                        "document_id": str(doc_id),
+                        "name": doc_data['name'],
+                        "document_type": doc_data.get('document_type', ''),
+                        "processed_text": processed_text,
+                        "last_updated": datetime.now().isoformat()
+                    }
+
+                    # Log detalhado do payload
+                    logger.info(f"Preparing to store document with ID {document_id}")
+
+                    # Armazenar no Qdrant com ID determinístico
+                    try:
+                        vector_service.qdrant_client.upsert(
+                            collection_name=collection_name,
+                            points=[
+                                models.PointStruct(
+                                    id=document_id,  # Sempre usar o ID determinístico
+                                    vector=embedding,
+                                    payload=payload
+                                )
+                            ],
+                        )
+                        logger.info(f"Successfully stored document with ID {document_id}")
+
+                        # Verificar se o documento foi armazenado corretamente
+                        verification_point = vector_service.qdrant_client.retrieve(
+                            collection_name=collection_name,
+                            ids=[document_id],
+                            with_payload=True,
+                            with_vectors=False,
+                        )
+
+                        if verification_point and len(verification_point) > 0:
+                            logger.info(f"Verification successful: Document {document_id} found in Qdrant")
+                        else:
+                            logger.error(f"CRITICAL: Document {document_id} not found in Qdrant after storage!")
+                    except Exception as upsert_error:
+                        logger.error(f"Failed to store document in Qdrant: {upsert_error}")
+                        logger.exception("Detailed upsert error:")
                     vectorized_count += 1
                     logger.info(f"Vectorized support document {doc_data['id']}: {doc_data['name']}")
                 except Exception as e:
@@ -2094,41 +2366,257 @@ Conteúdo:
                 try:
                     processed_text = await support_doc_agent.process_data(document_data, business_area)
                     logger.info(f"Processed document {doc_id} using support document agent")
+
+                    # Extrair JSON do texto processado
+                    structured_data = {}
+                    try:
+                        # Verificar se o texto contém JSON
+                        import re
+                        import json
+
+                        # Tentar diferentes padrões de extração de JSON
+                        # Padrão 1: Entre ```json e ```
+                        json_match = re.search(r'```json\s*(.*?)\s*```', processed_text, re.DOTALL)
+
+                        # Padrão 2: Entre { e } (primeiro JSON completo no texto)
+                        if not json_match:
+                            # Encontrar o primeiro { e o } correspondente
+                            start_idx = processed_text.find('{')
+                            if start_idx >= 0:
+                                # Contar chaves para encontrar o fechamento correto
+                                open_braces = 0
+                                for i in range(start_idx, len(processed_text)):
+                                    if processed_text[i] == '{':
+                                        open_braces += 1
+                                    elif processed_text[i] == '}':
+                                        open_braces -= 1
+                                        if open_braces == 0:
+                                            # Encontramos o JSON completo
+                                            json_str = processed_text[start_idx:i+1]
+                                            try:
+                                                # Verificar se é um JSON válido
+                                                json.loads(json_str)
+                                                json_match = type('obj', (object,), {'group': lambda self, x: json_str})()
+                                                logger.info(f"Found JSON using pattern 2 for document {doc_id}")
+                                                break
+                                            except:
+                                                # Não é um JSON válido, continuar procurando
+                                                pass
+
+                        # Padrão 3: Procurar por "PARTE 1 - JSON ESTRUTURADO:" seguido por JSON
+                        if not json_match:
+                            json_section = re.search(r'PARTE 1 - JSON ESTRUTURADO:.*?({.*?})', processed_text, re.DOTALL)
+                            if json_section:
+                                # Extrair o texto que parece ser JSON
+                                potential_json = json_section.group(1)
+                                # Limpar o texto para tentar extrair o JSON
+                                potential_json = re.sub(r'```.*?```', '', potential_json, flags=re.DOTALL)
+                                # Encontrar o primeiro { e o último }
+                                start_idx = potential_json.find('{')
+                                end_idx = potential_json.rfind('}')
+                                if start_idx >= 0 and end_idx > start_idx:
+                                    json_str = potential_json[start_idx:end_idx+1]
+                                    try:
+                                        # Verificar se é um JSON válido
+                                        json.loads(json_str)
+                                        json_match = type('obj', (object,), {'group': lambda self, x: json_str})()
+                                        logger.info(f"Found JSON using pattern 3 for document {doc_id}")
+                                    except:
+                                        # Não é um JSON válido
+                                        pass
+
+                        # Se encontramos um JSON válido, processá-lo
+                        if json_match:
+                            json_str = json_match.group(1)
+                            # Limpar o JSON para garantir que é válido
+                            json_str = json_str.strip()
+                            structured_data = json.loads(json_str)
+                            logger.info(f"Successfully extracted JSON structure from processed document {doc_id}")
+
+                            # Log detalhado para depuração
+                            logger.info(f"JSON structure keys: {list(structured_data.keys())}")
+
+                            # Remover o JSON do texto processado para manter apenas a parte textual
+                            if "```json" in processed_text:
+                                processed_text = processed_text.replace(json_match.group(0), "").strip()
+                            else:
+                                # Se não usamos o padrão ```json, apenas garantir que o texto está limpo
+                                processed_text = re.sub(r'PARTE 1 - JSON ESTRUTURADO:.*?PARTE 2 - TEXTO ENRIQUECIDO:',
+                                                       'PARTE 2 - TEXTO ENRIQUECIDO:', processed_text, flags=re.DOTALL)
+                                processed_text = processed_text.replace("PARTE 2 - TEXTO ENRIQUECIDO:", "").strip()
+                        else:
+                            logger.warning(f"No JSON structure found in processed document {doc_id}")
+                            # Log do início do texto processado para depuração
+                            logger.info(f"Processed text starts with: {processed_text[:200]}...")
+                    except Exception as json_error:
+                        logger.error(f"Failed to extract JSON from processed document: {json_error}")
+                        # Log do erro detalhado
+                        logger.exception("Detailed JSON extraction error:")
+                        # Continuar com o texto processado sem extrair JSON
                 except Exception as agent_error:
                     logger.error(f"Failed to process document with agent: {agent_error}")
                     # Usar o texto original como fallback
                     processed_text = original_text
+                    structured_data = {}
 
                 # Gerar embedding do texto processado
                 try:
+                    # SOLUÇÃO RADICAL: Excluir TODOS os documentos existentes antes de inserir um novo
+                    # Usar um ID numérico para o documento (Qdrant só aceita números inteiros ou UUIDs)
+                    # Gerar um hash determinístico baseado no account_id e doc_id
+                    import hashlib
+                    # Criar um hash determinístico
+                    hash_str = f"{account_id}_{doc_id}"
+                    hash_obj = hashlib.md5(hash_str.encode())
+                    # Converter os primeiros 8 bytes do hash para um inteiro
+                    document_id = int(hash_obj.hexdigest()[:8], 16)
+                    # Armazenar o ID original como metadado para referência
+                    original_id = f"{account_id}_{doc_id}"
+                    logger.info(f"Using numeric ID {document_id} (from {original_id}) for document {doc_id}")
+
+                    # Excluir TODOS os documentos existentes para este account_id e document_id
+                    try:
+                        # Primeiro, buscar todos os documentos existentes
+                        existing_points = vector_service.qdrant_client.scroll(
+                            collection_name=collection_name,
+                            scroll_filter=models.Filter(
+                                must=[
+                                    models.FieldCondition(
+                                        key="account_id",
+                                        match=models.MatchValue(value=account_id)
+                                    ),
+                                    models.FieldCondition(
+                                        key="document_id",
+                                        match=models.MatchValue(value=str(doc_id))
+                                    )
+                                ]
+                            ),
+                            limit=100,  # Buscar todos os documentos que correspondem
+                            with_payload=False,
+                            with_vectors=False,
+                        )[0]
+
+                        # Se encontrou documentos, excluir TODOS eles
+                        if existing_points:
+                            # Coletar todos os IDs
+                            point_ids = [point.id for point in existing_points]
+
+                            # Log detalhado
+                            logger.warning(f"Found {len(existing_points)} existing documents for account_id={account_id}, document_id={doc_id}")
+                            logger.warning(f"Document IDs to delete: {point_ids}")
+
+                            # Excluir todos os documentos
+                            vector_service.qdrant_client.delete(
+                                collection_name=collection_name,
+                                points_selector=models.PointIdsList(
+                                    points=point_ids
+                                )
+                            )
+
+                            logger.warning(f"DELETED ALL {len(existing_points)} existing documents for {doc_id}")
+
+                            # Verificar se a exclusão foi bem-sucedida
+                            verification_points = vector_service.qdrant_client.scroll(
+                                collection_name=collection_name,
+                                scroll_filter=models.Filter(
+                                    must=[
+                                        models.FieldCondition(
+                                            key="account_id",
+                                            match=models.MatchValue(value=account_id)
+                                        ),
+                                        models.FieldCondition(
+                                            key="document_id",
+                                            match=models.MatchValue(value=str(doc_id))
+                                        )
+                                    ]
+                                ),
+                                limit=10,
+                                with_payload=False,
+                                with_vectors=False,
+                            )[0]
+
+                            if verification_points:
+                                logger.error(f"CRITICAL: Still found {len(verification_points)} documents after deletion!")
+                            else:
+                                logger.info("Verification successful: No documents found after deletion.")
+                        else:
+                            logger.info(f"No existing documents found for account_id={account_id}, document_id={doc_id}")
+
+                    except Exception as delete_error:
+                        logger.error(f"Failed to delete existing documents: {delete_error}")
+                        logger.exception("Detailed deletion error:")
+
+                    # Gerar embedding
                     embedding = await vector_service.generate_embedding(processed_text)
 
-                    # Gerar um ID único para o documento usando UUID
-                    import uuid
-                    document_id = str(uuid.uuid4())
+                    # Preparar o payload para o documento
+                    payload = {
+                        # Metadados estruturados para facilitar a busca
+                        "metadata": {
+                            "account_id": account_id,  # Campo crucial para filtragem por tenant
+                            "business_rule_id": business_rule_id,
+                            "document_id": str(doc_id),
+                            "name": doc_name,
+                            "document_type": doc_type,
+                            "last_updated": datetime.now().isoformat(),
+                            "ai_processed": original_text != processed_text,  # Indica se o documento foi processado pelo agente
+                            "has_structured_data": bool(structured_data),  # Indica se o documento tem dados estruturados
+                            "original_id": original_id  # ID original para referência
+                        },
+                        # Conteúdo do documento
+                        "content": {
+                            "original": original_text,
+                            "processed": processed_text
+                        },
+                        # Dados estruturados extraídos pelo agente
+                        "structured_data": structured_data,
+                        # Campos para compatibilidade com código existente
+                        "account_id": account_id,
+                        "business_rule_id": business_rule_id,
+                        "document_id": str(doc_id),
+                        "name": doc_name,
+                        "document_type": doc_type,
+                        "content": doc_content,
+                        "original_text": original_text,
+                        "processed_text": processed_text,
+                        "ai_processed": original_text != processed_text,
+                        "last_updated": datetime.now().isoformat()
+                    }
 
-                    # Armazenar no Qdrant
-                    vector_service.qdrant_client.upsert(
-                        collection_name=collection_name,
-                        points=[
-                            models.PointStruct(
-                                id=document_id,  # ID baseado no account_id e doc_id
-                                vector=embedding,
-                                payload={
-                                    "account_id": account_id,  # Campo crucial para filtragem por tenant
-                                    "business_rule_id": business_rule_id,
-                                    "document_id": doc_id,
-                                    "name": doc_name,
-                                    "document_type": doc_type,
-                                    "content": doc_content,
-                                    "original_text": original_text,
-                                    "processed_text": processed_text,
-                                    "ai_processed": original_text != processed_text,  # Indica se o documento foi processado pelo agente
-                                    "last_updated": datetime.now().isoformat()
-                                }
-                            )
-                        ],
-                    )
+                    # Log detalhado do payload
+                    logger.info(f"Preparing to store document with ID {document_id}")
+                    logger.info(f"Payload metadata: {json.dumps(payload['metadata'], default=str)}")
+                    logger.info(f"Payload has structured data: {bool(structured_data)}")
+
+                    # Armazenar no Qdrant com ID determinístico
+                    try:
+                        vector_service.qdrant_client.upsert(
+                            collection_name=collection_name,
+                            points=[
+                                models.PointStruct(
+                                    id=document_id,  # Sempre usar o ID determinístico
+                                    vector=embedding,
+                                    payload=payload
+                                )
+                            ],
+                        )
+                        logger.info(f"Successfully stored document with ID {document_id}")
+
+                        # Verificar se o documento foi armazenado corretamente
+                        verification_point = vector_service.qdrant_client.retrieve(
+                            collection_name=collection_name,
+                            ids=[document_id],
+                            with_payload=True,
+                            with_vectors=False,
+                        )
+
+                        if verification_point and len(verification_point) > 0:
+                            logger.info(f"Verification successful: Document {document_id} found in Qdrant")
+                        else:
+                            logger.error(f"CRITICAL: Document {document_id} not found in Qdrant after storage!")
+                    except Exception as upsert_error:
+                        logger.error(f"Failed to store document in Qdrant: {upsert_error}")
+                        logger.exception("Detailed upsert error:")
                     logger.info(f"Stored support document in Qdrant: {doc_name} (ID: {doc_id})")
                     synced_docs.append(str(doc_id))
                 except Exception as e:
@@ -2136,10 +2624,16 @@ Conteúdo:
                     # Continuar com o próximo documento
 
             logger.info(f"Synchronized {len(synced_docs)} support documents for account {account_id}")
+
+            # Log detalhado para depuração
+            if synced_docs:
+                logger.info(f"Synced document IDs: {synced_docs}")
+
             return {
                 "success": True,
                 "synced_docs": synced_docs,
-                "total": len(synced_docs)
+                "total": len(synced_docs),
+                "message": f"Synchronized {len(synced_docs)} support documents successfully"
             }
 
         except Exception as e:
@@ -2201,22 +2695,44 @@ Conteúdo:
                 }
 
             # Extrair dados do documento
-            document = points[0].payload
+            payload = points[0].payload
 
-            # Construir resposta
-            return {
-                "found": True,
-                "document": {
-                    "id": document.get("document_id"),
-                    "name": document.get("name"),
-                    "document_type": document.get("document_type"),
-                    "original_content": document.get("content"),
-                    "original_text": document.get("original_text"),
-                    "processed_text": document.get("processed_text"),
-                    "ai_processed": document.get("ai_processed", False),
-                    "last_updated": document.get("last_updated")
+            # Verificar se o documento usa o novo formato estruturado
+            if "metadata" in payload and "content" in payload:
+                metadata = payload.get("metadata", {})
+                content = payload.get("content", {})
+
+                # Construir resposta com o novo formato
+                return {
+                    "found": True,
+                    "document": {
+                        "id": metadata.get("document_id"),
+                        "name": metadata.get("name"),
+                        "document_type": metadata.get("document_type"),
+                        "original_content": payload.get("content"),  # Campo de compatibilidade
+                        "original_text": content.get("original"),
+                        "processed_text": content.get("processed"),
+                        "ai_processed": metadata.get("ai_processed", False),
+                        "has_structured_data": metadata.get("has_structured_data", False),
+                        "structured_data": payload.get("structured_data", {}),
+                        "last_updated": metadata.get("last_updated")
+                    }
                 }
-            }
+            else:
+                # Compatibilidade com o formato antigo
+                return {
+                    "found": True,
+                    "document": {
+                        "id": payload.get("document_id"),
+                        "name": payload.get("name"),
+                        "document_type": payload.get("document_type"),
+                        "original_content": payload.get("content"),
+                        "original_text": payload.get("original_text"),
+                        "processed_text": payload.get("processed_text"),
+                        "ai_processed": payload.get("ai_processed", False),
+                        "last_updated": payload.get("last_updated")
+                    }
+                }
 
         except Exception as e:
             logger.error(f"Failed to get processed support document: {e}")
@@ -2272,16 +2788,37 @@ Conteúdo:
             # Extrair dados dos documentos
             documents = []
             for point in points:
-                document = point.payload
-                documents.append({
-                    "id": document.get("document_id"),
-                    "name": document.get("name"),
-                    "document_type": document.get("document_type"),
-                    "description": document.get("description", ""),
-                    "processed_text": document.get("processed_text"),
-                    "ai_processed": document.get("ai_processed", False),
-                    "last_updated": document.get("last_updated")
-                })
+                payload = point.payload
+
+                # Verificar se o documento usa o novo formato estruturado
+                if "metadata" in payload and "content" in payload:
+                    metadata = payload.get("metadata", {})
+                    content = payload.get("content", {})
+
+                    documents.append({
+                        "id": metadata.get("document_id"),
+                        "name": metadata.get("name"),
+                        "document_type": metadata.get("document_type"),
+                        "description": metadata.get("description", ""),
+                        "processed_text": content.get("processed"),
+                        "ai_processed": metadata.get("ai_processed", False),
+                        "has_structured_data": metadata.get("has_structured_data", False),
+                        "structured_data": payload.get("structured_data", {}),
+                        "last_updated": metadata.get("last_updated"),
+                        "format": "structured"  # Indicador do formato usado
+                    })
+                else:
+                    # Compatibilidade com o formato antigo
+                    documents.append({
+                        "id": payload.get("document_id"),
+                        "name": payload.get("name"),
+                        "document_type": payload.get("document_type"),
+                        "description": payload.get("description", ""),
+                        "processed_text": payload.get("processed_text"),
+                        "ai_processed": payload.get("ai_processed", False),
+                        "last_updated": payload.get("last_updated"),
+                        "format": "legacy"  # Indicador do formato usado
+                    })
 
             # Construir resposta
             return {

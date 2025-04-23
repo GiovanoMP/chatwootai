@@ -59,8 +59,31 @@ class BusinessSupportDocument(models.Model):
             'name', 'document_type', 'content', 'business_rule_ids', 'active'
         ]
 
+        # SOLUÇÃO RADICAL: Se o documento está sendo desativado, remover das regras de negócio
+        if 'active' in vals and vals['active'] is False:
+            _logger.warning(f"SOLUÇÃO RADICAL: Documento {self.name} (ID: {self.id}) está sendo desativado")
+
+            # Remover este documento de todas as regras de negócio associadas
+            for record in self:
+                if record.business_rule_ids:
+                    _logger.warning(f"SOLUÇÃO RADICAL: Removendo documento {record.name} (ID: {record.id}) de {len(record.business_rule_ids)} regras de negócio")
+
+                    # Para cada regra de negócio, remover este documento
+                    for business_rule in record.business_rule_ids:
+                        # Remover apenas este documento específico
+                        business_rule.write({
+                            'support_document_ids': [(3, record.id)]
+                        })
+                        _logger.warning(f"SOLUÇÃO RADICAL: Documento removido da regra de negócio {business_rule.name} (ID: {business_rule.id})")
+
+                        # Atualizar status de sincronização da regra de negócio
+                        business_rule.write({'sync_status': 'not_synced'})
+
+            # Definir status de sincronização como 'not_synced'
+            vals['sync_status'] = 'not_synced'
+
         # Verificar se algum campo relevante foi alterado
-        if any(field in vals for field in sync_fields):
+        elif any(field in vals for field in sync_fields):
             # Se o status atual é 'synced', mudar para 'not_synced'
             if self.sync_status == 'synced':
                 vals['sync_status'] = 'not_synced'
@@ -72,6 +95,25 @@ class BusinessSupportDocument(models.Model):
                         business_rule.write({'sync_status': 'not_synced'})
 
         return super(BusinessSupportDocument, self).write(vals)
+
+    def unlink(self):
+        """Sobrescrever método unlink para remover o documento das regras de negócio antes de excluí-lo"""
+        for record in self:
+            if record.business_rule_ids:
+                _logger.warning(f"SOLUÇÃO RADICAL: Removendo documento {record.name} (ID: {record.id}) de {len(record.business_rule_ids)} regras de negócio antes da exclusão")
+
+                # Para cada regra de negócio, remover este documento
+                for business_rule in record.business_rule_ids:
+                    # Remover apenas este documento específico
+                    business_rule.write({
+                        'support_document_ids': [(3, record.id)]
+                    })
+                    _logger.warning(f"SOLUÇÃO RADICAL: Documento removido da regra de negócio {business_rule.name} (ID: {business_rule.id})")
+
+                    # Atualizar status de sincronização da regra de negócio
+                    business_rule.write({'sync_status': 'not_synced'})
+
+        return super(BusinessSupportDocument, self).unlink()
 
     def action_sync_document(self):
         """Sincronizar documento individual com o sistema de IA"""

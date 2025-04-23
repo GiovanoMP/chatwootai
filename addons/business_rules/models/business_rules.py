@@ -329,6 +329,32 @@ class BusinessRules(models.Model):
         """Sincroniza os documentos de suporte com o sistema de IA."""
         self.ensure_one()
         try:
+            # SOLUÇÃO RADICAL: Verificar se há documentos ativos
+            active_docs = self.support_document_ids.filtered(lambda r: r.active)
+
+            if not active_docs:
+                _logger.warning("Nenhum documento ativo encontrado para sincronização")
+                return {
+                    'type': 'ir.actions.client',
+                    'tag': 'display_notification',
+                    'params': {
+                        'title': _('Aviso'),
+                        'message': _('Nenhum documento ativo encontrado para sincronização.'),
+                        'sticky': False,
+                        'type': 'warning'
+                    }
+                }
+
+            # Ordenar documentos por data de criação (mais recente primeiro)
+            sorted_docs = active_docs.sorted(key=lambda r: r.create_date or fields.Datetime.now(), reverse=True)
+
+            # SOLUÇÃO RADICAL: Atualizar support_document_ids para conter apenas o documento mais recente
+            if len(sorted_docs) > 1:
+                _logger.warning(f"SOLUÇÃO RADICAL: Encontrados {len(sorted_docs)} documentos ativos, mas sincronizando apenas o mais recente")
+                # Limpar a relação many2many e adicionar apenas o documento mais recente
+                self.support_document_ids = [(6, 0, [sorted_docs[0].id])]
+                _logger.warning(f"SOLUÇÃO RADICAL: Definido apenas o documento {sorted_docs[0].name} (ID: {sorted_docs[0].id}) para sincronização")
+
             # Chamar o MCP-Odoo para sincronizar documentos
             result = self._call_mcp_sync_support_docs()
 
@@ -385,9 +411,24 @@ class BusinessRules(models.Model):
                 'Authorization': f'Bearer {mcp_token}' if mcp_token else ''
             }
 
-            # Obter informações dos documentos
+            # SOLUÇÃO RADICAL: Enviar apenas o documento mais recente
             docs_data = []
-            for doc in self.support_document_ids:
+
+            # Verificar se há documentos
+            if self.support_document_ids:
+                # Ordenar documentos por data de criação (mais recente primeiro)
+                sorted_docs = self.support_document_ids.sorted(key=lambda r: r.create_date or fields.Datetime.now(), reverse=True)
+
+                # Pegar apenas o primeiro documento (mais recente)
+                if len(sorted_docs) > 1:
+                    _logger.warning(f"SOLUÇÃO RADICAL: Encontrados {len(sorted_docs)} documentos, mas enviando apenas o mais recente")
+                    doc = sorted_docs[0]
+                    _logger.warning(f"SOLUÇÃO RADICAL: Enviando apenas o documento: {doc.name} (ID: {doc.id})")
+                else:
+                    doc = sorted_docs[0]
+                    _logger.info(f"Enviando documento: {doc.name} (ID: {doc.id})")
+
+                # Adicionar apenas o documento mais recente
                 docs_data.append({
                     'id': doc.id,
                     'name': doc.name,
@@ -405,8 +446,9 @@ class BusinessRules(models.Model):
             # Fazer a requisição ao MCP-Odoo
             _logger.info(f"Chamando MCP-Odoo para sincronizar documentos de suporte para a regra de negócio {self.id}")
             response = requests.post(
-                f"{mcp_url}/tools/sync_support_documents",
+                f"{mcp_url}/api/v1/business-rules/sync-support-documents",
                 headers=headers,
+                params={"account_id": account_id},  # Adicionar account_id como parâmetro de query
                 json=payload,
                 timeout=30  # Timeout de 30 segundos
             )

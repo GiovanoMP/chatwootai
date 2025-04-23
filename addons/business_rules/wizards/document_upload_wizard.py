@@ -23,7 +23,7 @@ class DocumentUploadWizard(models.TransientModel):
         ('suggestion', 'Sugestão'),
         ('other', 'Outro')
     ], string='Tipo de Documento', default='support', required=True)
-    
+
     message = fields.Text(string='Descrição', help='Descrição ou contexto do documento')
 
     document_file = fields.Binary(string='Arquivo', required=True)
@@ -109,16 +109,16 @@ class DocumentUploadWizard(models.TransientModel):
             'active': True
         })
 
-        # Sincronizar documento com o sistema de IA
-        self.business_rule_id.action_sync_support_documents()
+        # Não sincronizar automaticamente - isso será feito pelo botão "Sincronizar com IA"
+        # self.business_rule_id.action_sync_support_documents()
 
         return {
             'type': 'ir.actions.client',
             'tag': 'display_notification',
             'params': {
                 'title': _('Documento Criado'),
-                'message': _('Documento "%s" foi criado e sincronizado com sucesso.') % self.name,
-                'sticky': False,
+                'message': _('Documento "%s" foi criado com sucesso. IMPORTANTE: Use o botão "Sincronizar com IA" na tela principal para vetorizar o documento.') % self.name,
+                'sticky': True,
                 'type': 'success',
             }
         }

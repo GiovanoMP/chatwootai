@@ -40,37 +40,95 @@ class SupportDocumentEmbeddingAgent(EmbeddingAgent):
         # Construir o prompt para o agente
         system_prompt = """
         Você é um especialista em processamento de documentos para sistemas de IA.
-        Sua tarefa é transformar os dados brutos de documentos de suporte ao cliente em um texto rico e contextualizado
-        para vetorização, seguindo estas diretrizes:
+        Sua tarefa é transformar os dados brutos de documentos de suporte ao cliente em um formato estruturado JSON
+        para facilitar a análise por agentes de IA, seguindo estas diretrizes RIGOROSAS:
 
-        1. Mantenha-se estritamente aos fatos presentes nos dados
-        2. Não invente informações ou características
-        3. Expanda abreviações e explique termos técnicos quando necessário
-        4. Organize as informações em formato claro e estruturado
-        5. Se o documento contiver perguntas e respostas, organize-as em formato de FAQ
-        6. Se o documento for uma política ou procedimento, estruture-o em seções claras
+        1. NUNCA invente informações ou características que não estejam explicitamente presentes nos dados
+        2. Mantenha-se ESTRITAMENTE aos fatos presentes nos dados originais
+        3. Expanda abreviações e explique termos técnicos quando necessário, mas sem adicionar informações não presentes
+        4. Organize as informações em formato estruturado JSON
+        5. Se o documento contiver perguntas e respostas, organize-as em formato de FAQ no JSON
+        6. Se o documento for uma política ou procedimento, estruture-o em seções claras no JSON
         7. Priorize informações que seriam úteis para responder consultas de clientes
-        8. Se os dados forem insuficientes, mantenha-se minimalista - não preencha lacunas com suposições
+        8. Se os dados forem insuficientes, mantenha-se minimalista - NÃO preencha lacunas com suposições
+        9. Identifique padrões e estruturas no documento para facilitar a análise por agentes de IA
+        10. Extraia entidades, datas, valores numéricos e outros dados estruturados quando presentes
 
-        Formate o texto final de forma que capture a essência do documento de suporte.
+        IMPORTANTE: Sua resposta DEVE seguir EXATAMENTE este formato:
+        1. Primeiro, um bloco de código JSON válido entre delimitadores ```json e ```
+        2. Depois, uma versão textual enriquecida do documento
+
+        O JSON DEVE ser válido e seguir exatamente a estrutura fornecida no exemplo. Não adicione comentários dentro do JSON.
         """
 
         # Adicionar contexto da área de negócio, se disponível
         if business_area:
-            system_prompt += f"\nEste documento pertence à área de negócio: {business_area}. Considere o contexto desta indústria."
+            system_prompt += f"\nEste documento pertence à área de negócio: {business_area}. Considere o contexto desta indústria, mas NÃO adicione informações específicas do setor que não estejam no documento original."
 
         # Preparar os dados do documento em formato legível
         document_content = self._format_document_data(data)
 
         # Chamar o LLM para processar os dados
-        user_prompt = f"Processe o seguinte documento de suporte ao cliente para vetorização:\n\n{document_content}"
+        user_prompt = f"""Processe o seguinte documento de suporte ao cliente para vetorização:
+
+{document_content}
+
+Estruture sua resposta em duas partes:
+
+PARTE 1 - JSON ESTRUTURADO:
+```json
+{{
+  "document_metadata": {{
+    "title": "Título descritivo do documento",
+    "document_type": "Tipo do documento (FAQ, Política, Procedimento, etc.)",
+    "audience": "Público-alvo do documento",
+    "complexity": "Baixa/Média/Alta",
+    "keywords": ["palavra1", "palavra2", "palavra3", "..."]
+  }},
+  "content_summary": "Breve resumo do conteúdo do documento",
+  "structured_content": {{
+    "sections": [
+      {{
+        "title": "Título da seção 1",
+        "content": "Conteúdo da seção 1"
+      }},
+      {{
+        "title": "Título da seção 2",
+        "content": "Conteúdo da seção 2"
+      }}
+    ]
+  }},
+  "entities": {
+    "products": ["produto1", "produto2", "..."],
+    "services": ["serviço1", "serviço2", "..."],
+    "dates": ["data1", "data2", "..."],
+    "values": ["valor1", "valor2", "..."]
+  },
+  "faq_items": [
+    {{
+      "question": "Pergunta 1",
+      "answer": "Resposta 1"
+    }},
+    {{
+      "question": "Pergunta 2",
+      "answer": "Resposta 2"
+    }}
+  ]
+}}
+```
+
+PARTE 2 - TEXTO ENRIQUECIDO:
+[Versão textual enriquecida do documento, organizada em seções com títulos e subtítulos]
+
+LEMBRE-SE: Não invente NENHUMA informação que não esteja presente no documento original. Se algum campo não puder ser preenchido com informações do documento, deixe-o como array vazio [] ou string vazia "".
+"""
 
         openai_service = await get_openai_service()
         response = await openai_service.generate_text(
             system_prompt=system_prompt,
             user_prompt=user_prompt,
-            max_tokens=1500,  # Tokens suficientes para documentos mais longos
-            temperature=0.2  # Baixa temperatura para respostas mais determinísticas
+            max_tokens=2500,  # Tokens suficientes para documentos mais longos e JSON complexo
+            temperature=0.1  # Temperatura muito baixa para respostas mais determinísticas e consistentes
         )
 
         return response.strip()

@@ -24,6 +24,8 @@ class BusinessRuleItem(models.Model):
     ], string='Tipo de Regra', default='general', required=True)
 
     active = fields.Boolean(default=True, string='Ativo')
+    visible_in_ai = fields.Boolean(default=True, string='Disponível no Sistema de IA',
+                                  help='Se marcado, esta regra será incluída no sistema de IA')
 
     # Campos para rastreamento
     create_date = fields.Datetime(string='Data de Criação', readonly=True)
@@ -42,13 +44,20 @@ class BusinessRuleItem(models.Model):
         """Sobrescrever método write para atualizar status de sincronização da regra principal"""
         # Lista de campos que afetam a sincronização
         sync_fields = [
-            'name', 'description', 'rule_type', 'active'
+            'name', 'description', 'rule_type', 'active', 'visible_in_ai'
         ]
 
         result = super(BusinessRuleItem, self).write(vals)
 
+        # Se a regra está sendo marcada como não disponível no IA, marcar para sincronização
+        if 'visible_in_ai' in vals and vals['visible_in_ai'] is False:
+            # Atualizar o status de sincronização da regra principal
+            for record in self:
+                if record.business_rule_id:
+                    record.business_rule_id.write({'sync_status': 'not_synced'})
+
         # Verificar se algum campo relevante foi alterado
-        if any(field in vals for field in sync_fields):
+        elif any(field in vals for field in sync_fields):
             # Atualizar o status de sincronização da regra principal
             for record in self:
                 if record.business_rule_id and record.business_rule_id.sync_status == 'synced':

@@ -545,20 +545,20 @@ class BusinessRulesSyncController(http.Controller):
             }
         }
 
-        # Regras permanentes ativas
+        # Regras permanentes ativas e disponíveis no Sistema de IA
         permanent_rules = []
-        for rule in business_rule.rule_ids.filtered(lambda r: r.active):
+        for rule in business_rule.rule_ids.filtered(lambda r: r.active and r.visible_in_ai):
             permanent_rules.append({
                 'name': rule.name,
                 'description': rule.description,
                 'type': rule.rule_type
             })
 
-        # Regras temporárias ativas e dentro do período de validade
+        # Regras temporárias ativas, dentro do período de validade e disponíveis no Sistema de IA
         now = fields.Datetime.now()
         temporary_rules = []
         for rule in business_rule.temporary_rule_ids.filtered(
-            lambda r: r.active and
+            lambda r: r.active and r.visible_in_ai and
             (not r.date_start or r.date_start <= now) and
             (not r.date_end or r.date_end >= now)
         ):

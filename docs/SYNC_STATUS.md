@@ -15,19 +15,21 @@ Este documento descreve o estado atual da sincronização de documentos entre o 
 - Na próxima sincronização, o documento é automaticamente removido do Qdrant.
 - Esta ação é irreversível - o documento não pode ser recuperado após a exclusão.
 
-## Problemas Conhecidos
+## Funcionalidades Recém-Implementadas
 
-### 1. Documentos Desativados
+### 1. Visualização de Documentos Inativos
 
-- Atualmente, quando um documento é desativado (botão `active` = False), ele desaparece da interface do usuário.
-- O comportamento desejado é que o documento permaneça visível na interface, mas seja marcado como inativo e seja removido do Qdrant.
-- Este problema será corrigido em uma atualização futura.
+- Documentos desativados (botão `active` = False) agora permanecem visíveis na interface do usuário, mas são marcados como inativos.
+- Documentos inativos são automaticamente removidos do Qdrant durante a sincronização.
+- Isso permite que os usuários vejam todos os documentos, incluindo os inativos, mas apenas os documentos ativos são usados pelo sistema de IA.
+
+### 2. Filtros para Documentos Ativos/Inativos
+
+- Adicionados filtros para mostrar documentos ativos, inativos ou ambos.
+- Adicionada opção para agrupar documentos por status de ativação.
+- Por padrão, a visualização mostra todos os documentos (ativos e inativos).
 
 ## Próximos Passos
-
-1. **Corrigir a visualização de documentos inativos**:
-   - Modificar as visualizações para mostrar documentos inativos na interface
-   - Adicionar um filtro para alternar entre mostrar todos os documentos ou apenas os ativos
 
 2. **Melhorar a documentação**:
    - Adicionar instruções detalhadas sobre como gerenciar documentos

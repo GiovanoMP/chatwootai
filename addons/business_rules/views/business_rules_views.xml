@@ -7,13 +7,13 @@
         <field name="arch" type="xml">
             <form string="Regras de Negócio">
                 <header>
-                    <button name="action_sync_with_ai" string="Sincronizar com IA" type="object" class="btn-success" attrs="{'invisible': [('sync_status', '=', 'syncing')]}"/>
+                    <button name="action_sync_with_ai" string="Sincronizar com Sistema de IA" type="object" class="btn btn-success" style="background-color: #28a745 !important; color: white !important;"/>
                     <field name="sync_status" widget="statusbar" statusbar_visible="not_synced,syncing,synced,error"/>
                 </header>
                 <sheet>
                     <div class="oe_button_box" name="button_box">
-                        <button name="toggle_active" type="object" class="oe_stat_button" icon="fa-archive">
-                            <field name="active" widget="boolean_button" options="{'terminology': 'archive'}"/>
+                        <button class="oe_stat_button" icon="fa-robot">
+                            <field name="visible_in_ai" widget="boolean_button" options="{'terminology': {'string_true': 'Disponível no IA', 'string_false': 'Indisponível no IA', 'hover_true': 'Tornar Indisponível no Sistema de IA', 'hover_false': 'Tornar Disponível no Sistema de IA'}}"/>
                         </button>
                     </div>
                     <div class="oe_title">
@@ -164,7 +164,8 @@
                                     <field name="date_start" attrs="{'invisible': [('is_temporary', '=', False)]}"/>
                                     <field name="date_end" attrs="{'invisible': [('is_temporary', '=', False)]}"/>
                                     <field name="state" decoration-success="state == 'active'" decoration-warning="state == 'draft'" decoration-danger="state == 'expired'" decoration-muted="state == 'cancelled'"/>
-                                    <field name="active" widget="boolean_toggle"/>
+                                    <field name="visible_in_ai" widget="boolean_toggle" string="Disponível no Sistema de IA"/>
+                                    <button name="unlink" type="object" string="Excluir" confirm="Atenção: Esta ação excluirá permanentemente a regra e não poderá ser desfeita. Deseja continuar?"/>
                                 </tree>
                                 <form>
                                     <sheet>
@@ -177,7 +178,7 @@
                                             <group>
                                                 <field name="date_start" attrs="{'invisible': [('is_temporary', '=', False)], 'required': [('is_temporary', '=', True)]}"/>
                                                 <field name="date_end" attrs="{'invisible': [('is_temporary', '=', False)], 'required': [('is_temporary', '=', True)]}"/>
-                                                <field name="active"/>
+                                                <field name="visible_in_ai" string="Disponível no Sistema de IA"/>
                                             </group>
                                         </group>
                                         <group string="Descrição">
@@ -199,7 +200,8 @@
                                     <field name="service_type"/>
                                     <field name="duration" widget="float_time"/>
                                     <field name="sync_status" decoration-success="sync_status == 'synced'" decoration-danger="sync_status == 'error'" decoration-info="sync_status == 'not_synced'"/>
-                                    <field name="active" widget="boolean_toggle"/>
+                                    <field name="visible_in_ai" widget="boolean_toggle" string="Disponível no Sistema de IA"/>
+                                    <button name="unlink" type="object" string="Excluir" confirm="Atenção: Esta ação excluirá permanentemente a regra e não poderá ser desfeita. Deseja continuar?"/>
                                 </tree>
                             </field>
                         </page>
@@ -223,13 +225,14 @@
                             <div class="row">
                                 <div class="col-12">
                                     <h3>Documentos Cadastrados</h3>
-                                    <field name="support_document_ids" options="{'no_create': True, 'no_create_edit': True}" widget="many2many" nolabel="1">
+                                    <field name="support_document_ids" options="{'no_create': True, 'no_create_edit': True}" widget="many2many" nolabel="1" context="{'active_test': False}">
                                         <tree>
                                             <field name="name"/>
                                             <field name="document_type"/>
                                             <field name="create_date"/>
                                             <field name="sync_status" decoration-success="sync_status == 'synced'" decoration-danger="sync_status == 'error'" decoration-info="sync_status == 'not_synced'"/>
-                                            <button name="action_delete_document" type="object" icon="fa-trash-o" string="Excluir" confirm="Atenção: Esta ação excluirá permanentemente o documento e não poderá ser desfeita. Deseja continuar?"/>
+                                            <field name="visible_in_ai" widget="boolean_toggle" string="Disponível no Sistema de IA"/>
+                                            <button name="action_delete_document" type="object" string="Excluir" confirm="Atenção: Esta ação excluirá permanentemente o documento e não poderá ser desfeita. Deseja continuar?"/>
                                         </tree>
                                     </field>
                                 </div>
@@ -250,14 +253,15 @@
         <field name="name">business.rules.tree</field>
         <field name="model">business.rules</field>
         <field name="arch" type="xml">
-            <tree string="Regras de Negócio" decoration-muted="active == False">
+            <tree string="Regras de Negócio">
                 <field name="name"/>
                 <field name="business_area"/>
                 <field name="active_permanent_rules_count" string="Regras Permanentes"/>
                 <field name="active_temporary_rules_count" string="Regras Temporárias"/>
                 <field name="last_sync_date"/>
                 <field name="sync_status" decoration-success="sync_status == 'synced'" decoration-danger="sync_status == 'error'" decoration-info="sync_status == 'not_synced'"/>
-                <field name="active" invisible="1"/>
+                <field name="visible_in_ai" widget="boolean_toggle" string="Disponível no Sistema de IA"/>
+                <button name="unlink" type="object" string="Excluir" confirm="Atenção: Esta ação excluirá permanentemente a regra e não poderá ser desfeita. Deseja continuar?"/>
             </tree>
         </field>
     </record>
@@ -274,10 +278,13 @@
                 <filter string="Não Sincronizadas" name="not_synced" domain="[('sync_status', '=', 'not_synced')]"/>
                 <filter string="Com Erro" name="error" domain="[('sync_status', '=', 'error')]"/>
                 <separator/>
-                <filter string="Arquivadas" name="inactive" domain="[('active', '=', False)]"/>
+                <filter string="Disponíveis no Sistema de IA" name="visible_in_ai" domain="[('visible_in_ai', '=', True)]"/>
+                <filter string="Indisponíveis no Sistema de IA" name="not_visible_in_ai" domain="[('visible_in_ai', '=', False)]"/>
+
                 <group expand="0" string="Agrupar Por">
                     <filter string="Área de Negócio" name="group_by_area" context="{'group_by': 'business_area'}"/>
                     <filter string="Status de Sincronização" name="group_by_sync" context="{'group_by': 'sync_status'}"/>
+                    <filter string="Disponibilidade no Sistema de IA" name="group_by_visible_in_ai" context="{'group_by': 'visible_in_ai'}"/>
                 </group>
             </search>
         </field>

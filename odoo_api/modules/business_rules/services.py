@@ -624,26 +624,27 @@ class BusinessRulesService:
                 # Criar um novo conector Odoo para regras permanentes
                 odoo_permanent = await OdooConnectorFactory.create_connector(account_id)
 
-                # Buscar regras permanentes ativas
+                # Buscar regras permanentes ativas e disponíveis no Sistema de IA
                 permanent_rule_ids = await odoo_permanent.execute_kw(
                     'business.rule.item',
                     'search',
-                    [[('active', '=', True)]]
+                    [[('active', '=', True), ('visible_in_ai', '=', True)]]
                 )
 
                 # Criar um novo conector Odoo para regras temporárias
                 odoo_temporary = await OdooConnectorFactory.create_connector(account_id)
 
-                # Buscar regras temporárias ativas
+                # Buscar regras temporárias ativas e disponíveis no Sistema de IA
                 temporary_rule_ids = await odoo_temporary.execute_kw(
                     'business.temporary.rule',
                     'search',
-                    [[('active', '=', True), ('state', '=', 'active')]]
+                    [[('active', '=', True), ('state', '=', 'active'), ('visible_in_ai', '=', True)]]
                 )
 
                 # Combinar IDs
                 active_rule_ids = permanent_rule_ids + temporary_rule_ids
-                logger.info(f"Found {len(active_rule_ids)} active rules in Odoo for account {account_id}")
+                logger.info(f"Found {len(permanent_rule_ids)} active permanent rules and {len(temporary_rule_ids)} active temporary rules in Odoo for account {account_id}")
+                logger.info(f"Total of {len(active_rule_ids)} active rules available in AI System for account {account_id}")
             except Exception as e:
                 logger.error(f"Failed to get active rule IDs: {e}")
                 logger.exception("Detailed traceback:")
@@ -721,33 +722,35 @@ class BusinessRulesService:
                 logger.exception("Detailed traceback:")
                 qdrant_rule_ids = []
 
-            # 4. Identificar regras a serem removidas do Qdrant (regras que existem no Qdrant mas não no Odoo)
-            # Comparar os IDs das regras no Qdrant com os IDs ativos no Odoo
+            # 4. Identificar regras a serem removidas do Qdrant:
+            # - Regras que existem no Qdrant mas não estão mais no Odoo
+            # - Regras que existem no Qdrant mas não estão mais ativas no Odoo
+            # - Regras que existem no Qdrant mas não estão mais disponíveis no Sistema de IA (visible_in_ai = False)
             obsolete_rule_ids = []
             for qdrant_id in qdrant_rule_ids:
                 # Obter o ID original da regra a partir do mapeamento
                 original_rule_id = qdrant_id_to_rule_id.get(qdrant_id, qdrant_id)
 
-                # Verificar se a regra ainda está ativa no Odoo
+                # Verificar se a regra ainda está ativa e disponível no Sistema de IA
                 if original_rule_id not in active_rule_ids:
                     obsolete_rule_ids.append(qdrant_id)
 
-            # 5. Remover regras excluídas do Qdrant
+            # 5. Remover regras excluídas ou não disponíveis no Sistema de IA do Qdrant
             if obsolete_rule_ids:
                 try:
-                    logger.info(f"Removing {len(obsolete_rule_ids)} obsolete rules from Qdrant: {obsolete_rule_ids}")
+                    logger.info(f"Removing {len(obsolete_rule_ids)} obsolete or not available in AI System rules from Qdrant: {obsolete_rule_ids}")
                     vector_service = await get_vector_service()
                     vector_service.qdrant_client.delete(
                         collection_name=collection_name,
                         points_selector=models.PointIdsList(points=obsolete_rule_ids),
                         wait=True  # Aguardar a conclusão da operação
                     )
-                    logger.info(f"Successfully removed {len(obsolete_rule_ids)} obsolete rules from Qdrant")
+                    logger.info(f"Successfully removed {len(obsolete_rule_ids)} obsolete or not available in AI System rules from Qdrant")
                 except Exception as e:
-                    logger.error(f"Failed to remove obsolete rules from Qdrant: {e}")
+                    logger.error(f"Failed to remove obsolete or not available in AI System rules from Qdrant: {e}")
                     logger.exception("Detailed traceback:")
             else:
-                logger.info(f"No obsolete rules to remove from Qdrant for account {account_id}")
+                logger.info(f"No obsolete or not available in AI System rules to remove from Qdrant for account {account_id}")
 
             # 6. Vetorizar e armazenar regras ativas no Qdrant
             vectorized_count = 0
@@ -1256,6 +1259,52 @@ class BusinessRulesService:
             vectorized_count = 0
             for doc_data in documents_data:
                 try:
+                    # Verificar se o documento está ativo e visível no IA
+                    is_active = doc_data.get('active', True)  # Por padrão, considerar ativo se não especificado
+                    is_visible_in_ai = doc_data.get('visible_in_ai', True)  # Por padrão, considerar visível se não especificado
+
+                    # Se o documento estiver inativo ou não visível no IA, remover do Qdrant e pular
+                    if not is_active or not is_visible_in_ai:
+                        # Determinar o motivo da exclusão para o log
+                        reason = "inativo" if not is_active else "indisponível no Sistema de IA"
+                        # Calcular o ID numérico usando o mesmo algoritmo de hash
+                        doc_id = doc_data['id']
+                        import hashlib
+                        hash_str = f"{account_id}_{doc_id}"
+                        hash_obj = hashlib.md5(hash_str.encode())
+                        document_id = int(hash_obj.hexdigest()[:8], 16)
+
+                        # Verificar se o documento existe no Qdrant
+                        existing_doc = vector_service.qdrant_client.retrieve(
+                            collection_name="support_documents",
+                            ids=[document_id],
+                            with_payload=True,
+                            with_vectors=False
+                        )
+
+                        if existing_doc and existing_doc[0]:
+                            # Remover documento do Qdrant
+                            vector_service.qdrant_client.delete(
+                                collection_name="support_documents",
+                                points_selector=models.PointIdsList(
+                                    points=[document_id]
+                                ),
+                                wait=True
+                            )
+                            logger.info(f"Documento {reason} removido do Qdrant: ID={doc_id}, Qdrant ID={document_id}")
+
+                        # Atualizar status de sincronização no Odoo
+                        await odoo.execute_kw(
+                            'business.support.document',
+                            'write',
+                            [[doc_id], {
+                                'sync_status': 'synced',
+                                'last_sync_date': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                            }]
+                        )
+                        logger.info(f"Status de sincronização atualizado para documento {reason} {doc_id}")
+                        continue
+
                     # Extrair texto do documento
                     document_text = ""
 
@@ -1491,25 +1540,25 @@ Conteúdo:
             # Se não houver documentos específicos, considerar que nenhum documento está selecionado
             selected_document_ids = document_ids if document_ids else []
 
-            # Obter os documentos ativos no Odoo
-            active_document_ids = await odoo.execute_kw(
+            # Obter os documentos disponíveis no Sistema de IA
+            visible_in_ai_document_ids = await odoo.execute_kw(
                 'business.support.document',
                 'search',
-                [[('active', '=', True)]],  # Buscar apenas documentos ativos
+                [[('visible_in_ai', '=', True)]],  # Buscar apenas documentos disponíveis no Sistema de IA
             )
 
             logger.info(f"Total de documentos no Odoo: {len(all_odoo_document_ids)}")
             logger.info(f"IDs de documentos no Odoo: {all_odoo_document_ids}")
-            logger.info(f"IDs de documentos ativos no Odoo: {active_document_ids}")
+            logger.info(f"IDs de documentos disponíveis no Sistema de IA: {visible_in_ai_document_ids}")
             logger.info(f"IDs de documentos selecionados na interface: {selected_document_ids}")
             logger.info(f"IDs de documentos no Qdrant: {existing_qdrant_docs}")
 
             # Identificar documentos obsoletos com base em duas condições:
             # 1. Documentos que existem no Qdrant mas não estão selecionados na interface
-            # 2. Documentos que existem no Qdrant mas estão inativos no Odoo
+            # 2. Documentos que existem no Qdrant mas não estão marcados como disponíveis no Sistema de IA
             obsolete_doc_ids = [
                 doc_id for doc_id in existing_qdrant_docs
-                if (doc_id not in selected_document_ids) or (doc_id not in active_document_ids)
+                if (doc_id not in selected_document_ids) or (int(doc_id) not in visible_in_ai_document_ids)
             ]
 
             # Remover documentos obsoletos do Qdrant
@@ -1949,7 +1998,7 @@ Conteúdo:
 
     async def sync_company_metadata(self, account_id: str) -> Dict[str, Any]:
         """
-        Sincroniza metadados gerais da empresa com o Qdrant.
+        Sincroniza metadados gerais da empresa com o arquivo YAML de configuração.
 
         Args:
             account_id: ID da conta
@@ -1959,8 +2008,6 @@ Conteúdo:
         """
         try:
             # Criar um novo conector Odoo para cada chamada
-            # Chamamos o método diretamente sem armazenar a coroutine
-            # para evitar problemas de reutilização de coroutines
             odoo = await OdooConnectorFactory.create_connector(account_id)
 
             # Obter ID da regra de negócio principal
@@ -2066,10 +2113,6 @@ Conteúdo:
                 'inform_at_start': business_rule_data.get('inform_promotions_at_start', False),
             }
 
-            # A geração do arquivo YAML de configuração do customer service foi removida
-            # como parte da mudança arquitetural para usar uma única crew que acessa
-            # as configurações específicas de cada empresa a partir do arquivo config.yaml
-
             # Atualizar o arquivo YAML principal de configuração da empresa
             try:
                 await self._update_company_config_yaml(
@@ -2080,87 +2123,6 @@ Conteúdo:
             except Exception as e:
                 logger.error(f"Failed to update main company config YAML: {e}")
                 # Continuar mesmo se falhar a atualização do YAML
-
-            # Obter uma nova instância do serviço de vetorização
-            # Isso evita reutilizar coroutines já aguardadas
-            vector_service = await get_vector_service()
-            collection_name = "company_metadata"  # Coleção compartilhada para todos os tenants
-
-            # Garantir que a coleção existe
-            try:
-                await vector_service.ensure_collection_exists(collection_name)
-            except Exception as e:
-                logger.error(f"Failed to ensure collection exists: {e}")
-                # Tentar criar a coleção diretamente se o método falhar
-                try:
-                    vector_service.qdrant_client.create_collection(
-                        collection_name=collection_name,
-                        vectors_config=models.VectorParams(size=1536, distance=models.Distance.COSINE),
-                    )
-                    # Criar índice para account_id
-                    vector_service.qdrant_client.create_payload_index(
-                        collection_name=collection_name,
-                        field_name="account_id",
-                        field_schema=models.PayloadSchemaType.KEYWORD,
-                    )
-                    logger.info(f"Created collection {collection_name} directly")
-                except Exception as create_error:
-                    logger.error(f"Failed to create collection directly: {create_error}")
-                    # Continuar mesmo se falhar a criação da coleção
-
-            # Importar o agente de metadados da empresa
-            from odoo_api.embedding_agents.business_rules import get_company_metadata_agent
-
-            # Obter a área de negócio da empresa
-            business_area = await self._get_business_area(account_id)
-
-            # Obter o agente de metadados da empresa
-            company_metadata_agent = await get_company_metadata_agent()
-
-            # Texto original para armazenamento
-            original_text = self._format_company_metadata(metadata)
-
-            # Processar metadados usando o agente
-            try:
-                processed_text = await company_metadata_agent.process_data(metadata, business_area)
-                logger.info(f"Processed company metadata for account {account_id} using company metadata agent")
-            except Exception as agent_error:
-                logger.error(f"Failed to process company metadata with agent: {agent_error}")
-                # Usar o texto original como fallback
-                processed_text = original_text
-
-            # Gerar embedding do texto processado
-            try:
-                embedding = await vector_service.generate_embedding(processed_text)
-
-                # Gerar um ID único para o documento baseado no account_id
-                # Isso permite atualizar o documento existente em vez de criar duplicatas
-                # Usar UUID para garantir compatibilidade com o Qdrant
-                import uuid
-                document_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, f"{account_id}_metadata"))
-
-                # Armazenar no Qdrant
-                vector_service.qdrant_client.upsert(
-                    collection_name=collection_name,
-                    points=[
-                        models.PointStruct(
-                            id=document_id,  # ID baseado no account_id
-                            vector=embedding,
-                            payload={
-                                "account_id": account_id,  # Campo crucial para filtragem por tenant
-                                "metadata": metadata,
-                                "original_text": original_text,
-                                "processed_text": processed_text,
-                                "ai_processed": original_text != processed_text,  # Indica se os metadados foram processados pelo agente
-                                "last_updated": datetime.now().isoformat()
-                            }
-                        )
-                    ],
-                )
-                logger.info(f"Stored company metadata in Qdrant for account {account_id}")
-            except Exception as e:
-                logger.error(f"Failed to generate embedding or store in Qdrant: {e}")
-                # Continuar mesmo se falhar a vetorização
 
             logger.info(f"Synchronized company metadata for account {account_id}")
             return metadata
@@ -2388,48 +2350,19 @@ Conteúdo:
             # Obter serviço de vetorização
             vector_service = await get_vector_service()
             rules_collection_name = "business_rules"  # Coleção compartilhada para todos os tenants
-            metadata_collection_name = "company_metadata"  # Coleção compartilhada para todos os tenants
 
-            # Verificar se as coleções existem
+            # Verificar se a coleção existe
             collections = vector_service.qdrant_client.get_collections()
             collection_names = [c.name for c in collections.collections]
 
-            # Verificar se as coleções existem e criar se necessário
-            for collection_name in [rules_collection_name, metadata_collection_name]:
-                if collection_name not in collection_names:
-                    logger.info(f"Collection {collection_name} not found. Creating it.")
-                    try:
-                        await vector_service.ensure_collection_exists(collection_name)
-                    except Exception as e:
-                        logger.error(f"Failed to create collection {collection_name}: {e}")
-                        # Continuar mesmo se falhar a criação da coleção
-
-            # Sincronizar dados se necessário
-            # Verificar se há dados para este account_id nas coleções
-            account_filter = models.Filter(
-                must=[
-                    models.FieldCondition(
-                        key="account_id",
-                        match=models.MatchValue(
-                            value=account_id
-                        )
-                    )
-                ]
-            )
-
-            # Verificar se há metadados da empresa
-            metadata_points = vector_service.qdrant_client.scroll(
-                collection_name=metadata_collection_name,
-                scroll_filter=account_filter,  # Usar scroll_filter em vez de filter
-                limit=1,
-                with_payload=False,
-                with_vectors=False,
-            )[0]
-
-            if not metadata_points:
-                # Se não houver metadados, sincronizar
-                logger.info(f"No metadata found for account {account_id}. Syncing data.")
-                await self.sync_business_rules(account_id)
+            # Verificar se a coleção existe e criar se necessário
+            if rules_collection_name not in collection_names:
+                logger.info(f"Collection {rules_collection_name} not found. Creating it.")
+                try:
+                    await vector_service.ensure_collection_exists(rules_collection_name)
+                except Exception as e:
+                    logger.error(f"Failed to create collection {rules_collection_name}: {e}")
+                    # Continuar mesmo se falhar a criação da coleção
 
             # Gerar embedding para a consulta
             query_embedding = await vector_service.generate_embedding(query)
@@ -2455,39 +2388,39 @@ Conteúdo:
                 score_threshold=score_threshold
             )
 
-            # Buscar metadados da empresa semanticamente similares
-            try:
-                # Usar o mesmo filtro de account_id
-                metadata_results = vector_service.qdrant_client.search(
-                    collection_name=metadata_collection_name,
-                    query_vector=query_embedding,
-                    query_filter=account_filter,  # Usar query_filter em vez de filter
-                    limit=1,  # Apenas um resultado, pois só há um documento de metadados por account_id
-                    score_threshold=score_threshold
-                )
-            except Exception as e:
-                logger.warning(f"Failed to search company metadata: {e}")
-                metadata_results = []
-
             # Extrair regras dos resultados
             relevant_rules = []
 
-            # Adicionar metadados da empresa se forem relevantes para a consulta
-            if metadata_results and len(metadata_results) > 0:
-                metadata_result = metadata_results[0]
-                metadata = metadata_result.payload.get("metadata", {})
+            # Carregar metadados da empresa do arquivo YAML
+            try:
+                import os
+                import yaml
+                yaml_path = f"config/domains/retail/{account_id}/config.yaml"
 
-                # Criar uma regra virtual para os metadados da empresa
-                relevant_rules.append({
-                    "rule_id": 0,  # ID especial para metadados da empresa
-                    "name": "Informações Gerais da Empresa",
-                    "description": "Metadados gerais da empresa, incluindo horários de funcionamento e políticas de atendimento",
-                    "type": "company_metadata",
-                    "priority": 1,
-                    "is_temporary": False,
-                    "rule_data": metadata,
-                    "similarity_score": metadata_result.score
-                })
+                if os.path.exists(yaml_path):
+                    with open(yaml_path, 'r', encoding='utf-8') as file:
+                        config = yaml.safe_load(file) or {}
+
+                    company_metadata = config.get('company_metadata', {})
+
+                    # Adicionar metadados da empresa como uma "regra virtual"
+                    if company_metadata:
+                        relevant_rules.append({
+                            "rule_id": 0,  # ID especial para metadados da empresa
+                            "name": "Informações Gerais da Empresa",
+                            "description": "Metadados gerais da empresa, incluindo horários de funcionamento e políticas de atendimento",
+                            "type": "company_metadata",
+                            "priority": 1,
+                            "is_temporary": False,
+                            "rule_data": company_metadata,
+                            "similarity_score": 1.0  # Sempre incluir os metadados da empresa
+                        })
+                        logger.info(f"Added company metadata from YAML for account {account_id}")
+                else:
+                    logger.warning(f"Company config YAML file not found: {yaml_path}")
+            except Exception as e:
+                logger.error(f"Failed to load company metadata from YAML: {e}")
+                # Continuar mesmo se falhar o carregamento dos metadados
 
             # Adicionar regras específicas
             for result in rules_results:

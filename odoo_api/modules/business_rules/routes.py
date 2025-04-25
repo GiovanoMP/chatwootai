@@ -318,6 +318,120 @@ async def sync_support_documents(
             detail={"code": "INTERNAL_SERVER_ERROR", "message": str(e)},
         )
 
+# Rota para limpar todos os documentos de suporte do Qdrant
+@router.post(
+    "/clear-support-documents",
+    response_model=APIResponse,
+    summary="Limpa todos os documentos de suporte do Qdrant",
+    description="Remove todos os documentos de suporte do Qdrant para um account_id específico.",
+)
+async def clear_support_documents(
+    request: Request,
+    account_id: str = Query(None, description="ID da conta (opcional, para compatibilidade)"),
+):
+    """
+    Limpa todos os documentos de suporte do Qdrant.
+    """
+    try:
+        service = get_business_rules_service()
+
+        # Obter account_id do estado da requisição (definido pelo middleware de autenticação)
+        # Se não estiver definido, usar o account_id da URL (para compatibilidade)
+        account_id = getattr(request.state, "account_id", account_id)
+
+        if not account_id:
+            raise ValidationError("account_id is required")
+
+        # Limpar documentos de suporte
+        result = await service.clear_support_documents(
+            account_id=account_id,
+        )
+
+        # Construir resposta
+        return build_response(
+            success=True,
+            data=result,
+            meta={"request_id": getattr(request.state, "request_id", "unknown")},
+        )
+
+    except ValidationError as e:
+        logger.warning(f"Validation error: {e}")
+        raise HTTPException(
+            status_code=422,
+            detail={"code": getattr(e, "code", "VALIDATION_ERROR"), "message": str(e), "details": getattr(e, "details", None)},
+        )
+
+    except OdooAPIError as e:
+        logger.error(f"Odoo API error: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail={"code": getattr(e, "code", "ODOO_API_ERROR"), "message": str(e), "details": getattr(e, "details", None)},
+        )
+
+    except Exception as e:
+        logger.error(f"Unexpected error: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail={"code": "INTERNAL_SERVER_ERROR", "message": str(e)},
+        )
+
+# Rota para sincronizar regras de agendamento com o sistema de IA
+@router.post(
+    "/sync-scheduling-rules",
+    response_model=APIResponse,
+    summary="Sincroniza regras de agendamento com o sistema de IA",
+    description="Sincroniza regras de agendamento com o sistema de IA.",
+)
+async def sync_scheduling_rules(
+    request: Request,
+    account_id: str = Query(None, description="ID da conta (opcional, para compatibilidade)"),
+):
+    """
+    Sincroniza regras de agendamento com o sistema de IA.
+    """
+    try:
+        service = get_business_rules_service()
+
+        # Obter account_id do estado da requisição (definido pelo middleware de autenticação)
+        # Se não estiver definido, usar o account_id da URL (para compatibilidade)
+        account_id = getattr(request.state, "account_id", account_id)
+
+        if not account_id:
+            raise ValidationError("account_id is required")
+
+        # Sincronizar regras de agendamento
+        result = await service.sync_scheduling_rules(
+            account_id=account_id,
+        )
+
+        # Construir resposta
+        return build_response(
+            success=True,
+            data=result,
+            meta={"request_id": getattr(request.state, "request_id", "unknown")},
+        )
+
+    except ValidationError as e:
+        logger.warning(f"Validation error: {e}")
+        raise HTTPException(
+            status_code=422,
+            detail={"code": getattr(e, "code", "VALIDATION_ERROR"), "message": str(e), "details": getattr(e, "details", None)},
+        )
+
+    except OdooAPIError as e:
+        logger.error(f"Odoo API error: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail={"code": getattr(e, "code", "ODOO_API_ERROR"), "message": str(e), "details": getattr(e, "details", None)},
+        )
+
+    except Exception as e:
+        logger.error(f"Unexpected error: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail={"code": "INTERNAL_SERVER_ERROR", "message": str(e)},
+        )
+
 
 
     except ValidationError as e:

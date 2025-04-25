@@ -7,6 +7,7 @@ Serviços para o módulo Business Rules.
 import logging
 import json
 import io
+import hashlib
 from typing import Dict, List, Optional, Any, Union
 from datetime import datetime, date
 
@@ -1135,6 +1136,307 @@ class BusinessRulesService:
             logger.error(f"Failed to clear support documents: {e}")
             logger.exception("Detailed traceback:")
             return {"documents_removed": 0, "error": str(e)}
+
+    async def sync_scheduling_rules(self, account_id: str) -> Dict[str, Any]:
+        """
+        Sincroniza regras de agendamento com o Qdrant.
+
+        Args:
+            account_id: ID da conta
+
+        Returns:
+            Resultado da sincronização
+        """
+        try:
+            # Criar um novo conector Odoo para cada chamada
+            odoo = await OdooConnectorFactory.create_connector(account_id)
+
+            # Obter IDs das regras de agendamento
+            scheduling_rule_ids = await odoo.execute_kw(
+                'business.scheduling.rule',
+                'search',
+                [[]],
+                {'order': 'name'},
+            )
+
+            if not scheduling_rule_ids:
+                logger.info(f"No scheduling rules found for account {account_id}")
+                return {
+                    "total_rules": 0,
+                    "vectorized_rules": 0,
+                    "removed_rules": 0,
+                    "sync_status": "success",
+                    "timestamp": datetime.now().isoformat()
+                }
+
+            # Obter dados das regras de agendamento
+            scheduling_rules_data = await odoo.execute_kw(
+                'business.scheduling.rule',
+                'read',
+                [scheduling_rule_ids],
+                # Não especificar campos para obter todos os campos disponíveis
+            )
+
+            logger.info(f"Found {len(scheduling_rules_data)} scheduling rules for account {account_id}")
+
+            # Obter serviço de vetorização
+            vector_service = await get_vector_service()
+            collection_name = "scheduling_rules"  # Coleção específica para regras de agendamento
+
+            # Garantir que a coleção existe
+            try:
+                await vector_service.ensure_collection_exists(collection_name)
+            except Exception as e:
+                logger.error(f"Failed to ensure collection exists: {e}")
+                # Tentar criar a coleção diretamente se o método falhar
+                try:
+                    vector_service.qdrant_client.create_collection(
+                        collection_name=collection_name,
+                        vectors_config=models.VectorParams(size=1536, distance=models.Distance.COSINE),
+                    )
+                    # Criar índice para account_id
+                    vector_service.qdrant_client.create_payload_index(
+                        collection_name=collection_name,
+                        field_name="account_id",
+                        field_schema=models.PayloadSchemaType.KEYWORD,
+                    )
+                    logger.info(f"Created collection {collection_name} directly")
+                except Exception as create_error:
+                    logger.error(f"Failed to create collection directly: {create_error}")
+                    # Continuar mesmo se falhar a criação da coleção
+
+            # Verificar regras existentes no Qdrant
+            account_filter = models.Filter(
+                must=[
+                    models.FieldCondition(
+                        key="account_id",
+                        match=models.MatchValue(
+                            value=account_id
+                        )
+                    )
+                ]
+            )
+
+            existing_points = vector_service.qdrant_client.scroll(
+                collection_name=collection_name,
+                scroll_filter=account_filter,
+                limit=100,  # Limite razoável para regras
+                with_payload=True,
+                with_vectors=False,
+            )[0]
+
+            # Mapear regras existentes por ID
+            existing_rules = {}
+            for point in existing_points:
+                rule_id = point.payload.get("rule_id")
+                if rule_id:
+                    existing_rules[rule_id] = {
+                        "qdrant_id": point.id,
+                        "last_updated": point.payload.get("last_updated"),
+                        "hash": point.payload.get("hash")
+                    }
+
+            logger.info(f"Found {len(existing_rules)} existing scheduling rules in Qdrant for account {account_id}")
+
+            # Importar o agente de regras de agendamento
+            from odoo_api.embedding_agents.business_rules import get_scheduling_rules_agent
+
+            # Obter a área de negócio da empresa
+            business_area = await self._get_business_area(account_id)
+
+            # Obter o agente de regras de agendamento
+            scheduling_rules_agent = await get_scheduling_rules_agent()
+
+            # Filtrar regras ativas e visíveis no sistema de IA
+            active_visible_rules = []
+            for rule_data in scheduling_rules_data:
+                is_active = rule_data.get('active', True)
+                is_visible_in_ai = rule_data.get('visible_in_ai', True)
+
+                if is_active and is_visible_in_ai:
+                    active_visible_rules.append(rule_data)
+                else:
+                    # Se a regra não está ativa ou não está visível no IA, verificar se existe no Qdrant e remover
+                    rule_id = rule_data.get('id')
+                    if rule_id in existing_rules:
+                        qdrant_id = existing_rules[rule_id].get("qdrant_id")
+                        if qdrant_id:
+                            try:
+                                vector_service.qdrant_client.delete(
+                                    collection_name=collection_name,
+                                    points_selector=models.PointIdsList(points=[qdrant_id]),
+                                    wait=True
+                                )
+                                logger.info(f"Removed rule from Qdrant (inactive or not visible in AI): ID={rule_id}, Qdrant ID={qdrant_id}")
+                            except Exception as delete_error:
+                                logger.error(f"Failed to remove rule {rule_id} from Qdrant: {delete_error}")
+
+            logger.info(f"Filtered {len(active_visible_rules)} active and visible rules out of {len(scheduling_rules_data)} total rules")
+
+            # Atualizar scheduling_rules_data para conter apenas regras ativas e visíveis
+            scheduling_rules_data = active_visible_rules
+
+            # Vetorizar regras ativas e visíveis
+            vectorized_count = 0
+            for rule_data in scheduling_rules_data:
+                rule_id = rule_data.get('id')
+
+                # Calcular hash dos dados da regra para verificar se houve alterações
+                rule_hash = hashlib.md5(json.dumps(rule_data, sort_keys=True).encode()).hexdigest()
+
+                # Verificar se a regra já existe e não foi modificada
+                if rule_id in existing_rules and existing_rules[rule_id].get("hash") == rule_hash:
+                    logger.info(f"Rule {rule_id} ({rule_data.get('name')}) not modified, skipping vectorization")
+                    continue
+
+                # Processar regra usando o agente
+                try:
+                    processed_text = await scheduling_rules_agent.process_data(rule_data, business_area)
+                    logger.info(f"Processed scheduling rule {rule_id} ({rule_data.get('name')}) using scheduling rules agent")
+                except Exception as agent_error:
+                    logger.error(f"Failed to process scheduling rule with agent: {agent_error}")
+                    # Usar texto simples como fallback
+                    processed_text = f"Regra de Agendamento: {rule_data.get('name')}\n\nDescrição: {rule_data.get('description', '')}"
+
+                # Gerar embedding do texto processado
+                try:
+                    embedding = await vector_service.generate_embedding(processed_text)
+
+                    # Gerar um ID único para o documento baseado no account_id e rule_id
+                    # Usar UUID para garantir compatibilidade com o Qdrant
+                    import uuid
+                    document_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, f"{account_id}_{rule_id}"))
+
+                    # Armazenar no Qdrant
+                    vector_service.qdrant_client.upsert(
+                        collection_name=collection_name,
+                        points=[
+                            models.PointStruct(
+                                id=document_id,
+                                vector=embedding,
+                                payload={
+                                    "account_id": account_id,
+                                    "rule_id": rule_id,
+                                    "name": rule_data.get('name', ''),
+                                    "description": rule_data.get('description', ''),
+                                    "service_type": rule_data.get('service_type', ''),
+                                    "service_type_other": rule_data.get('service_type_other', ''),
+                                    "duration": rule_data.get('duration', 0),
+                                    "min_interval": rule_data.get('min_interval', 0),
+                                    "min_advance_time": rule_data.get('min_advance_time', 0),
+                                    "max_advance_time": rule_data.get('max_advance_time', 0),
+                                    "days_available": {
+                                        "monday": rule_data.get('monday_available', False),
+                                        "tuesday": rule_data.get('tuesday_available', False),
+                                        "wednesday": rule_data.get('wednesday_available', False),
+                                        "thursday": rule_data.get('thursday_available', False),
+                                        "friday": rule_data.get('friday_available', False),
+                                        "saturday": rule_data.get('saturday_available', False),
+                                        "sunday": rule_data.get('sunday_available', False)
+                                    },
+                                    "hours": {
+                                        "morning_start": rule_data.get('morning_start', 0),
+                                        "morning_end": rule_data.get('morning_end', 0),
+                                        "afternoon_start": rule_data.get('afternoon_start', 0),
+                                        "afternoon_end": rule_data.get('afternoon_end', 0),
+                                        "has_lunch_break": rule_data.get('has_lunch_break', False),
+                                        "saturday_morning_start": rule_data.get('saturday_morning_start', 0),
+                                        "saturday_morning_end": rule_data.get('saturday_morning_end', 0),
+                                        "saturday_afternoon_start": rule_data.get('saturday_afternoon_start', 0),
+                                        "saturday_afternoon_end": rule_data.get('saturday_afternoon_end', 0),
+                                        "sunday_morning_start": rule_data.get('sunday_morning_start', 0),
+                                        "sunday_morning_end": rule_data.get('sunday_morning_end', 0),
+                                        "sunday_afternoon_start": rule_data.get('sunday_afternoon_start', 0),
+                                        "sunday_afternoon_end": rule_data.get('sunday_afternoon_end', 0)
+                                    },
+                                    "policies": {
+                                        "cancellation_policy": rule_data.get('cancellation_policy', ''),
+                                        "rescheduling_policy": rule_data.get('rescheduling_policy', '')
+                                    },
+                                    "additional_info": {
+                                        "required_information": rule_data.get('required_information', ''),
+                                        "confirmation_instructions": rule_data.get('confirmation_instructions', '')
+                                    },
+                                    "processed_text": processed_text,
+                                    "hash": rule_hash,
+                                    "last_updated": datetime.now().isoformat()
+                                }
+                            )
+                        ],
+                    )
+
+                    vectorized_count += 1
+                    logger.info(f"Vectorized scheduling rule {rule_id}: {rule_data.get('name')}")
+
+                except Exception as e:
+                    logger.error(f"Failed to vectorize scheduling rule {rule_id}: {e}")
+
+            # Identificar regras obsoletas para remover
+            current_rule_ids = set(rule_data.get('id') for rule_data in scheduling_rules_data)
+            obsolete_rule_ids = set(existing_rules.keys()) - current_rule_ids
+
+            # Remover regras obsoletas
+            removed_count = 0
+            if obsolete_rule_ids:
+                try:
+                    for rule_id in obsolete_rule_ids:
+                        qdrant_id = existing_rules[rule_id].get("qdrant_id")
+                        if qdrant_id:
+                            vector_service.qdrant_client.delete(
+                                collection_name=collection_name,
+                                points_selector=models.PointIdsList(points=[qdrant_id]),
+                                wait=True
+                            )
+                            removed_count += 1
+                            logger.info(f"Removed obsolete scheduling rule: ID={rule_id}, Qdrant ID={qdrant_id}")
+
+                    logger.info(f"Removed {removed_count} obsolete scheduling rules from Qdrant")
+                except Exception as e:
+                    logger.error(f"Failed to remove obsolete scheduling rules: {e}")
+
+            # Atualizar status de sincronização nas regras
+            try:
+                # Verificar se o campo 'last_sync' existe no modelo
+                fields_info = await odoo.execute_kw(
+                    'business.scheduling.rule',
+                    'fields_get',
+                    [],
+                    {'attributes': ['string', 'type']}
+                )
+
+                # Atualizar apenas se o campo existir
+                if 'last_sync' in fields_info:
+                    for rule_data in scheduling_rules_data:
+                        rule_id = rule_data.get('id')
+                        await odoo.execute_kw(
+                            'business.scheduling.rule',
+                            'write',
+                            [[rule_id], {'last_sync': datetime.now().strftime('%Y-%m-%d %H:%M:%S')}]
+                        )
+                else:
+                    logger.warning("Field 'last_sync' does not exist in model 'business.scheduling.rule'. Skipping status update.")
+            except Exception as e:
+                logger.error(f"Failed to update sync status: {e}")
+
+            return {
+                "total_rules": len(scheduling_rules_data),
+                "vectorized_rules": vectorized_count,
+                "removed_rules": removed_count,
+                "sync_status": "success",
+                "timestamp": datetime.now().isoformat()
+            }
+
+        except Exception as e:
+            logger.error(f"Failed to sync scheduling rules: {e}")
+            logger.exception("Detailed traceback:")
+            return {
+                "total_rules": 0,
+                "vectorized_rules": 0,
+                "removed_rules": 0,
+                "sync_status": "failed",
+                "error": str(e),
+                "timestamp": datetime.now().isoformat()
+            }
 
     async def sync_support_documents(self, account_id: str) -> Dict[str, Any]:
         """
@@ -3132,21 +3434,26 @@ Conteúdo:
         try:
             # Obter serviço de vetorização
             vector_service = await get_vector_service()
-            collection_name = "business_rules"  # Coleção compartilhada para todos os tenants
+            collection_name = "scheduling_rules"  # Coleção específica para regras de agendamento
 
-            # Filtrar por account_id e tipo de regra (agendamento)
+            # Verificar se a coleção existe
+            collections = vector_service.qdrant_client.get_collections()
+            collection_names = [c.name for c in collections.collections]
+
+            if collection_name not in collection_names:
+                logger.warning(f"Collection {collection_name} not found")
+                return {
+                    "found": False,
+                    "message": "Scheduling rules collection not found"
+                }
+
+            # Filtrar por account_id
             filter_condition = models.Filter(
                 must=[
                     models.FieldCondition(
                         key="account_id",
                         match=models.MatchValue(
                             value=account_id
-                        )
-                    ),
-                    models.FieldCondition(
-                        key="type",
-                        match=models.MatchValue(
-                            value="scheduling"
                         )
                     )
                 ]
@@ -3155,7 +3462,7 @@ Conteúdo:
             # Buscar regras no Qdrant
             points = vector_service.qdrant_client.scroll(
                 collection_name=collection_name,
-                scroll_filter=filter_condition,  # Usar scroll_filter em vez de filter
+                scroll_filter=filter_condition,
                 limit=50,  # Limite razoável para regras
                 with_payload=True,
                 with_vectors=False,
@@ -3176,12 +3483,17 @@ Conteúdo:
                     "id": rule.get("rule_id"),
                     "name": rule.get("name"),
                     "description": rule.get("description", ""),
-                    "priority": rule.get("priority"),
-                    "is_temporary": rule.get("is_temporary", False),
-                    "start_date": rule.get("start_date"),
-                    "end_date": rule.get("end_date"),
-                    "rule_data": rule.get("rule_data", {}),
-                    "processed_text": rule.get("processed_text"),
+                    "service_type": rule.get("service_type", ""),
+                    "service_type_other": rule.get("service_type_other", ""),
+                    "duration": rule.get("duration", 0),
+                    "min_interval": rule.get("min_interval", 0),
+                    "min_advance_time": rule.get("min_advance_time", 0),
+                    "max_advance_time": rule.get("max_advance_time", 0),
+                    "days_available": rule.get("days_available", {}),
+                    "hours": rule.get("hours", {}),
+                    "policies": rule.get("policies", {}),
+                    "additional_info": rule.get("additional_info", {}),
+                    "processed_text": rule.get("processed_text", ""),
                     "last_updated": rule.get("last_updated")
                 })
 

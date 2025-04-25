@@ -21,6 +21,11 @@ class BusinessRulesSyncController(http.Controller):
         """Endpoint HTTP para sincronizar metadados da empresa"""
         return self.sync_company_metadata(business_rule_id)
 
+    @http.route('/business_rules/sync_scheduling_rules', type='json', auth='user')
+    def sync_scheduling_rules_http(self, business_rule_id):
+        """Endpoint HTTP para sincronizar regras de agendamento"""
+        return self.sync_scheduling_rules(business_rule_id)
+
     def sync_business_rules(self, business_rule_id, env=None):
         """Endpoint para sincronizar regras de negócio com o sistema de IA"""
         try:
@@ -457,6 +462,192 @@ class BusinessRulesSyncController(http.Controller):
         except Exception as e:
             _logger.error("Erro ao sincronizar metadados da empresa: %s", str(e))
             return {'success': False, 'error': str(e)}
+
+    def sync_scheduling_rules(self, business_rule_id, env=None):
+        """Endpoint para sincronizar regras de agendamento com o sistema de IA"""
+        try:
+            # Obter o ambiente Odoo
+            if env is None:
+                env = request.env if hasattr(request, 'env') else None
+
+            if env is None:
+                raise ValueError("Ambiente Odoo não disponível")
+
+            # Obter a regra de negócio
+            business_rule = env['business.rules'].browse(int(business_rule_id))
+            if not business_rule.exists():
+                return {'success': False, 'error': _('Regra de negócio não encontrada')}
+
+            # Chamar a API para sincronizar as regras de agendamento
+            api_url = self._get_api_url(env)
+
+            # Se não encontrar URL válida, falhar de forma segura
+            if not api_url:
+                raise ValueError("URL do sistema de IA não encontrada. Configure o módulo ai_credentials_manager primeiro.")
+
+            # Obter o token de autenticação
+            token = self._get_api_token(env)
+            _logger.info(f"Token obtido para sincronização de regras de agendamento: {token if token else 'None'}")
+
+            if not token:
+                raise ValueError("Token de API não encontrado. Configure o módulo ai_credentials_manager primeiro.")
+
+            # Construir o endpoint correto
+            sync_scheduling_endpoint = f"{api_url}/api/v1/business-rules/sync-scheduling-rules"
+
+            try:
+                # Obter o account_id correto do módulo ai_credentials_manager
+                account_id = self._get_account_id(env)
+
+                # Se não encontrar credenciais, falhar de forma segura
+                if not account_id:
+                    raise ValueError("Nenhuma credencial válida encontrada. Configure o módulo ai_credentials_manager primeiro.")
+
+                # Preparar os dados das regras de agendamento
+                scheduling_rules_data = self._prepare_scheduling_rules_data(business_rule)
+
+                # Gerar assinatura HMAC para o payload
+                webhook_secret = env['ir.config_parameter'].sudo().get_param('webhook_secret_key', '')
+
+                if webhook_secret:
+                    import hmac
+                    import hashlib
+                    import json
+
+                    # Converter o payload para string ordenada
+                    payload_str = json.dumps(scheduling_rules_data, sort_keys=True)
+
+                    # Gerar a assinatura HMAC
+                    signature = hmac.new(
+                        webhook_secret.encode(),
+                        payload_str.encode(),
+                        hashlib.sha256
+                    ).hexdigest()
+
+                    # Adicionar a assinatura ao header
+                    headers = {
+                        'Content-Type': 'application/json',
+                        'Authorization': f"Bearer {token}",
+                        'X-Webhook-Signature': signature
+                    }
+                    _logger.info(f"Assinatura HMAC gerada para o webhook: {signature[:10]}...")
+                else:
+                    headers = {
+                        'Content-Type': 'application/json',
+                        'Authorization': f"Bearer {token}"
+                    }
+                    _logger.warning("Nenhuma chave secreta configurada para assinatura de webhook")
+
+                # Fazer a chamada para a API
+                response = requests.post(
+                    sync_scheduling_endpoint,
+                    params={'account_id': account_id},
+                    headers=headers,
+                    json=scheduling_rules_data,
+                    timeout=30
+                )
+
+                if response.status_code == 200:
+                    result = response.json()
+                    # Atualizar o status de sincronização
+                    business_rule.write({
+                        'last_sync_date': fields.Datetime.now(),
+                        'sync_status': 'synced'
+                    })
+
+                    # Atualizar o status de sincronização das regras de agendamento
+                    for rule in business_rule.scheduling_rule_ids:
+                        rule.write({'sync_status': 'synced'})
+
+                    return {
+                        'success': True,
+                        'message': _('Regras de agendamento sincronizadas com sucesso'),
+                        'rules_count': len(scheduling_rules_data.get('scheduling_rules', [])),
+                        'vectorized_rules': result.get('data', {}).get('vectorized_rules', 0)
+                    }
+                else:
+                    _logger.error("Erro na API ao sincronizar regras de agendamento: %s", response.text)
+                    return {'success': False, 'error': f"Erro na API: {response.status_code} - {response.text}"}
+
+            except requests.RequestException as req_err:
+                _logger.error("Erro de conexão com a API: %s", str(req_err))
+                return {'success': False, 'error': f"Erro de conexão com a API: {str(req_err)}"}
+
+        except Exception as e:
+            _logger.error("Erro ao sincronizar regras de agendamento: %s", str(e))
+            return {'success': False, 'error': str(e)}
+
+    def _prepare_scheduling_rules_data(self, business_rule):
+        """Preparar dados das regras de agendamento para envio ao sistema de IA"""
+        # Regras de agendamento ativas e disponíveis no Sistema de IA
+        scheduling_rules = []
+        for rule in business_rule.scheduling_rule_ids.filtered(lambda r: r.active and r.visible_in_ai):
+            # Preparar dados dos dias disponíveis
+            days_available = {
+                'monday': rule.monday_available,
+                'tuesday': rule.tuesday_available,
+                'wednesday': rule.wednesday_available,
+                'thursday': rule.thursday_available,
+                'friday': rule.friday_available,
+                'saturday': rule.saturday_available,
+                'sunday': rule.sunday_available
+            }
+
+            # Preparar dados dos horários
+            hours = {
+                'weekdays': {
+                    'morning_start': rule.morning_start,
+                    'morning_end': rule.morning_end,
+                    'afternoon_start': rule.afternoon_start,
+                    'afternoon_end': rule.afternoon_end,
+                    'has_lunch_break': rule.has_lunch_break
+                },
+                'saturday': {
+                    'morning_start': rule.saturday_morning_start,
+                    'morning_end': rule.saturday_morning_end,
+                    'afternoon_start': rule.saturday_afternoon_start,
+                    'afternoon_end': rule.saturday_afternoon_end
+                },
+                'sunday': {
+                    'morning_start': rule.sunday_morning_start,
+                    'morning_end': rule.sunday_morning_end,
+                    'afternoon_start': rule.sunday_afternoon_start,
+                    'afternoon_end': rule.sunday_afternoon_end
+                }
+            }
+
+            # Preparar dados das políticas
+            policies = {
+                'cancellation': rule.cancellation_policy or '',
+                'rescheduling': rule.rescheduling_policy or ''
+            }
+
+            # Preparar dados adicionais
+            additional_info = {
+                'required_information': rule.required_information or '',
+                'confirmation_instructions': rule.confirmation_instructions or ''
+            }
+
+            # Adicionar regra à lista
+            scheduling_rules.append({
+                'rule_id': rule.id,
+                'name': rule.name,
+                'description': rule.description or '',
+                'service_type': rule.service_type,
+                'service_type_other': rule.service_type_other or '',
+                'duration': rule.duration,
+                'min_interval': rule.min_interval,
+                'min_advance_time': rule.min_advance_time,
+                'max_advance_time': rule.max_advance_time,
+                'days_available': days_available,
+                'hours': hours,
+                'policies': policies,
+                'additional_info': additional_info
+            })
+
+        return {
+            'scheduling_rules': scheduling_rules
+        }
 
     def _prepare_company_metadata(self, business_rule):
         """Preparar metadados da empresa para envio ao sistema de IA"""

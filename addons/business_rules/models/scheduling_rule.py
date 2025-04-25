@@ -104,6 +104,8 @@ class BusinessSchedulingRule(models.Model):
                                           help='Instruções enviadas ao cliente após confirmação do agendamento')
 
     active = fields.Boolean(default=True, string='Ativo')
+    visible_in_ai = fields.Boolean(default=True, string='Disponível no Sistema de IA',
+                                  help='Se marcado, esta regra será incluída no sistema de IA')
 
     # Campos para rastreamento
     create_date = fields.Datetime(string='Data de Criação', readonly=True)
@@ -138,11 +140,34 @@ class BusinessSchedulingRule(models.Model):
             'sunday_morning_start', 'sunday_morning_end',
             'sunday_afternoon_start', 'sunday_afternoon_end',
             'cancellation_policy', 'rescheduling_policy',
-            'required_information', 'confirmation_instructions', 'active'
+            'required_information', 'confirmation_instructions', 'active', 'visible_in_ai'
         ]
 
+        # Se a regra está sendo marcada como não visível no IA, marcar para sincronização
+        if 'visible_in_ai' in vals:
+            vals['sync_status'] = 'not_synced'
+
+            # Se a regra está sendo ativada novamente no IA, sincronizar imediatamente
+            if vals['visible_in_ai'] is True and hasattr(self, 'business_rule_id') and self.business_rule_id:
+                # Executar em um job separado para não bloquear a UI
+                self.env.cr.commit()  # Commit para garantir que as alterações sejam salvas
+                self._cr.execute('SELECT pg_advisory_xact_lock(0)')  # Adquirir lock para evitar execuções concorrentes
+
+                # Chamar o método de sincronização após o commit
+                self.env['ir.cron'].sudo().create({
+                    'name': f'Sync Scheduling Rule {self.id}',
+                    'model_id': self.env['ir.model'].search([('model', '=', 'business.rules')], limit=1).id,
+                    'state': 'code',
+                    'code': f'env["business.rules"].browse({self.business_rule_id.id}).action_sync_scheduling_rules()',
+                    'interval_number': 1,
+                    'interval_type': 'minutes',
+                    'numbercall': 1,
+                    'active': True,
+                    'priority': 5,
+                })
+
         # Verificar se algum campo relevante foi alterado
-        if any(field in vals for field in sync_fields):
+        elif any(field in vals for field in sync_fields):
             # Se o status atual é 'synced', mudar para 'not_synced'
             if self.sync_status == 'synced':
                 vals['sync_status'] = 'not_synced'

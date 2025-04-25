@@ -2,3 +2,4 @@
 from odoo_api.embedding_agents.business_rules.rules_agent import get_business_rules_agent
 from odoo_api.embedding_agents.business_rules.support_docs_agent import get_support_document_agent
 from odoo_api.embedding_agents.business_rules.company_metadata_agent import get_company_metadata_agent
+from odoo_api.embedding_agents.business_rules.scheduling_agent import get_scheduling_rules_agent

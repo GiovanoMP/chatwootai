@@ -4,6 +4,7 @@
 from odoo_api.embedding_agents.business_rules import get_business_rules_agent
 from odoo_api.embedding_agents.business_rules import get_support_document_agent
 from odoo_api.embedding_agents.business_rules import get_company_metadata_agent
+from odoo_api.embedding_agents.business_rules import get_scheduling_rules_agent
 
 # Importar agentes do módulo semantic_product
 from odoo_api.embedding_agents.product_description_agent import get_product_description_agent

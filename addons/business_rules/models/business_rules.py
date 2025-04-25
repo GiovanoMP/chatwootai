@@ -117,7 +117,8 @@ class BusinessRules(models.Model):
         'business_rule_id',
         'document_id',
         string='Documentos de Suporte',
-        help='Documentos relacionados ao suporte ao cliente'
+        help='Documentos relacionados ao suporte ao cliente',
+        context={'active_test': False}  # Incluir documentos inativos
     )
 
     last_sync_date = fields.Datetime(string='Última Sincronização', readonly=True)
@@ -129,6 +130,8 @@ class BusinessRules(models.Model):
     ], string='Status de Sincronização', default='not_synced', readonly=True)
 
     active = fields.Boolean(default=True, string='Ativo')
+    visible_in_ai = fields.Boolean(default=True, string='Disponível no Sistema de IA',
+                                  help='Se marcado, esta regra será incluída no sistema de IA')
     company_id = fields.Many2one('res.company', string='Empresa', default=lambda self: self.env.company)
 
     # Contagem de regras ativas
@@ -148,11 +151,15 @@ class BusinessRules(models.Model):
             'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday',
             'saturday_hours_start', 'saturday_hours_end', 'sunday_hours_start', 'sunday_hours_end',
             'street', 'street2', 'city', 'state', 'zip', 'country', 'share_address',
-            'inform_promotions_at_start'
+            'inform_promotions_at_start', 'visible_in_ai'
         ]
 
+        # Se a regra está sendo marcada como não disponível no IA, marcar para sincronização
+        if 'visible_in_ai' in vals and vals['visible_in_ai'] is False:
+            vals['sync_status'] = 'not_synced'
+
         # Verificar se algum campo relevante foi alterado
-        if any(field in vals for field in sync_fields):
+        elif any(field in vals for field in sync_fields):
             # Se o status atual é 'synced', mudar para 'not_synced'
             if self.sync_status == 'synced':
                 vals['sync_status'] = 'not_synced'
@@ -189,8 +196,14 @@ class BusinessRules(models.Model):
         self.ensure_one()
 
         # Atualizar status para 'sincronizando'
-        self.write({'sync_status': 'syncing'})
-        self.env.cr.commit()  # Commit imediato para atualizar a UI
+        try:
+            # Usar savepoint para evitar problemas de serialização
+            with self.env.cr.savepoint():
+                self.write({'sync_status': 'syncing'})
+            self.env.cr.commit()  # Commit imediato para atualizar a UI
+        except Exception as e:
+            _logger.error(f"Erro ao atualizar status para 'syncing': {e}")
+            # Continuar mesmo se falhar a atualização de status
 
         try:
             # Importar o controlador
@@ -213,12 +226,39 @@ class BusinessRules(models.Model):
             _logger.info(f"Iniciando sincronização de regras para a regra de negócio {self.id}")
             rules_result = controller.sync_business_rules(self.id, env=self.env)
 
+            # 3. Sincronizar regras de agendamento
+            _logger.info(f"Iniciando sincronização de regras de agendamento para a regra de negócio {self.id}")
+            scheduling_result = controller.sync_scheduling_rules(self.id, env=self.env)
+
+            if not scheduling_result or not scheduling_result.get('success'):
+                _logger.warning(f"Falha na sincronização de regras de agendamento: {scheduling_result.get('error', 'Erro desconhecido')}")
+                # Continuar mesmo se a sincronização de regras de agendamento falhar
+            else:
+                _logger.info("Regras de agendamento sincronizadas com sucesso")
+
             # Verificar resultado da sincronização de regras
             if rules_result and rules_result.get('success'):
-                self.write({
-                    'last_sync_date': fields.Datetime.now(),
-                    'sync_status': 'synced'
-                })
+                try:
+                    # Usar savepoint para evitar problemas de serialização
+                    with self.env.cr.savepoint():
+                        self.write({
+                            'last_sync_date': fields.Datetime.now(),
+                            'sync_status': 'synced'
+                        })
+                except Exception as status_error:
+                    _logger.error(f"Erro ao atualizar status para 'synced': {status_error}")
+                    # Tentar novamente com retry
+                    try:
+                        # Atualizar novamente após um pequeno delay
+                        import time
+                        time.sleep(0.5)
+                        with self.env.cr.savepoint():
+                            self.write({
+                                'last_sync_date': fields.Datetime.now(),
+                                'sync_status': 'synced'
+                            })
+                    except Exception as retry_error:
+                        _logger.error(f"Falha no retry ao atualizar status: {retry_error}")
 
                 # Mensagem de sucesso com detalhes
                 rules_count = rules_result.get('rules_count', 0)
@@ -295,7 +335,10 @@ class BusinessRules(models.Model):
             'res_model': 'business.support.document',
             'view_mode': 'tree,form',
             'domain': [('id', 'in', self.support_document_ids.ids)],
-            'context': {'default_business_rule_id': self.id}
+            'context': {
+                'default_business_rule_id': self.id,
+                'active_test': False  # Mostrar registros inativos
+            }
         }
 
     def action_upload_documents(self):
@@ -329,31 +372,33 @@ class BusinessRules(models.Model):
         """Sincroniza os documentos de suporte com o sistema de IA."""
         self.ensure_one()
         try:
-            # SOLUÇÃO RADICAL: Verificar se há documentos ativos
-            active_docs = self.support_document_ids.filtered(lambda r: r.active)
-
-            if not active_docs:
-                _logger.warning("Nenhum documento ativo encontrado para sincronização")
+            # Verificar se há documentos selecionados
+            if not self.support_document_ids:
+                _logger.warning("Nenhum documento selecionado encontrado para sincronização")
                 return {
                     'type': 'ir.actions.client',
                     'tag': 'display_notification',
                     'params': {
                         'title': _('Aviso'),
-                        'message': _('Nenhum documento ativo encontrado para sincronização.'),
+                        'message': _('Nenhum documento selecionado para sincronização.'),
                         'sticky': False,
                         'type': 'warning'
                     }
                 }
 
             # Ordenar documentos por data de criação (mais recente primeiro)
-            sorted_docs = active_docs.sorted(key=lambda r: r.create_date or fields.Datetime.now(), reverse=True)
+            sorted_docs = self.support_document_ids.sorted(key=lambda r: r.create_date or fields.Datetime.now(), reverse=True)
 
-            # SOLUÇÃO RADICAL: Atualizar support_document_ids para conter apenas o documento mais recente
+            # Informar quantos documentos estão ativos e inativos
+            active_count = len(self.support_document_ids.filtered(lambda r: r.active))
+            inactive_count = len(self.support_document_ids) - active_count
+            _logger.info(f"Documentos selecionados: {len(self.support_document_ids)} (Ativos: {active_count}, Inativos: {inactive_count})")
+
+            # Sincronizar todos os documentos selecionados
             if len(sorted_docs) > 1:
-                _logger.warning(f"SOLUÇÃO RADICAL: Encontrados {len(sorted_docs)} documentos ativos, mas sincronizando apenas o mais recente")
-                # Limpar a relação many2many e adicionar apenas o documento mais recente
-                self.support_document_ids = [(6, 0, [sorted_docs[0].id])]
-                _logger.warning(f"SOLUÇÃO RADICAL: Definido apenas o documento {sorted_docs[0].name} (ID: {sorted_docs[0].id}) para sincronização")
+                _logger.info(f"Encontrados {len(sorted_docs)} documentos selecionados para sincronização")
+                # Não limitar mais a apenas um documento
+                _logger.info(f"Sincronizando todos os {len(sorted_docs)} documentos selecionados")
 
             # Chamar o MCP-Odoo para sincronizar documentos
             result = self._call_mcp_sync_support_docs()
@@ -411,31 +456,31 @@ class BusinessRules(models.Model):
                 'Authorization': f'Bearer {mcp_token}' if mcp_token else ''
             }
 
-            # SOLUÇÃO RADICAL: Enviar apenas o documento mais recente
+            # Enviar apenas os documentos selecionados (independente de estarem ativos ou não)
             docs_data = []
 
             # Verificar se há documentos
             if self.support_document_ids:
                 # Ordenar documentos por data de criação (mais recente primeiro)
-                sorted_docs = self.support_document_ids.sorted(key=lambda r: r.create_date or fields.Datetime.now(), reverse=True)
+                sorted_docs = self.support_document_ids.sorted(
+                    key=lambda r: r.create_date or fields.Datetime.now(), reverse=True
+                )
 
-                # Pegar apenas o primeiro documento (mais recente)
-                if len(sorted_docs) > 1:
-                    _logger.warning(f"SOLUÇÃO RADICAL: Encontrados {len(sorted_docs)} documentos, mas enviando apenas o mais recente")
-                    doc = sorted_docs[0]
-                    _logger.warning(f"SOLUÇÃO RADICAL: Enviando apenas o documento: {doc.name} (ID: {doc.id})")
-                else:
-                    doc = sorted_docs[0]
-                    _logger.info(f"Enviando documento: {doc.name} (ID: {doc.id})")
+                # Enviar todos os documentos selecionados (apenas os ativos serão processados pelo sistema de IA)
+                _logger.info(f"Enviando {len(sorted_docs)} documentos selecionados para sincronização")
 
-                # Adicionar apenas o documento mais recente
-                docs_data.append({
-                    'id': doc.id,
-                    'name': doc.name,
-                    'document_type': doc.document_type,
-                    'content': doc.content,
-                    'create_date': fields.Datetime.to_string(doc.create_date) if doc.create_date else '',
-                })
+                # Adicionar todos os documentos selecionados (com informação de status)
+                for doc in sorted_docs:
+                    _logger.info(f"Adicionando documento: {doc.name} (ID: {doc.id}, Ativo: {doc.active}, Visível no IA: {doc.visible_in_ai})")
+                    docs_data.append({
+                        'id': doc.id,
+                        'name': doc.name,
+                        'document_type': doc.document_type,
+                        'content': doc.content,
+                        'active': doc.active,  # Incluir status de ativação
+                        'visible_in_ai': doc.visible_in_ai,  # Incluir status de visibilidade no IA
+                        'create_date': fields.Datetime.to_string(doc.create_date) if doc.create_date else '',
+                    })
 
             payload = {
                 'account_id': account_id,
@@ -460,9 +505,25 @@ class BusinessRules(models.Model):
                 # Atualizar status de sincronização dos documentos
                 if result.get('synced_docs'):
                     for doc_id in result['synced_docs']:
-                        doc = self.env['business.support.document'].browse(int(doc_id))
-                        if doc:
-                            doc.write({'sync_status': 'synced'})
+                        try:
+                            doc = self.env['business.support.document'].browse(int(doc_id))
+                            if doc:
+                                # Usar savepoint para evitar problemas de serialização
+                                with self.env.cr.savepoint():
+                                    doc.write({'sync_status': 'synced'})
+                        except Exception as doc_update_error:
+                            _logger.error(f"Erro ao atualizar status do documento {doc_id}: {doc_update_error}")
+
+                # Atualizar o status de sincronização da regra de negócio
+                try:
+                    # Usar savepoint para evitar problemas de serialização
+                    with self.env.cr.savepoint():
+                        self.write({
+                            'last_sync_date': fields.Datetime.now(),
+                            'sync_status': 'synced'
+                        })
+                except Exception as rule_update_error:
+                    _logger.error(f"Erro ao atualizar status da regra de negócio: {rule_update_error}")
 
                 return result
             else:
@@ -509,6 +570,95 @@ class BusinessRules(models.Model):
             'url': url,
             'target': 'new',
         }
+
+    def action_sync_scheduling_rules(self):
+        """Sincroniza apenas as regras de agendamento com o sistema de IA"""
+        self.ensure_one()
+
+        # Atualizar status para 'sincronizando'
+        try:
+            # Usar savepoint para evitar problemas de serialização
+            with self.env.cr.savepoint():
+                self.write({'sync_status': 'syncing'})
+            self.env.cr.commit()  # Commit imediato para atualizar a UI
+        except Exception as e:
+            _logger.error(f"Erro ao atualizar status para 'syncing': {e}")
+            # Continuar mesmo se falhar a atualização de status
+
+        try:
+            # Importar o controlador
+            from ..controllers.sync_controller import BusinessRulesSyncController
+
+            # Criar uma instância do controlador
+            controller = BusinessRulesSyncController()
+
+            # Sincronizar regras de agendamento
+            _logger.info(f"Iniciando sincronização de regras de agendamento para a regra de negócio {self.id}")
+            result = controller.sync_scheduling_rules(self.id, env=self.env)
+
+            # Verificar resultado da sincronização
+            if result and result.get('success'):
+                try:
+                    # Usar savepoint para evitar problemas de serialização
+                    with self.env.cr.savepoint():
+                        self.write({
+                            'last_sync_date': fields.Datetime.now(),
+                            'sync_status': 'synced'
+                        })
+                except Exception as status_error:
+                    _logger.error(f"Erro ao atualizar status para 'synced': {status_error}")
+
+                # Mensagem de sucesso com detalhes
+                rules_count = result.get('rules_count', 0)
+                vectorized_count = result.get('vectorized_rules', 0)
+
+                return {
+                    'type': 'ir.actions.client',
+                    'tag': 'display_notification',
+                    'params': {
+                        'title': _('Sincronização Concluída'),
+                        'message': _(f'Sincronizadas {rules_count} regras de agendamento, {vectorized_count} vetorizadas.'),
+                        'sticky': False,
+                        'type': 'success',
+                    }
+                }
+            else:
+                # Atualizar status para erro
+                self.write({
+                    'last_sync_date': fields.Datetime.now(),
+                    'sync_status': 'error'
+                })
+
+                return {
+                    'type': 'ir.actions.client',
+                    'tag': 'display_notification',
+                    'params': {
+                        'title': _('Erro na Sincronização'),
+                        'message': _(f'Erro ao sincronizar regras de agendamento: {result.get("error", "Erro desconhecido")}'),
+                        'sticky': True,
+                        'type': 'danger',
+                    }
+                }
+
+        except Exception as e:
+            # Em caso de erro, atualizar status
+            self.write({
+                'last_sync_date': fields.Datetime.now(),
+                'sync_status': 'error'
+            })
+
+            _logger.error("Erro ao sincronizar regras de agendamento: %s", str(e))
+
+            return {
+                'type': 'ir.actions.client',
+                'tag': 'display_notification',
+                'params': {
+                    'title': _('Erro na Sincronização'),
+                    'message': _(f'Erro ao sincronizar: {str(e)}'),
+                    'sticky': True,
+                    'type': 'danger',
+                }
+            }
 
     def action_view_scheduling_rules(self):
         """Visualiza as regras de agendamento no Sistema de IA"""

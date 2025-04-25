@@ -694,49 +694,94 @@ class BusinessRulesService:
                     qdrant_points = vector_service.qdrant_client.scroll(
                         collection_name=collection_name,
                         limit=10000,  # Limite alto para obter todos os pontos
-                        with_payload=True,
+                        with_payload=True,  # Precisamos do payload para obter o rule_id
                         with_vectors=False,
                         scroll_filter=filter_condition  # Usar scroll_filter em vez de filter
                     )[0]  # O método scroll retorna uma tupla (pontos, next_page_offset)
 
-                    # Extrair IDs dos pontos
-                    qdrant_rule_ids = [point.id for point in qdrant_points]
+                    # Extrair IDs dos pontos e mapear para os IDs originais das regras
+                    qdrant_rule_ids = []
+                    qdrant_id_to_rule_id = {}  # Mapeamento de ID do Qdrant para ID da regra
+
+                    for point in qdrant_points:
+                        qdrant_rule_ids.append(point.id)
+                        # Armazenar o mapeamento para uso posterior
+                        rule_id = point.payload.get("rule_id")
+                        if rule_id:
+                            qdrant_id_to_rule_id[point.id] = rule_id
+
                     logger.info(f"Found {len(qdrant_rule_ids)} rules in Qdrant for account {account_id}")
                 except Exception as e:
                     logger.error(f"Failed to get rules from Qdrant: {e}")
                     logger.exception("Detailed traceback:")
                     qdrant_rule_ids = []
+                    qdrant_id_to_rule_id = {}
             except Exception as e:
                 logger.error(f"Failed to initialize vector service: {e}")
                 logger.exception("Detailed traceback:")
                 qdrant_rule_ids = []
 
             # 4. Identificar regras a serem removidas do Qdrant (regras que existem no Qdrant mas não no Odoo)
-            deleted_rule_ids = [rule_id for rule_id in qdrant_rule_ids if rule_id not in active_rule_ids]
+            # Comparar os IDs das regras no Qdrant com os IDs ativos no Odoo
+            obsolete_rule_ids = []
+            for qdrant_id in qdrant_rule_ids:
+                # Obter o ID original da regra a partir do mapeamento
+                original_rule_id = qdrant_id_to_rule_id.get(qdrant_id, qdrant_id)
+
+                # Verificar se a regra ainda está ativa no Odoo
+                if original_rule_id not in active_rule_ids:
+                    obsolete_rule_ids.append(qdrant_id)
 
             # 5. Remover regras excluídas do Qdrant
-            if deleted_rule_ids:
+            if obsolete_rule_ids:
                 try:
-                    logger.info(f"Removing {len(deleted_rule_ids)} deleted rules from Qdrant: {deleted_rule_ids}")
+                    logger.info(f"Removing {len(obsolete_rule_ids)} obsolete rules from Qdrant: {obsolete_rule_ids}")
                     vector_service = await get_vector_service()
                     vector_service.qdrant_client.delete(
                         collection_name=collection_name,
-                        points_selector=models.PointIdsList(points=deleted_rule_ids),
+                        points_selector=models.PointIdsList(points=obsolete_rule_ids),
                         wait=True  # Aguardar a conclusão da operação
                     )
-                    logger.info(f"Successfully removed {len(deleted_rule_ids)} rules from Qdrant")
+                    logger.info(f"Successfully removed {len(obsolete_rule_ids)} obsolete rules from Qdrant")
                 except Exception as e:
-                    logger.error(f"Failed to remove deleted rules from Qdrant: {e}")
+                    logger.error(f"Failed to remove obsolete rules from Qdrant: {e}")
                     logger.exception("Detailed traceback:")
             else:
-                logger.info(f"No deleted rules to remove from Qdrant for account {account_id}")
+                logger.info(f"No obsolete rules to remove from Qdrant for account {account_id}")
 
             # 6. Vetorizar e armazenar regras ativas no Qdrant
             vectorized_count = 0
+            # Inicializar o dicionário de informações de regras existentes
+            # Importante: inicializar aqui para evitar UnboundLocalError
+            existing_rule_info = {}
+
             try:
                 # Criar conectores Odoo para obter dados das regras
                 odoo_permanent_data = await OdooConnectorFactory.create_connector(account_id)
                 odoo_temporary_data = await OdooConnectorFactory.create_connector(account_id)
+
+                # Obter informações sobre regras existentes no Qdrant
+                for qdrant_id, rule_id in qdrant_id_to_rule_id.items():
+                    try:
+                        # Buscar o ponto no Qdrant para obter metadados
+                        point = vector_service.qdrant_client.retrieve(
+                            collection_name=collection_name,
+                            ids=[qdrant_id],
+                            with_payload=True,
+                            with_vectors=False
+                        )
+
+                        if point and len(point) > 0:
+                            # Extrair informações relevantes do payload
+                            payload = point[0].payload
+                            existing_rule_info[rule_id] = {
+                                "last_updated": payload.get("last_updated", ""),
+                                "name": payload.get("name", ""),
+                                "description": payload.get("description", ""),
+                                "type": payload.get("type", ""),
+                            }
+                    except Exception as e:
+                        logger.warning(f"Failed to get info for rule {rule_id} from Qdrant: {e}")
 
                 # Processar regras permanentes
                 if permanent_rule_ids:
@@ -749,9 +794,11 @@ class BusinessRulesService:
 
                     for rule_data in permanent_rules_data:
                         try:
+                            rule_id = rule_data['id']
+
                             # Criar objeto BusinessRuleResponse
                             rule = BusinessRuleResponse(
-                                id=rule_data['id'],
+                                id=rule_id,
                                 name=rule_data['name'],
                                 description=rule_data.get('description', ''),
                                 type=rule_data.get('rule_type', 'general'),
@@ -763,38 +810,58 @@ class BusinessRulesService:
                                 updated_at=datetime.fromisoformat(rule_data['write_date']),
                             )
 
-                            # Preparar texto para vetorização
-                            rule_text = self._prepare_rule_text_for_vectorization(rule)
+                            # Verificar se a regra já existe e se foi modificada
+                            rule_modified = True  # Por padrão, assumir que foi modificada
 
-                            # Gerar embedding
-                            embedding = await vector_service.generate_embedding(rule_text)
+                            if rule_id in existing_rule_info:
+                                # Comparar dados atuais com os armazenados no Qdrant
+                                existing_info = existing_rule_info[rule_id]
 
-                            # Armazenar no Qdrant
-                            vector_service.qdrant_client.upsert(
-                                collection_name=collection_name,
-                                points=[
-                                    models.PointStruct(
-                                        id=rule.id,
-                                        vector=embedding,
-                                        payload={
-                                            "account_id": account_id,  # Campo crucial para filtragem por tenant
-                                            "rule_id": rule.id,
-                                            "name": rule.name,
-                                            "description": rule.description,
-                                            "type": rule.type,
-                                            "priority": rule.priority,
-                                            "is_temporary": rule.is_temporary,
-                                            "rule_data": rule.rule_data,
-                                            "processed_text": rule_text,
-                                            "last_updated": datetime.now().isoformat()
-                                        }
-                                    )
-                                ],
-                            )
-                            vectorized_count += 1
-                            logger.info(f"Vectorized permanent rule {rule.id}: {rule.name}")
+                                # Verificar se houve alterações nos campos relevantes
+                                if (existing_info["name"] == rule.name and
+                                    existing_info["description"] == rule.description and
+                                    existing_info["type"] == rule.type):
+
+                                    # Regra não foi modificada, não precisa revetorizar
+                                    rule_modified = False
+                                    logger.info(f"Rule {rule_id} ({rule.name}) not modified, skipping vectorization")
+
+                            if rule_modified:
+                                # Preparar texto para vetorização
+                                rule_text = self._prepare_rule_text_for_vectorization(rule)
+
+                                # Gerar embedding
+                                embedding = await vector_service.generate_embedding(rule_text)
+
+                                # Armazenar no Qdrant
+                                vector_service.qdrant_client.upsert(
+                                    collection_name=collection_name,
+                                    points=[
+                                        models.PointStruct(
+                                            id=rule.id,
+                                            vector=embedding,
+                                            payload={
+                                                "account_id": account_id,  # Campo crucial para filtragem por tenant
+                                                "rule_id": rule.id,
+                                                "name": rule.name,
+                                                "description": rule.description,
+                                                "type": rule.type,
+                                                "priority": rule.priority,
+                                                "is_temporary": rule.is_temporary,
+                                                "rule_data": rule.rule_data,
+                                                "processed_text": rule_text,
+                                                "last_updated": datetime.now().isoformat()
+                                            }
+                                        )
+                                    ],
+                                )
+                                vectorized_count += 1
+                                logger.info(f"Vectorized permanent rule {rule.id}: {rule.name}")
+                            else:
+                                logger.info(f"Skipped vectorization for unchanged rule {rule.id}: {rule.name}")
                         except Exception as e:
-                            logger.error(f"Failed to vectorize permanent rule {rule_data['id']}: {e}")
+                            logger.error(f"Failed to process permanent rule {rule_data['id']}: {e}")
+                            logger.exception("Detailed traceback:")
 
                 # Processar regras temporárias
                 if temporary_rule_ids:
@@ -807,6 +874,8 @@ class BusinessRulesService:
 
                     for rule_data in temporary_rules_data:
                         try:
+                            rule_id = rule_data['id']
+
                             # Verificar se a regra é realmente temporária
                             is_temporary = rule_data.get('is_temporary', False)
 
@@ -835,7 +904,7 @@ class BusinessRulesService:
 
                             # Criar objeto BusinessRuleResponse
                             rule = BusinessRuleResponse(
-                                id=rule_data['id'],
+                                id=rule_id,
                                 name=rule_data['name'],
                                 description=rule_data.get('description', ''),
                                 type=rule_data.get('rule_type', 'general'),
@@ -849,40 +918,60 @@ class BusinessRulesService:
                                 updated_at=datetime.fromisoformat(rule_data.get('write_date', datetime.now().isoformat())),
                             )
 
-                            # Preparar texto para vetorização
-                            rule_text = self._prepare_rule_text_for_vectorization(rule)
+                            # Verificar se a regra já existe e se foi modificada
+                            rule_modified = True  # Por padrão, assumir que foi modificada
 
-                            # Gerar embedding
-                            embedding = await vector_service.generate_embedding(rule_text)
+                            if rule_id in existing_rule_info:
+                                # Comparar dados atuais com os armazenados no Qdrant
+                                existing_info = existing_rule_info[rule_id]
 
-                            # Armazenar no Qdrant
-                            vector_service.qdrant_client.upsert(
-                                collection_name=collection_name,
-                                points=[
-                                    models.PointStruct(
-                                        id=rule.id,
-                                        vector=embedding,
-                                        payload={
-                                            "account_id": account_id,  # Campo crucial para filtragem por tenant
-                                            "rule_id": rule.id,
-                                            "name": rule.name,
-                                            "description": rule.description,
-                                            "type": rule.type,
-                                            "priority": rule.priority,
-                                            "is_temporary": rule.is_temporary,
-                                            "start_date": rule.start_date.isoformat() if rule.start_date else None,
-                                            "end_date": rule.end_date.isoformat() if rule.end_date else None,
-                                            "rule_data": rule.rule_data,
-                                            "processed_text": rule_text,
-                                            "last_updated": datetime.now().isoformat()
-                                        }
-                                    )
-                                ],
-                            )
-                            vectorized_count += 1
-                            logger.info(f"Vectorized temporary rule {rule.id}: {rule.name}")
+                                # Verificar se houve alterações nos campos relevantes
+                                if (existing_info["name"] == rule.name and
+                                    existing_info["description"] == rule.description and
+                                    existing_info["type"] == rule.type):
+
+                                    # Regra não foi modificada, não precisa revetorizar
+                                    rule_modified = False
+                                    logger.info(f"Rule {rule_id} ({rule.name}) not modified, skipping vectorization")
+
+                            if rule_modified:
+                                # Preparar texto para vetorização
+                                rule_text = self._prepare_rule_text_for_vectorization(rule)
+
+                                # Gerar embedding
+                                embedding = await vector_service.generate_embedding(rule_text)
+
+                                # Armazenar no Qdrant
+                                vector_service.qdrant_client.upsert(
+                                    collection_name=collection_name,
+                                    points=[
+                                        models.PointStruct(
+                                            id=rule.id,
+                                            vector=embedding,
+                                            payload={
+                                                "account_id": account_id,  # Campo crucial para filtragem por tenant
+                                                "rule_id": rule.id,
+                                                "name": rule.name,
+                                                "description": rule.description,
+                                                "type": rule.type,
+                                                "priority": rule.priority,
+                                                "is_temporary": rule.is_temporary,
+                                                "start_date": rule.start_date.isoformat() if rule.start_date else None,
+                                                "end_date": rule.end_date.isoformat() if rule.end_date else None,
+                                                "rule_data": rule.rule_data,
+                                                "processed_text": rule_text,
+                                                "last_updated": datetime.now().isoformat()
+                                            }
+                                        )
+                                    ],
+                                )
+                                vectorized_count += 1
+                                logger.info(f"Vectorized temporary rule {rule.id}: {rule.name}")
+                            else:
+                                logger.info(f"Skipped vectorization for unchanged rule {rule.id}: {rule.name}")
                         except Exception as e:
-                            logger.error(f"Failed to vectorize temporary rule {rule_data['id']}: {e}")
+                            logger.error(f"Failed to process temporary rule {rule_data['id']}: {e}")
+                            logger.exception("Detailed traceback:")
 
                 logger.info(f"Vectorized {vectorized_count} rules for account {account_id}")
             except Exception as e:
@@ -901,6 +990,7 @@ class BusinessRulesService:
                 permanent_rules=len([id for id in active_rule_ids if id in permanent_rule_ids]),
                 temporary_rules=len([id for id in active_rule_ids if id in temporary_rule_ids]),
                 vectorized_rules=vectorized_count,
+                removed_rules=len(obsolete_rule_ids) if 'obsolete_rule_ids' in locals() and obsolete_rule_ids else 0,
                 sync_status="completed",
                 timestamp=datetime.now(),
             )
@@ -911,6 +1001,7 @@ class BusinessRulesService:
                 permanent_rules=0,
                 temporary_rules=0,
                 vectorized_rules=0,
+                removed_rules=0,
                 sync_status="failed",
                 timestamp=datetime.now(),
                 error=str(e)
@@ -971,6 +1062,77 @@ class BusinessRulesService:
             logger.exception("Detailed traceback:")
             return {}
 
+    async def clear_support_documents(self, account_id: str) -> Dict[str, Any]:
+        """
+        Limpa todos os documentos de suporte do Qdrant para um account_id específico.
+
+        Args:
+            account_id: ID da conta
+
+        Returns:
+            Resultado da operação
+        """
+        try:
+            # Verificar se a coleção existe
+            collection_name = "support_documents"
+            vector_service = await get_vector_service()
+
+            # Verificar se a coleção existe
+            collections = vector_service.qdrant_client.get_collections().collections
+            collection_names = [collection.name for collection in collections]
+
+            if collection_name not in collection_names:
+                logger.warning(f"Collection {collection_name} does not exist")
+                return {"documents_removed": 0, "message": "Collection does not exist"}
+
+            # Buscar todos os documentos para este account_id
+            existing_points = vector_service.qdrant_client.scroll(
+                collection_name=collection_name,
+                scroll_filter=models.Filter(
+                    must=[
+                        models.FieldCondition(
+                            key="account_id",
+                            match=models.MatchValue(value=account_id)
+                        )
+                    ]
+                ),
+                limit=1000,  # Buscar até 1000 documentos
+                with_payload=True,
+                with_vectors=False,
+            )[0]
+
+            if not existing_points:
+                logger.info(f"No documents found for account_id={account_id}")
+                return {"documents_removed": 0, "message": "No documents found"}
+
+            # Extrair os IDs dos documentos
+            document_ids = []
+            for point in existing_points:
+                document_ids.append(point.id)
+
+            # Remover todos os documentos
+            if document_ids:
+                logger.info(f"Removing {len(document_ids)} documents for account_id={account_id}")
+                vector_service.qdrant_client.delete(
+                    collection_name=collection_name,
+                    points_selector=models.PointIdsList(points=document_ids),
+                    wait=True
+                )
+
+                logger.info(f"Successfully removed {len(document_ids)} documents for account_id={account_id}")
+                return {
+                    "documents_removed": len(document_ids),
+                    "success": True,
+                    "message": f"Removed {len(document_ids)} documents"
+                }
+            else:
+                return {"documents_removed": 0, "message": "No documents to remove"}
+
+        except Exception as e:
+            logger.error(f"Failed to clear support documents: {e}")
+            logger.exception("Detailed traceback:")
+            return {"documents_removed": 0, "error": str(e)}
+
     async def sync_support_documents(self, account_id: str) -> Dict[str, Any]:
         """
         Sincroniza documentos de suporte com o Qdrant.
@@ -985,8 +1147,7 @@ class BusinessRulesService:
             # Obter conector Odoo
             odoo = await OdooConnectorFactory.create_connector(account_id)
 
-            # SOLUÇÃO RADICAL: Limpar TODOS os documentos existentes para este account_id
-            # antes de inserir novos documentos
+            # Inicializar serviço de vetorização
             vector_service = await get_vector_service()
             collection_name = "support_documents"  # Coleção compartilhada para todos os tenants
 
@@ -1012,7 +1173,8 @@ class BusinessRulesService:
                     logger.error(f"Failed to create collection directly: {create_error}")
                     return {"documents_vectorized": 0, "error": str(create_error)}
 
-            # Buscar TODOS os documentos existentes para este account_id
+            # Verificar documentos existentes para este account_id
+            existing_qdrant_docs = []
             try:
                 existing_points = vector_service.qdrant_client.scroll(
                     collection_name=collection_name,
@@ -1025,57 +1187,33 @@ class BusinessRulesService:
                         ]
                     ),
                     limit=1000,  # Buscar até 1000 documentos
-                    with_payload=False,
+                    with_payload=True,  # Precisamos do payload para obter o document_id
                     with_vectors=False,
                 )[0]
 
                 if existing_points:
-                    # Coletar todos os IDs
-                    point_ids = [point.id for point in existing_points]
+                    # Log informativo
+                    logger.info(f"Encontrados {len(existing_points)} documentos existentes para account_id={account_id}")
 
-                    # Log detalhado
-                    logger.warning(f"LIMPEZA RADICAL: Encontrados {len(existing_points)} documentos existentes para account_id={account_id}")
-                    logger.warning(f"LIMPEZA RADICAL: IDs dos documentos a serem excluídos: {point_ids}")
-
-                    # Excluir TODOS os documentos
-                    vector_service.qdrant_client.delete(
-                        collection_name=collection_name,
-                        points_selector=models.PointIdsList(
-                            points=point_ids
-                        )
-                    )
-
-                    logger.warning(f"LIMPEZA RADICAL: EXCLUÍDOS TODOS OS {len(existing_points)} documentos existentes para account_id={account_id}")
-
-                    # Verificar se a exclusão foi bem-sucedida
-                    verification_points = vector_service.qdrant_client.scroll(
-                        collection_name=collection_name,
-                        scroll_filter=models.Filter(
-                            must=[
-                                models.FieldCondition(
-                                    key="account_id",
-                                    match=models.MatchValue(value=account_id)
-                                )
-                            ]
-                        ),
-                        limit=10,
-                        with_payload=False,
-                        with_vectors=False,
-                    )[0]
-
-                    if verification_points:
-                        logger.error(f"LIMPEZA RADICAL: CRÍTICO: Ainda encontrados {len(verification_points)} documentos após exclusão!")
-                    else:
-                        logger.info("LIMPEZA RADICAL: Verificação bem-sucedida: Nenhum documento encontrado após exclusão.")
+                    # Extrair os IDs dos documentos existentes no Qdrant
+                    for point in existing_points:
+                        doc_id_str = point.payload.get("document_id")
+                        if doc_id_str:
+                            try:
+                                doc_id = int(doc_id_str)
+                                existing_qdrant_docs.append(doc_id)
+                                logger.info(f"Documento encontrado no Qdrant: ID={doc_id}, Qdrant ID={point.id}")
+                            except ValueError:
+                                logger.warning(f"ID de documento inválido no Qdrant: {doc_id_str}")
                 else:
-                    logger.info(f"LIMPEZA RADICAL: Nenhum documento existente encontrado para account_id={account_id}")
+                    logger.info(f"Nenhum documento existente encontrado para account_id={account_id}")
 
-            except Exception as delete_error:
-                logger.error(f"LIMPEZA RADICAL: Falha ao excluir documentos existentes: {delete_error}")
-                logger.exception("LIMPEZA RADICAL: Erro detalhado de exclusão:")
+            except Exception as e:
+                logger.error(f"Erro ao verificar documentos existentes: {e}")
+                logger.exception("Detailed traceback:")
+                # Continuar mesmo se falhar a verificação
 
-            # SOLUÇÃO SUPER RADICAL: Processar apenas o documento mais recente
-            # Verificar se há um documento específico no support_document_ids da empresa
+            # Verificar se há documentos específicos no support_document_ids da empresa
             company_data = await self.get_company_data(account_id)
 
             # Verificar se company_data é um dicionário ou uma lista
@@ -1092,33 +1230,27 @@ class BusinessRulesService:
 
             if specific_document_ids:
                 logger.info(f"Using specific document IDs from company data: {specific_document_ids}")
-                # SOLUÇÃO SUPER RADICAL: Pegar apenas o primeiro documento (mais recente)
-                if len(specific_document_ids) > 1:
-                    logger.warning(f"SOLUÇÃO SUPER RADICAL: Encontrados {len(specific_document_ids)} documentos, mas processando apenas o primeiro")
-                    document_ids = [specific_document_ids[0]]
-                else:
-                    document_ids = specific_document_ids
+                document_ids = specific_document_ids
             else:
-                # Fallback: buscar apenas o documento ativo mais recente
-                logger.warning(f"No specific document IDs found in company data, falling back to most recent active document")
-                document_ids = await odoo.execute_kw(
+                # Quando não há documentos específicos, não processamos nenhum documento
+                logger.warning(f"No specific document IDs found in company data. No documents will be processed.")
+                document_ids = []
+
+            # Mesmo que não haja documentos específicos para processar,
+            # ainda precisamos verificar documentos obsoletos no Qdrant
+            documents_data = []
+            vectorized_count = 0
+
+            if document_ids:
+                # Obter dados dos documentos apenas se houver IDs específicos
+                documents_data = await odoo.execute_kw(
                     'business.support.document',
-                    'search',
-                    [[('active', '=', True)]],
-                    {'order': 'create_date desc', 'limit': 1},  # Limitar a apenas 1 documento
+                    'read',
+                    [document_ids],
+                    {'fields': ['name', 'document_type', 'content', 'attachment_ids', 'create_date', 'write_date']},
                 )
 
-            if not document_ids:
-                logger.info(f"No support documents found for account {account_id}")
-                return {"documents_vectorized": 0}
 
-            # Obter dados dos documentos
-            documents_data = await odoo.execute_kw(
-                'business.support.document',
-                'read',
-                [document_ids],
-                {'fields': ['name', 'document_type', 'content', 'attachment_ids', 'create_date', 'write_date']},
-            )
 
             # Processar cada documento
             vectorized_count = 0
@@ -1164,7 +1296,6 @@ Conteúdo:
 {document_text}
 """
 
-                    # SOLUÇÃO RADICAL: Excluir TODOS os documentos existentes antes de inserir um novo
                     # Usar um ID numérico para o documento (Qdrant só aceita números inteiros ou UUIDs)
                     doc_id = doc_data['id']
                     # Gerar um hash determinístico baseado no account_id e doc_id
@@ -1178,9 +1309,10 @@ Conteúdo:
                     original_id = f"{account_id}_{doc_id}"
                     logger.info(f"Using numeric ID {document_id} (from {original_id}) for document {doc_id}")
 
-                    # Excluir TODOS os documentos existentes para este account_id e document_id
+                    # Verificar se o documento já existe e se foi modificado
+                    doc_modified = True  # Por padrão, assumir que foi modificado
                     try:
-                        # Primeiro, buscar todos os documentos existentes
+                        # Buscar documentos existentes com o mesmo ID
                         existing_points = vector_service.qdrant_client.scroll(
                             collection_name=collection_name,
                             scroll_filter=models.Filter(
@@ -1196,62 +1328,60 @@ Conteúdo:
                                 ]
                             ),
                             limit=100,  # Buscar todos os documentos que correspondem
-                            with_payload=False,
+                            with_payload=True,  # Precisamos do payload para verificar se o documento foi modificado
                             with_vectors=False,
                         )[0]
 
-                        # Se encontrou documentos, excluir TODOS eles
-                        if existing_points:
-                            # Coletar todos os IDs
-                            point_ids = [point.id for point in existing_points]
+                        # Se encontrou documentos, verificar se houve modificação
+                        if existing_points and len(existing_points) > 0:
+                            logger.info(f"Documento já existe no Qdrant: account_id={account_id}, document_id={doc_id}")
 
-                            # Log detalhado
-                            logger.warning(f"Found {len(existing_points)} existing documents for account_id={account_id}, document_id={doc_id}")
-                            logger.warning(f"Document IDs to delete: {point_ids}")
+                            # Obter o primeiro ponto (deve haver apenas um)
+                            existing_point = existing_points[0]
+                            existing_payload = existing_point.payload
 
-                            # Excluir todos os documentos
-                            vector_service.qdrant_client.delete(
-                                collection_name=collection_name,
-                                points_selector=models.PointIdsList(
-                                    points=point_ids
-                                )
-                            )
+                            # Verificar se o conteúdo do documento foi modificado
+                            if existing_payload.get("metadata", {}).get("name") == doc_data['name'] and \
+                               existing_payload.get("metadata", {}).get("document_type") == doc_data.get('document_type', '') and \
+                               existing_payload.get("content", {}).get("original") == processed_text:
 
-                            logger.warning(f"DELETED ALL {len(existing_points)} existing documents for {doc_id}")
-
-                            # Verificar se a exclusão foi bem-sucedida
-                            verification_points = vector_service.qdrant_client.scroll(
-                                collection_name=collection_name,
-                                scroll_filter=models.Filter(
-                                    must=[
-                                        models.FieldCondition(
-                                            key="account_id",
-                                            match=models.MatchValue(value=account_id)
-                                        ),
-                                        models.FieldCondition(
-                                            key="document_id",
-                                            match=models.MatchValue(value=str(doc_id))
-                                        )
-                                    ]
-                                ),
-                                limit=10,
-                                with_payload=False,
-                                with_vectors=False,
-                            )[0]
-
-                            if verification_points:
-                                logger.error(f"CRITICAL: Still found {len(verification_points)} documents after deletion!")
+                                # Documento não foi modificado, não precisa revetorizar
+                                doc_modified = False
+                                logger.info(f"Documento {doc_id} ({doc_data['name']}) não foi modificado, pulando vetorização")
                             else:
-                                logger.info("Verification successful: No documents found after deletion.")
+                                logger.info(f"Documento {doc_id} ({doc_data['name']}) foi modificado, atualizando vetorização")
                         else:
-                            logger.info(f"No existing documents found for account_id={account_id}, document_id={doc_id}")
+                            logger.info(f"Documento não existe no Qdrant: account_id={account_id}, document_id={doc_id}")
+                            logger.info(f"Criando novo documento com ID {document_id}")
 
-                    except Exception as delete_error:
-                        logger.error(f"Failed to delete existing documents: {delete_error}")
-                        logger.exception("Detailed deletion error:")
+                    except Exception as e:
+                        logger.error(f"Erro ao verificar documento existente: {e}")
+                        logger.exception("Detailed traceback:")
+                        # Continuar mesmo se falhar a verificação, assumindo que o documento foi modificado
 
-                    # Gerar embedding
-                    embedding = await vector_service.generate_embedding(processed_text)
+                    # Se o documento foi modificado ou é novo, gerar embedding e atualizar
+                    if doc_modified:
+                        # Gerar embedding
+                        embedding = await vector_service.generate_embedding(processed_text)
+                    else:
+                        # Pular vetorização para documentos não modificados
+                        logger.info(f"Pulando vetorização para documento não modificado {doc_id}: {doc_data['name']}")
+
+                        # Atualizar o status de sincronização no Odoo mesmo para documentos não modificados
+                        try:
+                            await odoo.execute_kw(
+                                'business.support.document',
+                                'write',
+                                [[doc_data['id']], {
+                                    'sync_status': 'synced',
+                                    'last_sync_date': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                                }]
+                            )
+                            logger.info(f"Status de sincronização atualizado para documento não modificado {doc_data['id']}")
+                        except Exception as update_error:
+                            logger.error(f"Erro ao atualizar status de sincronização para documento não modificado {doc_data['id']}: {update_error}")
+
+                        continue
 
                     # Preparar o payload para o documento
                     payload = {
@@ -1307,19 +1437,125 @@ Conteúdo:
 
                         if verification_point and len(verification_point) > 0:
                             logger.info(f"Verification successful: Document {document_id} found in Qdrant")
+                            # Incrementar contador apenas para documentos que foram realmente vetorizados
+                            vectorized_count += 1
+                            logger.info(f"Vectorized support document {doc_data['id']}: {doc_data['name']}")
                         else:
                             logger.error(f"CRITICAL: Document {document_id} not found in Qdrant after storage!")
                     except Exception as upsert_error:
                         logger.error(f"Failed to store document in Qdrant: {upsert_error}")
                         logger.exception("Detailed upsert error:")
-                    vectorized_count += 1
-                    logger.info(f"Vectorized support document {doc_data['id']}: {doc_data['name']}")
+
+                    # Atualizar o status de sincronização no Odoo
+                    try:
+                        await odoo.execute_kw(
+                            'business.support.document',
+                            'write',
+                            [[doc_data['id']], {
+                                'sync_status': 'synced',
+                                'last_sync_date': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                            }]
+                        )
+                        logger.info(f"Status de sincronização atualizado para documento {doc_data['id']}")
+                    except Exception as update_error:
+                        logger.error(f"Erro ao atualizar status de sincronização para documento {doc_data['id']}: {update_error}")
+
                 except Exception as e:
                     logger.error(f"Failed to vectorize support document {doc_data['id']}: {e}")
                     logger.exception("Detailed traceback:")
 
+                    # Atualizar o status de sincronização para erro no Odoo
+                    try:
+                        await odoo.execute_kw(
+                            'business.support.document',
+                            'write',
+                            [[doc_data['id']], {
+                                'sync_status': 'error',
+                                'last_sync_date': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                            }]
+                        )
+                        logger.info(f"Status de sincronização atualizado para erro para documento {doc_data['id']}")
+                    except Exception as update_error:
+                        logger.error(f"Erro ao atualizar status de sincronização para erro para documento {doc_data['id']}: {update_error}")
+
             logger.info(f"Vectorized {vectorized_count} support documents for account {account_id}")
-            return {"documents_vectorized": vectorized_count}
+
+            # Obter todos os documentos existentes no Odoo (mesmo que não estejam na interface)
+            all_odoo_document_ids = await odoo.execute_kw(
+                'business.support.document',
+                'search',
+                [[('id', '!=', False)]],  # Buscar todos os IDs
+            )
+
+            # Obter os documentos selecionados na interface (support_document_ids)
+            # Se não houver documentos específicos, considerar que nenhum documento está selecionado
+            selected_document_ids = document_ids if document_ids else []
+
+            # Obter os documentos ativos no Odoo
+            active_document_ids = await odoo.execute_kw(
+                'business.support.document',
+                'search',
+                [[('active', '=', True)]],  # Buscar apenas documentos ativos
+            )
+
+            logger.info(f"Total de documentos no Odoo: {len(all_odoo_document_ids)}")
+            logger.info(f"IDs de documentos no Odoo: {all_odoo_document_ids}")
+            logger.info(f"IDs de documentos ativos no Odoo: {active_document_ids}")
+            logger.info(f"IDs de documentos selecionados na interface: {selected_document_ids}")
+            logger.info(f"IDs de documentos no Qdrant: {existing_qdrant_docs}")
+
+            # Identificar documentos obsoletos com base em duas condições:
+            # 1. Documentos que existem no Qdrant mas não estão selecionados na interface
+            # 2. Documentos que existem no Qdrant mas estão inativos no Odoo
+            obsolete_doc_ids = [
+                doc_id for doc_id in existing_qdrant_docs
+                if (doc_id not in selected_document_ids) or (doc_id not in active_document_ids)
+            ]
+
+            # Remover documentos obsoletos do Qdrant
+            if obsolete_doc_ids:
+                logger.info(f"Encontrados {len(obsolete_doc_ids)} documentos obsoletos para remover: {obsolete_doc_ids}")
+
+                try:
+                    # Para cada documento obsoleto, calcular o ID numérico e remover
+                    removed_count = 0
+                    for doc_id in obsolete_doc_ids:
+                        try:
+                            # Calcular o ID numérico usando o mesmo algoritmo de hash
+                            import hashlib
+                            hash_str = f"{account_id}_{doc_id}"
+                            hash_obj = hashlib.md5(hash_str.encode())
+                            document_id = int(hash_obj.hexdigest()[:8], 16)
+
+                            # Remover do Qdrant
+                            vector_service.qdrant_client.delete(
+                                collection_name=collection_name,
+                                points_selector=models.PointIdsList(points=[document_id]),
+                                wait=True
+                            )
+
+                            logger.info(f"Documento obsoleto removido com sucesso: ID={doc_id}, Qdrant ID={document_id}")
+                            removed_count += 1
+                        except Exception as delete_error:
+                            logger.error(f"Erro ao remover documento obsoleto {doc_id}: {delete_error}")
+
+                    logger.info(f"Removidos {removed_count} documentos obsoletos do Qdrant")
+                except Exception as e:
+                    logger.error(f"Erro ao remover documentos obsoletos: {e}")
+                    logger.exception("Detailed traceback:")
+            else:
+                logger.info("Não foram encontrados documentos obsoletos para remover")
+
+            # Atualizar o status de sincronização da empresa
+            # Não atualizamos o status aqui para evitar conflitos de concorrência
+            # O status será atualizado pelo controlador que fez a chamada
+
+            return {
+                "documents_vectorized": vectorized_count,
+                "documents_removed": len(obsolete_doc_ids) if obsolete_doc_ids else 0,
+                "success": True,
+                "message": f"Sincronizados {vectorized_count} documentos e removidos {len(obsolete_doc_ids) if obsolete_doc_ids else 0} documentos obsoletos"
+            }
 
         except Exception as e:
             logger.error(f"Failed to sync support documents: {e}")
@@ -2461,7 +2697,6 @@ Conteúdo:
 
                 # Gerar embedding do texto processado
                 try:
-                    # SOLUÇÃO RADICAL: Excluir TODOS os documentos existentes antes de inserir um novo
                     # Usar um ID numérico para o documento (Qdrant só aceita números inteiros ou UUIDs)
                     # Gerar um hash determinístico baseado no account_id e doc_id
                     import hashlib
@@ -2474,9 +2709,9 @@ Conteúdo:
                     original_id = f"{account_id}_{doc_id}"
                     logger.info(f"Using numeric ID {document_id} (from {original_id}) for document {doc_id}")
 
-                    # Excluir TODOS os documentos existentes para este account_id e document_id
+                    # Verificar se o documento já existe
                     try:
-                        # Primeiro, buscar todos os documentos existentes
+                        # Buscar documentos existentes com o mesmo ID
                         existing_points = vector_service.qdrant_client.scroll(
                             collection_name=collection_name,
                             scroll_filter=models.Filter(
@@ -2496,55 +2731,17 @@ Conteúdo:
                             with_vectors=False,
                         )[0]
 
-                        # Se encontrou documentos, excluir TODOS eles
+                        # Se encontrou documentos, apenas logar
                         if existing_points:
-                            # Coletar todos os IDs
-                            point_ids = [point.id for point in existing_points]
-
-                            # Log detalhado
-                            logger.warning(f"Found {len(existing_points)} existing documents for account_id={account_id}, document_id={doc_id}")
-                            logger.warning(f"Document IDs to delete: {point_ids}")
-
-                            # Excluir todos os documentos
-                            vector_service.qdrant_client.delete(
-                                collection_name=collection_name,
-                                points_selector=models.PointIdsList(
-                                    points=point_ids
-                                )
-                            )
-
-                            logger.warning(f"DELETED ALL {len(existing_points)} existing documents for {doc_id}")
-
-                            # Verificar se a exclusão foi bem-sucedida
-                            verification_points = vector_service.qdrant_client.scroll(
-                                collection_name=collection_name,
-                                scroll_filter=models.Filter(
-                                    must=[
-                                        models.FieldCondition(
-                                            key="account_id",
-                                            match=models.MatchValue(value=account_id)
-                                        ),
-                                        models.FieldCondition(
-                                            key="document_id",
-                                            match=models.MatchValue(value=str(doc_id))
-                                        )
-                                    ]
-                                ),
-                                limit=10,
-                                with_payload=False,
-                                with_vectors=False,
-                            )[0]
-
-                            if verification_points:
-                                logger.error(f"CRITICAL: Still found {len(verification_points)} documents after deletion!")
-                            else:
-                                logger.info("Verification successful: No documents found after deletion.")
+                            logger.info(f"Documento já existe no Qdrant: account_id={account_id}, document_id={doc_id}")
+                            logger.info(f"Atualizando documento existente com ID {document_id}")
                         else:
-                            logger.info(f"No existing documents found for account_id={account_id}, document_id={doc_id}")
+                            logger.info(f"Documento não existe no Qdrant: account_id={account_id}, document_id={doc_id}")
+                            logger.info(f"Criando novo documento com ID {document_id}")
 
-                    except Exception as delete_error:
-                        logger.error(f"Failed to delete existing documents: {delete_error}")
-                        logger.exception("Detailed deletion error:")
+                    except Exception as e:
+                        logger.error(f"Erro ao verificar documento existente: {e}")
+                        # Continuar mesmo se falhar a verificação
 
                     # Gerar embedding
                     embedding = await vector_service.generate_embedding(processed_text)
@@ -2619,8 +2816,44 @@ Conteúdo:
                         logger.exception("Detailed upsert error:")
                     logger.info(f"Stored support document in Qdrant: {doc_name} (ID: {doc_id})")
                     synced_docs.append(str(doc_id))
+
+                    # Atualizar o status de sincronização no Odoo
+                    try:
+                        # Obter conector Odoo
+                        odoo = await OdooConnectorFactory.create_connector(account_id)
+
+                        await odoo.execute_kw(
+                            'business.support.document',
+                            'write',
+                            [[doc_id], {
+                                'sync_status': 'synced',
+                                'last_sync_date': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                            }]
+                        )
+                        logger.info(f"Status de sincronização atualizado para documento {doc_id}")
+                    except Exception as update_error:
+                        logger.error(f"Erro ao atualizar status de sincronização para documento {doc_id}: {update_error}")
+
                 except Exception as e:
                     logger.error(f"Failed to generate embedding or store document in Qdrant: {e}")
+
+                    # Atualizar o status de sincronização para erro no Odoo
+                    try:
+                        # Obter conector Odoo
+                        odoo = await OdooConnectorFactory.create_connector(account_id)
+
+                        await odoo.execute_kw(
+                            'business.support.document',
+                            'write',
+                            [[doc_id], {
+                                'sync_status': 'error',
+                                'last_sync_date': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                            }]
+                        )
+                        logger.info(f"Status de sincronização atualizado para erro para documento {doc_id}")
+                    except Exception as update_error:
+                        logger.error(f"Erro ao atualizar status de sincronização para erro para documento {doc_id}: {update_error}")
+
                     # Continuar com o próximo documento
 
             logger.info(f"Synchronized {len(synced_docs)} support documents for account {account_id}")
@@ -2628,6 +2861,9 @@ Conteúdo:
             # Log detalhado para depuração
             if synced_docs:
                 logger.info(f"Synced document IDs: {synced_docs}")
+
+            # Não atualizamos o status aqui para evitar conflitos de concorrência
+            # O status será atualizado pelo controlador que fez a chamada
 
             return {
                 "success": True,

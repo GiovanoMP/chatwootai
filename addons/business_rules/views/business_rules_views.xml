@@ -229,7 +229,7 @@
                                             <field name="document_type"/>
                                             <field name="create_date"/>
                                             <field name="sync_status" decoration-success="sync_status == 'synced'" decoration-danger="sync_status == 'error'" decoration-info="sync_status == 'not_synced'"/>
-                                            <field name="active" widget="boolean_toggle"/>
+                                            <button name="action_delete_document" type="object" icon="fa-trash-o" string="Excluir" confirm="Atenção: Esta ação excluirá permanentemente o documento e não poderá ser desfeita. Deseja continuar?"/>
                                         </tree>
                                     </field>
                                 </div>

@@ -42,17 +42,38 @@ class CompanyService(models.Model):
     # Descrições dos serviços (não são mais necessárias como campos, pois usamos texto estático na view)
 
     # Configurações de Atendimento
-    greeting_message = fields.Text('Saudação Inicial', tracking=True)
-    communication_style = fields.Selection([
-        ('formal', 'Formal'),
+    greeting_message = fields.Text('Saudação Inicial', tracking=True, default='')
+
+    # Estilo de Comunicação e Personalidade
+    tone = fields.Selection([
         ('friendly', 'Amigável'),
-        ('casual', 'Casual')
-    ], string='Estilo de Comunicação', default='friendly', tracking=True)
+        ('polite', 'Educado'),
+        ('professional', 'Profissional'),
+        ('technical', 'Técnico')
+    ], string='Tom de Comunicação', default='friendly', tracking=True,
+       help='Define o tom que o agente usará na comunicação')
+
+    voice = fields.Selection([
+        ('welcoming', 'Acolhedor'),
+        ('energetic', 'Energético'),
+        ('calm', 'Calmo'),
+        ('objective', 'Objetivo')
+    ], string='Voz do Agente', default='welcoming', tracking=True,
+       help='Define a personalidade da voz do agente')
+
+    formality = fields.Selection([
+        ('informal', 'Informal'),
+        ('moderate', 'Moderado'),
+        ('formal', 'Formal')
+    ], string='Nível de Formalidade', default='moderate', tracking=True,
+       help='Define o nível de formalidade na comunicação')
+
     emoji_usage = fields.Selection([
         ('none', 'Não Usar'),
         ('minimal', 'Uso Mínimo'),
         ('moderate', 'Uso Moderado')
-    ], string='Uso de Emojis', default='none', tracking=True)
+    ], string='Uso de Emojis', default='none', tracking=True,
+       help='Define a frequência de uso de emojis pelo agente')
 
     # Horário de Funcionamento
     start_time = fields.Char('Horário de Início', default='09:00', tracking=True)
@@ -81,14 +102,18 @@ class CompanyService(models.Model):
     instagram_mention = fields.Boolean('Mencionar Instagram ao finalizar conversa', default=False, tracking=True)
 
     # Finalização de Conversa
-    farewell_message = fields.Char('Mensagem de Despedida', default='Obrigado por entrar em contato!', tracking=True)
-    use_farewell = fields.Boolean('Permitir ao agente informar o Site/Redes Sociais', default=False, tracking=True)
-    request_rating = fields.Boolean('Solicitar ao Cliente avaliação sobre o atendimento', default=False, tracking=True)
-    rating_request_message = fields.Char('Mensagem de Solicitação de Avaliação', default='Sua opinião é muito importante para nós. Como você avaliaria este atendimento?', tracking=True)
+    farewell_message = fields.Char('Mensagem de Despedida', default='', tracking=True)
+    use_farewell = fields.Boolean('Permitir ao agente informar o Site/Redes Sociais ao finalizar', default=False, tracking=True,
+                                 help='Se marcado, o agente poderá mencionar o site e redes sociais da empresa ao finalizar a conversa')
+    request_rating = fields.Boolean('Solicitar ao Cliente avaliação sobre o atendimento', default=False, tracking=True,
+                                   help='Se marcado, o agente solicitará uma avaliação do atendimento ao finalizar a conversa')
+    rating_request_message = fields.Char('Mensagem de Solicitação de Avaliação', default='', tracking=True)
 
     # Informações Adicionais
-    share_address = fields.Boolean('Permitir ao agente informar o endereço quando solicitado', default=False, tracking=True)
-    inform_promotions = fields.Boolean('Quando estiver em vendas, informar promoções e sugerir produtos', default=False, tracking=True)
+    share_address = fields.Boolean('Permitir ao agente informar o endereço quando solicitado', default=False, tracking=True,
+                                 help='Se marcado, o agente poderá informar o endereço da empresa quando o cliente solicitar')
+    inform_promotions = fields.Boolean('Quando estiver em vendas, informar promoções e sugerir produtos', default=False, tracking=True,
+                                     help='Se marcado, o agente poderá informar promoções ativas e sugerir produtos relacionados durante conversas de vendas')
 
     @api.depends('name')  # Dependência fictícia para garantir que seja recalculado
     def _compute_enabled_services(self):
@@ -275,8 +300,12 @@ class CompanyService(models.Model):
                     },
                     'customer_service': {
                         'greeting_message': self.greeting_message or '',
-                        'communication_style': self.communication_style,
-                        'emoji_usage': self.emoji_usage,
+                        'communication': {
+                            'tone': self.tone,
+                            'voice': self.voice,
+                            'formality': self.formality,
+                            'emoji_usage': self.emoji_usage
+                        },
                         'farewell': {
                             'message': self.farewell_message or 'Obrigado por entrar em contato!',
                             'enabled': self.use_farewell

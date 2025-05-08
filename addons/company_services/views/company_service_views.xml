@@ -1,0 +1,220 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Visualização de formulário -->
+    <record id="view_company_service_form" model="ir.ui.view">
+        <field name="name">company.service.form</field>
+        <field name="model">company.service</field>
+        <field name="arch" type="xml">
+            <form string="Empresa e Serviços">
+                <header>
+                    <button name="action_sync_to_config_service"
+                            string="Sincronizar com Sistema de IA"
+                            type="object"
+                            class="btn btn-success"
+                            icon="fa-sync"
+                            style="background-color: #00C853 !important; color: white !important; font-weight: bold !important; padding: 10px 20px !important; border-radius: 4px !important; box-shadow: 0 2px 4px rgba(0,0,0,0.2) !important;"/>
+                    <field name="sync_status" widget="statusbar" statusbar_visible="not_synced,syncing,synced,error"/>
+                </header>
+                <sheet>
+                    <div class="oe_title">
+                        <h1>
+                            <field name="name" placeholder="Nome da Empresa"/>
+                        </h1>
+                    </div>
+                    <group>
+                        <field name="description" placeholder="Descrição da empresa"/>
+                    </group>
+                    <!-- Campos computados invisíveis necessários para attrs -->
+                    <field name="enable_sales" invisible="1"/>
+                    <field name="enable_scheduling" invisible="1"/>
+                    <field name="enable_delivery" invisible="1"/>
+                    <field name="enable_support" invisible="1"/>
+                    <notebook>
+                        <page string="Informações da Empresa" name="company_info">
+                            <p class="text-muted">
+                                Inclua os dados básicos da sua empresa
+                            </p>
+                            <group string="Endereço da Empresa">
+                                <group>
+                                    <field name="street" placeholder="Rua e número"/>
+                                    <field name="street2" placeholder="Complemento"/>
+                                    <field name="city" placeholder="Cidade"/>
+                                </group>
+                                <group>
+                                    <field name="state" placeholder="Estado"/>
+                                    <field name="zip" placeholder="CEP"/>
+                                    <field name="country" placeholder="País"/>
+                                </group>
+                            </group>
+                        </page>
+                        <page string="Configurações de Atendimento" name="service_config">
+                            <p class="text-muted">
+                                Configure aqui o estilo de comunicação que o agente de IA deve utilizar ao interagir com seus clientes, os horários de Atendimento e Informações Adicionais que o Agente de IA deve informar aos seus clientes.
+                            </p>
+                            <group string="Comunicação">
+                                <group>
+                                    <field name="greeting_message" placeholder="Olá, bem-vindo à nossa empresa!"/>
+                                    <field name="rating_request_message" placeholder="Sua opinião é muito importante para nós. Como você avaliaria este atendimento?"/>
+                                    <field name="communication_style"/>
+                                    <field name="emoji_usage"/>
+                                </group>
+                                <group>
+                                    <field name="farewell_message" placeholder="Obrigado por entrar em contato!"/>
+                                    <field name="use_farewell"/>
+                                    <field name="request_rating"/>
+                                    <field name="share_address"/>
+                                    <field name="inform_promotions"/>
+                                </group>
+                            </group>
+                            <group string="Horário de Funcionamento">
+                                <group>
+                                    <field name="start_time"/>
+                                    <field name="end_time"/>
+                                    <field name="has_lunch_break"/>
+                                </group>
+                                <group attrs="{'invisible': [('has_lunch_break', '=', False)]}">
+                                    <field name="lunch_break_start"/>
+                                    <field name="lunch_break_end"/>
+                                </group>
+                            </group>
+                            <group string="Dias de Funcionamento">
+                                <group>
+                                    <field name="monday"/>
+                                    <field name="tuesday"/>
+                                    <field name="wednesday"/>
+                                    <field name="thursday"/>
+                                </group>
+                                <group>
+                                    <field name="friday"/>
+                                    <field name="saturday"/>
+                                    <field name="saturday_start_time" attrs="{'invisible': [('saturday', '=', False)]}"/>
+                                    <field name="saturday_end_time" attrs="{'invisible': [('saturday', '=', False)]}"/>
+                                    <field name="sunday"/>
+                                </group>
+                            </group>
+                            <group string="Site e Redes Sociais">
+                                <group string="Site da Empresa">
+                                    <field name="website_url" placeholder="https://www.exemplo.com.br"/>
+                                    <field name="website_mention"/>
+                                </group>
+                                <group string="Facebook">
+                                    <field name="facebook_url" placeholder="https://www.facebook.com/exemplo"/>
+                                    <field name="facebook_mention"/>
+                                </group>
+                                <group string="Instagram">
+                                    <field name="instagram_url" placeholder="https://www.instagram.com/exemplo"/>
+                                    <field name="instagram_mention"/>
+                                </group>
+                            </group>
+                        </page>
+                        <page string="Serviços de IA" name="services">
+                            <div class="alert alert-info" role="alert">
+                                <strong>Serviços de IA Contratados</strong>
+                                <p>Abaixo estão os serviços de IA atualmente contratados para sua empresa. Para adicionar mais serviços, entre em contato com a Sprintia.</p>
+                            </div>
+
+                            <div attrs="{'invisible': [('enable_sales', '=', False)]}">
+                                <h3 style="margin-top: 20px; color: #00C853;">Vendas de Produtos e Serviços</h3>
+                                <p class="text-muted">Permite que o agente de IA forneça informações sobre produtos, preços, promoções e realize vendas.</p>
+                                <hr/>
+                            </div>
+
+                            <div attrs="{'invisible': [('enable_scheduling', '=', False)]}">
+                                <h3 style="margin-top: 20px; color: #00C853;">Agendamentos</h3>
+                                <p class="text-muted">Permite que o agente de IA realize agendamentos de serviços, consultas ou reservas.</p>
+                                <hr/>
+                            </div>
+
+                            <div attrs="{'invisible': [('enable_delivery', '=', False)]}">
+                                <h3 style="margin-top: 20px; color: #00C853;">Delivery</h3>
+                                <p class="text-muted">Permite que o agente de IA forneça informações sobre entregas, prazos e status de pedidos.</p>
+                                <hr/>
+                            </div>
+
+                            <div attrs="{'invisible': [('enable_support', '=', False)]}">
+                                <h3 style="margin-top: 20px; color: #00C853;">Suporte ao Cliente</h3>
+                                <p class="text-muted">Permite que o agente de IA forneça suporte técnico, responda dúvidas e resolva problemas.</p>
+                                <hr/>
+                            </div>
+
+                            <div>
+                                <div class="alert alert-warning" role="alert">
+                                    <strong>Outros Serviços Disponíveis</strong>
+                                    <p>Amplie as capacidades do seu atendimento com mais serviços de IA:</p>
+                                </div>
+
+                                <div attrs="{'invisible': [('enable_sales', '=', True)]}">
+                                    <h3 style="margin-top: 20px; color: #FFA000;">Vendas de Produtos e Serviços</h3>
+                                    <p class="text-muted">Permite que o agente de IA forneça informações sobre produtos, preços, promoções e realize vendas.</p>
+                                    <hr/>
+                                </div>
+
+                                <div attrs="{'invisible': [('enable_scheduling', '=', True)]}">
+                                    <h3 style="margin-top: 20px; color: #FFA000;">Agendamentos</h3>
+                                    <p class="text-muted">Permite que o agente de IA realize agendamentos de serviços, consultas ou reservas.</p>
+                                    <hr/>
+                                </div>
+
+                                <div attrs="{'invisible': [('enable_delivery', '=', True)]}">
+                                    <h3 style="margin-top: 20px; color: #FFA000;">Delivery</h3>
+                                    <p class="text-muted">Permite que o agente de IA forneça informações sobre entregas, prazos e status de pedidos.</p>
+                                    <hr/>
+                                </div>
+
+                                <div attrs="{'invisible': [('enable_support', '=', True)]}">
+                                    <h3 style="margin-top: 20px; color: #FFA000;">Suporte ao Cliente</h3>
+                                    <p class="text-muted">Permite que o agente de IA forneça suporte técnico, responda dúvidas e resolva problemas.</p>
+                                    <hr/>
+                                </div>
+
+                                <div class="alert alert-info" style="margin-top: 20px;">
+                                    <p><strong>Entre em contato com a Sprintia para contratar mais serviços!</strong></p>
+                                    <p>Email: contato@sprintia.com.br | Website: <a href="https://www.sprintia.com.br" target="_blank">www.sprintia.com.br</a></p>
+                                </div>
+                            </div>
+                        </page>
+                        <page string="Status de Sincronização" name="sync_status_page" attrs="{'invisible': [('sync_status', '!=', 'error')]}">
+                            <group string="Detalhes do Erro">
+                                <field name="error_message" readonly="1" nolabel="1"/>
+                            </group>
+                        </page>
+                    </notebook>
+                </sheet>
+                <div class="oe_chatter">
+                    <field name="message_follower_ids"/>
+                    <field name="activity_ids"/>
+                    <field name="message_ids"/>
+                </div>
+            </form>
+        </field>
+    </record>
+
+    <!-- Visualização de árvore -->
+    <record id="view_company_service_tree" model="ir.ui.view">
+        <field name="name">company.service.tree</field>
+        <field name="model">company.service</field>
+        <field name="arch" type="xml">
+            <tree string="Empresa e Serviços">
+                <field name="name"/>
+                <field name="sync_status"/>
+                <field name="last_sync"/>
+            </tree>
+        </field>
+    </record>
+
+    <!-- Ação -->
+    <record id="action_company_service" model="ir.actions.act_window">
+        <field name="name">Empresa e Serviços</field>
+        <field name="res_model">company.service</field>
+        <field name="view_mode">tree,form</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Configure as informações da sua empresa e serviços de IA
+            </p>
+            <p>
+                Configure as informações da sua empresa, serviços contratados e
+                preferências de comunicação para integração com o sistema de IA.
+            </p>
+        </field>
+    </record>
+</odoo>

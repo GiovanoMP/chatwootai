@@ -16,10 +16,9 @@ import traceback
 
 from src.utils.encryption import credential_encryption
 
-from src.core.hub import HubCrew
-from src.core.data_service_hub import DataServiceHub
+from src.core.hub import Hub
 from odoo_api.integrations.chatwoot import ChatwootClient
-from src.core.domain import DomainManager
+from src.webhook.channel_mapping_handler import process_mapping_event
 
 logger = logging.getLogger(__name__)
 
@@ -46,22 +45,23 @@ class ChatwootWebhookHandler:
     4. Retorna o resultado da sincronização
     """
 
-    def __init__(self, hub_crew: HubCrew = None, config: Dict[str, Any] = None):
+    def __init__(self, hub: Hub = None, config: Dict[str, Any] = None):
         """
         Inicializa o handler de webhook.
 
         Args:
-            hub_crew: Instância do HubCrew para processamento das mensagens (obrigatório)
+            hub: Instância do Hub para processamento das mensagens
             config: Configuração do handler
         """
         self.config = config or {}
 
-        # Valida que o HubCrew foi fornecido (elemento central da arquitetura hub-and-spoke)
-        if hub_crew is None:
-            raise ValueError("hub_crew é obrigatório para o ChatwootWebhookHandler")
+        # Valida que o Hub foi fornecido
+        if hub is None:
+            raise ValueError("hub é obrigatório para o ChatwootWebhookHandler")
 
-        # Define o HubCrew que será responsável pelo processamento das mensagens
-        self.hub_crew = hub_crew
+        # Define o Hub que será responsável pelo processamento das mensagens
+        self.hub = hub
+        logger.info("Usando Hub para processamento de mensagens")
 
         # Inicializa o cliente do Chatwoot para envio de respostas
         self.chatwoot_client = ChatwootClient(
@@ -109,6 +109,11 @@ class ChatwootWebhookHandler:
             if webhook_data.get('source') == 'credentials' or webhook_data.get('event') == 'credentials_sync':
                 logger.info("Webhook identificado como evento de credenciais")
                 return await self.process_credentials_event(webhook_data)
+
+            # Verifica se é um evento de mapeamento de canal
+            if webhook_data.get('source') == 'channel_mapping' or webhook_data.get('event') == 'mapping_sync':
+                logger.info("Webhook identificado como evento de mapeamento de canal")
+                return process_mapping_event(webhook_data, credential_encryption)
 
             # Obtém o tipo de evento
             event_type = webhook_data.get("event")
@@ -300,26 +305,9 @@ class ChatwootWebhookHandler:
             "raw_data": message_data
         }
 
-        # Processa a mensagem com o HubCrew
+        # Processa a mensagem com o Hub
         try:
-            logger.info("Encaminhando mensagem para processamento pelo HubCrew")
-
-            # Na nova arquitetura, não dependemos mais de crews funcionais pré-configuradas
-            # As crews são criadas dinamicamente pelo CrewFactory com base no domínio
-            # determinado para a conversa
-
-            # Verificar se temos acesso ao DomainManager e CrewFactory
-            domain_manager = getattr(self.hub_crew, "domain_manager", None)
-            crew_factory = getattr(self.hub_crew, "crew_factory", None)
-
-            if not domain_manager or not crew_factory:
-                logger.error("HubCrew não tem DomainManager ou CrewFactory configurados")
-                return {
-                    "status": "error",
-                    "error": "Componentes essenciais não configurados no HubCrew",
-                    "conversation_id": conversation_id,
-                    "has_response": True
-                }
+            logger.info("Encaminhando mensagem para processamento pelo Hub")
 
             # Obter o account_id e inbox_id para determinar o domínio
             account_id = str(webhook_data.get("account", {}).get("id", ""))
@@ -327,76 +315,111 @@ class ChatwootWebhookHandler:
             # Log detalhado para diagnóstico
             logger.info(f"Processando mensagem para account_id: {account_id}, inbox_id: {inbox_id}")
 
-            # Determinar o domínio e o account_id interno com base no account_id do Chatwoot
-            domain_name = None
-            internal_account_id = None
-            domain_manager = getattr(self.hub_crew, "domain_manager", None)
+            # Determinar o domínio com base no account_id ou inbox_id
+            default_domain = self.config.get("default_domain", "default")  # Obter o domínio padrão da configuração ou usar "default"
+            domain_name = default_domain  # Usar o domínio padrão configurado
+            internal_account_id = f"account_{account_id}"  # Formato padrão
 
-            if domain_manager and account_id:
-                try:
-                    # Obter o domínio
-                    domain_name = domain_manager.get_domain_by_account_id(account_id)
-                    if domain_name:
-                        logger.info(f"Domínio determinado para account_id {account_id}: {domain_name}")
-                    else:
-                        logger.warning(f"Nenhum domínio encontrado para account_id {account_id}, usando padrão")
+            # 1. Tentar obter o domínio do mapeamento de account_id no formato esperado pelo código
+            account_domain_mapping = self.config.get("account_domain_mapping", {})
+            if account_id in account_domain_mapping:
+                # Verificar se o valor é um dicionário com chave 'domain' ou uma string direta
+                if isinstance(account_domain_mapping[account_id], dict) and "domain" in account_domain_mapping[account_id]:
+                    domain_name = account_domain_mapping[account_id]["domain"]
+                    logger.info(f"Domínio determinado a partir do account_domain_mapping (formato objeto): {domain_name}")
+                    # Também atualizar o internal_account_id se disponível
+                    if "account_id" in account_domain_mapping[account_id]:
+                        internal_account_id = account_domain_mapping[account_id]["account_id"]
+                        logger.info(f"Account ID interno determinado a partir do account_domain_mapping: {internal_account_id}")
+                elif isinstance(account_domain_mapping[account_id], str):
+                    domain_name = account_domain_mapping[account_id]
+                    logger.info(f"Domínio determinado a partir do account_domain_mapping (formato string): {domain_name}")
 
-                    # Obter o account_id interno
-                    internal_account_id = domain_manager.get_internal_account_id(account_id)
-                    if internal_account_id:
-                        logger.info(f"Account ID interno determinado: {internal_account_id}")
-                        # Adicionar o account_id interno aos metadados da mensagem normalizada
-                        normalized_message["internal_account_id"] = internal_account_id
-                    else:
-                        logger.warning(f"Nenhum account_id interno encontrado para account_id {account_id}")
-                except Exception as e:
-                    logger.error(f"Erro ao determinar domínio/account_id para account_id {account_id}: {str(e)}")
+            # 2. Se não encontrou, tentar o formato gerado pelo Odoo (accounts)
+            if domain_name == default_domain:  # Ainda usando o valor padrão
+                accounts = self.config.get("accounts", {})
+                if account_id in accounts and isinstance(accounts[account_id], dict) and "domain" in accounts[account_id]:
+                    domain_name = accounts[account_id]["domain"]
+                    logger.info(f"Domínio determinado a partir do formato Odoo (accounts): {domain_name}")
+                    # Também atualizar o internal_account_id se disponível
+                    if "account_id" in accounts[account_id]:
+                        internal_account_id = accounts[account_id]["account_id"]
+                        logger.info(f"Account ID interno determinado a partir do formato Odoo: {internal_account_id}")
 
-            # Processar a mensagem pelo HubCrew central (hub-and-spoke model)
-            # Não precisamos mais passar as crews funcionais, pois elas serão criadas dinamicamente
-            # pelo CrewFactory com base no domínio determinado para a conversa
-            hub_result = await self.hub_crew.process_message(
+            # 3. Se ainda não encontrou, tentar pelo inbox_id
+            if domain_name == default_domain and inbox_id:  # Ainda usando o valor padrão
+                # Primeiro tentar o formato esperado pelo código
+                inbox_domain_mapping = self.config.get("inbox_domain_mapping", {})
+                inbox_id_str = str(inbox_id)
+                if inbox_id_str in inbox_domain_mapping:
+                    domain_name = inbox_domain_mapping[inbox_id_str]
+                    logger.info(f"Domínio determinado a partir do inbox_domain_mapping: {domain_name}")
+                # Se não encontrou, tentar o formato gerado pelo Odoo
+                elif "inboxes" in self.config and inbox_id_str in self.config["inboxes"]:
+                    domain_name = self.config["inboxes"][inbox_id_str]
+                    logger.info(f"Domínio determinado a partir do formato Odoo (inboxes): {domain_name}")
+
+            logger.info(f"Usando domínio: {domain_name} para account_id: {account_id}, internal_account_id: {internal_account_id}")
+
+            # Adicionar o account_id interno aos metadados da mensagem normalizada
+            normalized_message["internal_account_id"] = internal_account_id
+
+            # Processar a mensagem pelo Hub
+            hub_result = await self.hub.process_message(
                 message=normalized_message,
                 conversation_id=conversation_id,
                 channel_type=channel_type,
                 domain_name=domain_name,  # Passamos o domínio determinado pelo account_id
                 account_id=internal_account_id  # Passamos o account_id interno
-                # Removemos o parâmetro functional_crews, pois agora é responsabilidade do HubCrew
-                # criar as crews dinamicamente usando o CrewFactory
             )
 
-            logger.info(f"Mensagem processada pelo HubCrew: {hub_result}")
+            logger.info(f"Mensagem processada pelo Hub: {hub_result}")
 
             # Extrair informações relevantes do resultado
             routing = hub_result.get("routing", {})
 
-            # Se temos uma resposta gerada pela crew funcional
-            if hub_result.get("response"):
-                response = hub_result["response"]
+            # Na nova arquitetura, o conteúdo da resposta está diretamente no hub_result
+            # ou em hub_result.response, dependendo da implementação
+            content = None
 
+            # Verificar se temos conteúdo diretamente no resultado
+            if "content" in hub_result:
+                content = hub_result["content"]
+                logger.info("Resposta encontrada diretamente no resultado do Hub")
+            # Verificar se temos uma resposta no formato antigo
+            elif hub_result.get("response") and "content" in hub_result["response"]:
+                content = hub_result["response"]["content"]
+                logger.info("Resposta encontrada no formato antigo (hub_result.response)")
+
+            # Se temos conteúdo, enviar para o Chatwoot
+            if content:
                 # Enviar a resposta para o Chatwoot
                 await self._send_reply_to_chatwoot(
                     conversation_id=conversation_id,
-                    content=response.get("content", ""),
+                    content=content,
                     private=False,
                     message_type="outgoing"
                 )
 
-                logger.info(f"Resposta enviada para Chatwoot: {response.get('content', '')[:100]}...")
+                logger.info(f"Resposta enviada para Chatwoot: {content[:100]}...")
 
                 return {
                     "status": "processed",
-                    "crew": routing.get("crew", "unknown"),
-                    "confidence": routing.get("confidence", 0),
+                    "crew": routing.get("crew_type", "unknown"),
+                    "channel": routing.get("channel_type", "unknown"),
+                    "domain": routing.get("domain_name", "unknown"),
+                    "account_id": routing.get("account_id", "unknown"),
                     "conversation_id": conversation_id,
                     "has_response": True
                 }
             else:
-                logger.warning("Nenhuma resposta gerada pela crew funcional")
+                logger.warning("Nenhuma resposta encontrada no resultado do Hub")
                 return {
                     "status": "processed_no_response",
-                    "crew": routing.get("crew", "unknown"),
-                    "confidence": routing.get("confidence", 0),
+                    "crew": routing.get("crew_type", "unknown"),
+                    "channel": routing.get("channel_type", "unknown"),
+                    "domain": routing.get("domain_name", "unknown"),
+                    "account_id": routing.get("account_id", "unknown"),
                     "conversation_id": conversation_id,
                     "has_response": False
                 }
@@ -457,7 +480,9 @@ class ChatwootWebhookHandler:
         from src.core.domain.domain_registry import get_domain_registry
 
         domain_registry = get_domain_registry()
-        domain_manager = DomainManager(redis_client=None, default_domain="cosmetics")
+        # Obter o domínio padrão da configuração ou usar "default"
+        default_domain = self.config.get("default_domain", "default")
+        domain_manager = DomainManager(redis_client=None, default_domain=default_domain)
 
         # 1. Primeiro, tentar determinar o domínio a partir do account_id
         if account_id:
@@ -515,13 +540,9 @@ class ChatwootWebhookHandler:
         # Registrar a nova conversa no sistema de memória através do HubCrew
         # Agora passando o domínio já determinado
         try:
-            # O HubCrew é o ponto central e tem acesso ao sistema de memória
-            self.hub_crew.register_conversation(
-                conversation_id=conversation_id,
-                customer_id=contact_id,
-                domain_name=domain_name  # Passamos o domínio já determinado
-            )
-            logger.info(f"Conversa {conversation_id} inicializada via HubCrew com domínio: {domain_name or 'padrão'}")
+            # O Hub é o ponto central
+            # Na nova arquitetura, não precisamos registrar a conversa explicitamente
+            logger.info(f"Conversa {conversation_id} inicializada com domínio: {domain_name or 'padrão'}")
         except Exception as e:
             logger.error(f"Erro ao inicializar conversa: {str(e)}")
 
@@ -532,7 +553,7 @@ class ChatwootWebhookHandler:
             "has_response": False
         }
 
-    def _process_conversation_status_changed(self, webhook_data: Dict[str, Any]) -> Dict[str, Any]:
+    async def _process_conversation_status_changed(self, webhook_data: Dict[str, Any]) -> Dict[str, Any]:
         """
         Processa um evento de status de conversa alterado.
 
@@ -552,9 +573,9 @@ class ChatwootWebhookHandler:
         if status == "resolved":
             # Registra o encerramento da conversa via HubCrew
             try:
-                # O HubCrew é o ponto central e tem acesso ao sistema de memória
-                self.hub_crew.finalize_conversation(conversation_id)
-                logger.info(f"Conversa {conversation_id} finalizada via HubCrew")
+                # O Hub é o ponto central
+                await self.hub.finalize_conversation(conversation_id)
+                logger.info(f"Conversa {conversation_id} finalizada via Hub")
             except Exception as e:
                     logger.error(f"Erro ao finalizar conversa na memória: {str(e)}")
 
@@ -578,20 +599,110 @@ class ChatwootWebhookHandler:
             Dict[str, Any]: Resposta da API do Chatwoot
         """
         try:
-            # Envia a resposta para o Chatwoot
-            response = await self.chatwoot_client.send_message(
-                conversation_id=conversation_id,
-                content=content,
-                private=private,
-                message_type=message_type
-            )
+            # Converte o conversation_id para inteiro, conforme esperado pelo ChatwootClient
+            try:
+                conv_id = int(conversation_id)
+            except ValueError:
+                logger.warning(f"Erro ao converter conversation_id para inteiro: {conversation_id}")
+                conv_id = int(conversation_id.strip())
+
+            # Obter o account_id do webhook ou usar um valor padrão
+            account_id = 1  # Valor padrão
+
+            # Tentar obter o account_id das configurações
+            if hasattr(self, 'config') and self.config:
+                account_id = self.config.get('chatwoot_account_id', account_id)
+
+            logger.info(f"Usando account_id: {account_id} para enviar mensagem")
+
+            # Verificar se o método send_message é assíncrono ou síncrono
+            # Alguns clientes Chatwoot têm implementação assíncrona, outros síncrona
+            if hasattr(self.chatwoot_client.send_message, "__await__"):
+                # Método assíncrono
+                logger.info("Usando método assíncrono para enviar mensagem")
+                response = await self.chatwoot_client.send_message(
+                    account_id=account_id,
+                    conversation_id=conv_id,
+                    message=content
+                )
+            else:
+                # Método síncrono
+                logger.info("Usando método síncrono para enviar mensagem")
+                # Sempre usar o account_id para garantir que a URL esteja correta
+                response = self.chatwoot_client.send_message(
+                    account_id=account_id,
+                    conversation_id=conv_id,
+                    message=content
+                )
 
             logger.info(f"Resposta enviada para conversa {conversation_id}")
             return response
         except Exception as e:
             logger.error(f"Erro ao enviar resposta para Chatwoot: {str(e)}")
             logger.error(traceback.format_exc())
-            raise
+
+            # Tentar com o parâmetro 'content' em vez de 'message'
+            try:
+                logger.info("Tentando enviar mensagem com parâmetro 'content'")
+
+                # Obter o account_id do webhook ou usar um valor padrão
+                account_id = 1  # Valor padrão
+
+                # Tentar obter o account_id das configurações
+                if hasattr(self, 'config') and self.config:
+                    account_id = self.config.get('chatwoot_account_id', account_id)
+
+                # Verificar se o método é assíncrono
+                if hasattr(self.chatwoot_client.send_message, "__await__"):
+                    # Sempre usar account_id para garantir que a URL esteja correta
+                    response = await self.chatwoot_client.send_message(
+                        account_id=account_id,
+                        conversation_id=conv_id,
+                        content=content
+                    )
+                else:
+                    # Sempre usar account_id para garantir que a URL esteja correta
+                    response = self.chatwoot_client.send_message(
+                        account_id=account_id,
+                        conversation_id=conv_id,
+                        content=content
+                    )
+                logger.info("Mensagem enviada com sucesso usando parâmetro 'content'")
+                return response
+            except Exception as e2:
+                logger.error(f"Erro ao enviar resposta com parâmetro 'content': {str(e2)}")
+                logger.error(traceback.format_exc())
+
+                # Última tentativa: usar diretamente o _make_request com o formato correto da URL
+                try:
+                    logger.info("Tentativa final: usando _make_request diretamente com o formato correto da URL")
+
+                    # Obter o account_id do webhook ou usar um valor padrão
+                    account_id = 1  # Valor padrão
+
+                    # Tentar obter o account_id das configurações
+                    if hasattr(self, 'config') and self.config:
+                        account_id = self.config.get('chatwoot_account_id', account_id)
+
+                    # Usar o formato correto da URL conforme a documentação do Chatwoot
+                    endpoint = f"accounts/{account_id}/conversations/{conv_id}/messages"
+                    data = {"content": content}
+
+                    logger.info(f"Tentando enviar mensagem para endpoint: {endpoint}")
+
+                    if hasattr(self.chatwoot_client, "_make_request"):
+                        if hasattr(self.chatwoot_client._make_request, "__await__"):
+                            response = await self.chatwoot_client._make_request("POST", endpoint, data=data)
+                        else:
+                            response = self.chatwoot_client._make_request("POST", endpoint, data=data)
+                        logger.info("Mensagem enviada com sucesso usando _make_request")
+                        return response
+                    else:
+                        raise ValueError("Cliente Chatwoot não possui método _make_request")
+                except Exception as e3:
+                    logger.error(f"Todas as tentativas de envio falharam: {str(e3)}")
+                    logger.error(traceback.format_exc())
+                    raise
 
     def _process_contact_updated(self, webhook_data: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -800,15 +911,12 @@ class ChatwootWebhookHandler:
 
             logger.info(f"Processando credenciais para account_id: {account_id}")
 
-            # Verificar se o HubCrew está disponível
-            if not self.hub_crew:
-                logger.error("HubCrew não inicializado")
-                return {"success": False, "error": "HubCrew não inicializado"}
+            # Na nova arquitetura, usamos o Hub em vez do HubCrew
+            if not self.hub:
+                logger.error("Hub não inicializado")
+                return {"success": False, "error": "Hub não inicializado"}
 
-            # Verificar se o DomainManager está disponível
-            if not hasattr(self.hub_crew, 'domain_manager') or not self.hub_crew.domain_manager:
-                logger.error("DomainManager não disponível no HubCrew")
-                return {"success": False, "error": "DomainManager não disponível"}
+            # Não precisamos mais verificar o DomainManager, pois o Hub gerencia isso internamente
 
             # Extrair informações das credenciais
             domain = credentials.get("domain", "default")
@@ -1043,11 +1151,36 @@ class ChatwootWebhookHandler:
                 creds_config["credentials"][f"ml_token_{account_id}"] = encrypted_token
                 logger.info(f"Mercado Livre access token criptografado salvo para {account_id}")
 
-            # Salvar configuração atualizada
+            # Tentar salvar no microserviço de configuração primeiro
+            try:
+                from src.utils.config_service_client import config_service
+
+                # Verificar se o serviço está saudável
+                if config_service.health_check():
+                    logger.info(f"Serviço de configuração está saudável, tentando salvar configurações")
+
+                    # Converter configurações para YAML
+                    config_yaml = yaml.dump(config, default_flow_style=False)
+                    creds_yaml = yaml.dump(creds_config, default_flow_style=False)
+
+                    # Salvar configuração no microserviço
+                    config_success = config_service.update_config(account_id, domain, "config", config_yaml)
+                    creds_success = config_service.update_config(account_id, domain, "credentials", creds_yaml)
+
+                    if config_success and creds_success:
+                        logger.info(f"Configurações salvas com sucesso no microserviço")
+                    else:
+                        logger.warning(f"Erro ao salvar configurações no microserviço. Usando fallback para arquivos locais.")
+                else:
+                    logger.warning(f"Serviço de configuração não está disponível. Usando fallback para arquivos locais.")
+            except Exception as e:
+                logger.error(f"Erro ao salvar no microserviço: {str(e)}. Usando fallback para arquivos locais.")
+
+            # Salvar configuração atualizada localmente como fallback
             with open(config_path, 'w') as f:
                 yaml.dump(config, f, default_flow_style=False)
 
-            # Salvar credenciais atualizadas
+            # Salvar credenciais atualizadas localmente como fallback
             with open(credentials_path, 'w') as f:
                 yaml.dump(creds_config, f, default_flow_style=False)
 

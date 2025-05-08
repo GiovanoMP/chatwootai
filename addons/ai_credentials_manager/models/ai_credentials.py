@@ -21,6 +21,15 @@ class AISystemCredentials(models.Model):
     _description = 'Credenciais do Sistema de IA'
     _inherit = ['mail.thread', 'mail.activity.mixin']
 
+    def open_config_viewer(self):
+        """Abre o visualizador de configurações em uma nova aba."""
+        base_url = self.env['ir.config_parameter'].sudo().get_param('config_viewer.url', 'http://localhost:8080')
+        return {
+            'type': 'ir.actions.act_url',
+            'url': f"{base_url}?tenant_id={self.account_id}",
+            'target': 'new',
+        }
+
     def _get_encryption_key(self):
         """Obtém a chave de criptografia do parâmetro do sistema."""
         if not HAS_CRYPTOGRAPHY:
@@ -157,6 +166,9 @@ class AISystemCredentials(models.Model):
     last_accessed = fields.Datetime('Último Acesso', readonly=True)
     notes = fields.Text('Notas', help="Notas adicionais sobre estas credenciais")
 
+    # Mapeamentos de canal relacionados
+    channel_mapping_ids = fields.One2many('ai.channel.mapping', 'credential_id', string='Mapeamentos de Canal')
+
     # Campos para status de sincronização
     sync_status = fields.Selection([
         ('not_synced', 'Não Sincronizado'),
@@ -166,9 +178,17 @@ class AISystemCredentials(models.Model):
     last_sync = fields.Datetime('Última Sincronização', readonly=True)
     error_message = fields.Text('Mensagem de Erro', readonly=True)
 
-    # URL do sistema de IA
+    # URLs dos serviços
     ai_system_url = fields.Char('URL do Sistema de IA', tracking=True,
                               help="URL base do sistema de IA (ex: https://ai-system.example.com)")
+    config_service_url = fields.Char('URL do Serviço de Configuração', tracking=True,
+                                   help="URL do serviço de configuração (ex: http://localhost:8002)")
+    config_service_api_key = fields.Char('Chave de API do Serviço de Configuração', tracking=True,
+                                       help="Chave de API para autenticação no serviço de configuração")
+    vectorization_service_url = fields.Char('URL do Serviço de Vetorização', tracking=True,
+                                          help="URL do serviço de vetorização (ex: http://localhost:8003)")
+    vectorization_service_api_key = fields.Char('Chave de API do Serviço de Vetorização', tracking=True,
+                                              help="Chave de API para autenticação no serviço de vetorização")
     use_ngrok = fields.Boolean('Usar Ngrok', default=False, tracking=True,
                              help="Ativar para usar Ngrok em ambiente de desenvolvimento")
     ngrok_url = fields.Char('URL Ngrok', tracking=True,
@@ -382,16 +402,96 @@ class AISystemCredentials(models.Model):
                 }
             }
 
-    def get_ai_system_url(self):
-        """Obtém a URL do sistema de IA, considerando Ngrok se ativado."""
+    def get_ai_system_url(self, service_type='ai', return_api_key=False):
+        """
+        Obtém a URL do serviço especificado, considerando Ngrok se ativado.
+
+        Args:
+            service_type: Tipo de serviço ('ai', 'config', 'vectorization')
+            return_api_key: Se True, retorna uma tupla (url, api_key)
+
+        Returns:
+            URL do serviço ou None se não configurada
+            Se return_api_key=True, retorna uma tupla (url, api_key)
+        """
         self.ensure_one()
+        _logger.info(f"Obtendo URL para o serviço: {service_type}")
+
+        url = None
+        api_key = None
+
+        # Se Ngrok estiver ativado, usar a URL do Ngrok para todos os serviços
         if self.use_ngrok and self.ngrok_url:
-            return self.ngrok_url.rstrip('/')
-        elif self.ai_system_url:
-            return self.ai_system_url.rstrip('/')
-        else:
-            # Não usar fallback - exigir que a URL esteja configurada
-            return None
+            _logger.info(f"Usando URL do Ngrok: {self.ngrok_url}")
+            url = self.ngrok_url.rstrip('/')
+            # Ainda precisamos obter a chave de API correta para o serviço
+            if service_type == 'config':
+                api_key = self.config_service_api_key
+            elif service_type == 'vectorization':
+                api_key = self.vectorization_service_api_key
+        # Caso contrário, usar a URL específica do serviço
+        elif service_type == 'config' and self.config_service_url:
+            _logger.info(f"Usando URL do serviço de configuração: {self.config_service_url}")
+            url = self.config_service_url.rstrip('/')
+            api_key = self.config_service_api_key
+        elif service_type == 'vectorization' and self.vectorization_service_url:
+            _logger.info(f"Usando URL do serviço de vetorização: {self.vectorization_service_url}")
+            url = self.vectorization_service_url.rstrip('/')
+            api_key = self.vectorization_service_api_key
+        elif service_type == 'ai' and self.ai_system_url:
+            _logger.info(f"Usando URL do sistema de IA: {self.ai_system_url}")
+            url = self.ai_system_url.rstrip('/')
+            # Sistema de IA não tem chave de API específica
+
+        # Se não encontrou URL, verificar se há uma URL de fallback nos parâmetros do sistema
+        if not url:
+            _logger.info("Verificando URLs de fallback nos parâmetros do sistema")
+            IrConfigParam = self.env['ir.config_parameter'].sudo()
+
+            if service_type == 'config':
+                # Verificar o novo parâmetro
+                fallback_url = IrConfigParam.get_param('config_service.url', '')
+                if fallback_url:
+                    _logger.info(f"Usando URL de fallback do serviço de configuração: {fallback_url}")
+                    url = fallback_url.rstrip('/')
+                    # Obter a chave de API do parâmetro do sistema
+                    api_key = IrConfigParam.get_param('config_service.api_key', '')
+                    if not api_key:
+                        api_key = IrConfigParam.get_param('config_service_api_key', 'development-api-key')
+
+                # Verificar o parâmetro antigo
+                if not url:
+                    old_fallback_url = IrConfigParam.get_param('config_service_url', '')
+                    if old_fallback_url:
+                        _logger.info(f"Usando URL de fallback antiga do serviço de configuração: {old_fallback_url}")
+                        url = old_fallback_url.rstrip('/')
+                        # Obter a chave de API do parâmetro do sistema
+                        api_key = IrConfigParam.get_param('config_service_api_key', 'development-api-key')
+            elif service_type == 'vectorization':
+                fallback_url = IrConfigParam.get_param('vectorization_service.url', '')
+                if fallback_url:
+                    _logger.info(f"Usando URL de fallback do serviço de vetorização: {fallback_url}")
+                    url = fallback_url.rstrip('/')
+                    # Obter a chave de API do parâmetro do sistema
+                    api_key = IrConfigParam.get_param('vectorization_service.api_key', 'development-api-key')
+            elif service_type == 'ai':
+                fallback_url = IrConfigParam.get_param('ai_system.url', '')
+                if fallback_url:
+                    _logger.info(f"Usando URL de fallback do sistema de IA: {fallback_url}")
+                    url = fallback_url.rstrip('/')
+                    # Sistema de IA não tem chave de API específica
+
+        # Não usar fallback - exigir que a URL esteja configurada
+        if not url:
+            _logger.warning(f"Nenhuma URL encontrada para o serviço: {service_type}")
+            return (None, None) if return_api_key else None
+
+        # Se não encontrou chave de API, usar a padrão
+        if not api_key and (service_type == 'config' or service_type == 'vectorization'):
+            _logger.warning(f"Nenhuma chave de API encontrada para o serviço: {service_type}, usando padrão")
+            api_key = 'development-api-key'
+
+        return (url, api_key) if return_api_key else url
 
     # Método para sincronizar credenciais com arquivos YAML (legado)
     def action_sync_to_yaml(self):
@@ -510,15 +610,37 @@ class AISystemCredentials(models.Model):
             import requests
             import json
 
-            # Obter URL do webhook
-            webhook_url = self.get_ai_system_url()
+            # Obter URL e chave de API do serviço de configuração
+            _logger.info("Obtendo URL e chave de API do serviço de configuração")
+            webhook_url, api_key = self.get_ai_system_url(service_type='config', return_api_key=True)
+            _logger.info(f"URL obtida: {webhook_url}")
+
+            # Verificar se a URL está configurada
             if not webhook_url:
                 # Falhar de forma segura se a URL não estiver configurada
-                raise UserError(_('URL do sistema de IA não configurada. Configure a URL do sistema de IA ou do Ngrok.'))
+                _logger.error("URL do serviço de configuração não configurada")
+                raise UserError(_('URL do serviço de configuração não configurada. Configure a URL do serviço de configuração ou do Ngrok.'))
 
-            # Garantir que a URL termina com /webhook
-            if not webhook_url.endswith('/webhook'):
-                webhook_url = f"{webhook_url}/webhook"
+            # Verificar se a URL é válida
+            if not webhook_url.startswith('http'):
+                _logger.error(f"URL do serviço de configuração inválida: {webhook_url}")
+                raise UserError(_('URL do serviço de configuração inválida. A URL deve começar com http:// ou https://.'))
+
+            # Garantir que a URL termina com /odoo-webhook/
+            if not webhook_url.endswith('/odoo-webhook/'):
+                if webhook_url.endswith('/odoo-webhook'):
+                    webhook_url = f"{webhook_url}/"
+                else:
+                    webhook_url = f"{webhook_url}/odoo-webhook/"
+
+            _logger.info(f"URL do webhook: {webhook_url}")
+
+            # Verificar se a chave de API está configurada
+            if not api_key:
+                _logger.warning("Chave de API do serviço de configuração não configurada, usando padrão")
+                api_key = 'development-api-key'
+            else:
+                _logger.info(f"Usando chave de API configurada: {api_key[:5]}...")
 
             # Preparar payload
             # Descriptografar senha para enviar ao webhook
@@ -570,7 +692,14 @@ class AISystemCredentials(models.Model):
             if self.mercadolivre_access_token:
                 payload['credentials']['mercado_livre_access_token'] = self.mercadolivre_access_token
 
-            # Gerar assinatura HMAC para o payload
+            # Inicializar headers com a chave de API
+            headers = {
+                'Content-Type': 'application/json',
+                'X-API-Key': api_key
+            }
+            _logger.info(f"Usando chave de API para autenticação: {api_key[:5]}...")
+
+            # Gerar assinatura HMAC para o payload (segurança adicional)
             webhook_secret = self.env['ir.config_parameter'].sudo().get_param('webhook_secret_key', '')
             if webhook_secret:
                 import hmac
@@ -588,27 +717,22 @@ class AISystemCredentials(models.Model):
                 ).hexdigest()
 
                 # Adicionar a assinatura ao header
-                headers = {
-                    'Content-Type': 'application/json',
-                    'X-Webhook-Signature': signature
-                }
+                headers['X-Webhook-Signature'] = signature
                 _logger.info(f"Assinatura HMAC gerada para o webhook: {signature[:10]}...")
             else:
-                headers = {'Content-Type': 'application/json'}
                 _logger.warning("Nenhuma chave secreta configurada para assinatura de webhook")
 
-            # Enviar requisição
+            # Enviar requisição com timeout maior
+            _logger.info(f"Enviando requisição para {webhook_url} com timeout de 60 segundos")
             response = requests.post(
                 webhook_url,
                 headers=headers,
                 json=payload,
-                timeout=30
+                timeout=60
             )
 
             # Verificar resposta
             if response.status_code == 200:
-                result = response.json()
-
                 # Registrar sincronização bem-sucedida
                 self.env['ai.credentials.access.log'].sudo().create({
                     'credential_id': self.id,
@@ -625,12 +749,107 @@ class AISystemCredentials(models.Model):
                     'error_message': False
                 })
 
+                # Sincronizar mapeamentos de canal associados a esta credencial
+                success_count = 0
+                error_count = 0
+
+                for mapping in self.channel_mapping_ids:
+                    try:
+                        # Preparar payload para o mapeamento
+                        mapping_payload = {
+                            'source': 'channel_mapping',
+                            'event': 'mapping_sync',
+                            'account_id': self.account_id,
+                            'token': self.token,
+                            'mapping': {
+                                'chatwoot_account_id': mapping.chatwoot_account_id,
+                                'chatwoot_inbox_id': mapping.chatwoot_inbox_id if mapping.chatwoot_inbox_id else None,
+                                'internal_account_id': mapping.internal_account_id,
+                                'domain': mapping.get_domain(),
+                                'is_fallback': mapping.is_fallback,
+                                'sequence': mapping.sequence,
+                                'special_whatsapp_numbers': []
+                            }
+                        }
+
+                        # Adicionar números especiais de WhatsApp
+                        for field in ['special_whatsapp_number1', 'special_whatsapp_number2', 'special_whatsapp_number3']:
+                            number = getattr(mapping, field)
+                            if number:
+                                mapping_payload['mapping']['special_whatsapp_numbers'].append({
+                                    'number': number,
+                                    'crew': mapping.special_crew
+                                })
+
+                        # Gerar assinatura HMAC para o payload
+                        if webhook_secret:
+                            # Converter o payload para string ordenada
+                            mapping_payload_str = json.dumps(mapping_payload, sort_keys=True)
+
+                            # Gerar a assinatura HMAC
+                            mapping_signature = hmac.new(
+                                webhook_secret.encode(),
+                                mapping_payload_str.encode(),
+                                hashlib.sha256
+                            ).hexdigest()
+
+                            # Adicionar a assinatura ao header
+                            mapping_headers = {
+                                'Content-Type': 'application/json',
+                                'X-Webhook-Signature': mapping_signature,
+                                'X-API-Key': api_key  # Adicionar a chave de API
+                            }
+                        else:
+                            mapping_headers = {
+                                'Content-Type': 'application/json',
+                                'X-API-Key': api_key  # Adicionar a chave de API
+                            }
+
+                        # Enviar requisição para o mapeamento com timeout maior
+                        _logger.info(f"Enviando requisição de mapeamento para {webhook_url} com timeout de 60 segundos")
+                        mapping_response = requests.post(
+                            webhook_url,
+                            headers=mapping_headers,
+                            json=mapping_payload,
+                            timeout=60
+                        )
+
+                        # Verificar resposta
+                        if mapping_response.status_code == 200:
+                            # Atualizar status de sincronização do mapeamento
+                            mapping.write({
+                                'sync_status': 'synced',
+                                'last_sync': fields.Datetime.now(),
+                                'error_message': False
+                            })
+                            success_count += 1
+                        else:
+                            # Falha na requisição
+                            error_msg = f"Erro HTTP {mapping_response.status_code}: {mapping_response.text}"
+                            mapping.write({
+                                'sync_status': 'error',
+                                'error_message': error_msg
+                            })
+                            error_count += 1
+                    except Exception as e:
+                        # Falha na sincronização do mapeamento
+                        mapping.write({
+                            'sync_status': 'error',
+                            'error_message': str(e)
+                        })
+                        error_count += 1
+
+                # Mensagem de sucesso com informações sobre os mapeamentos
+                message = _('As credenciais foram sincronizadas com o serviço de configuração.')
+                if success_count > 0 or error_count > 0:
+                    message += _(' Mapeamentos de canal: %s sincronizados com sucesso, %s falhas.') % (success_count, error_count)
+
                 return {
                     'type': 'ir.actions.client',
                     'tag': 'display_notification',
                     'params': {
                         'title': _('Sincronização bem-sucedida'),
-                        'message': _('As credenciais foram sincronizadas com o sistema de IA.'),
+                        'message': message,
                         'sticky': False,
                         'type': 'success',
                     }

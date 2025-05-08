@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Menu Principal -->
+    <menuitem id="menu_business_rules_root"
+              name="Regras de Negócio"
+              sequence="80"/>
+    
+    <!-- Submenu para Regras de Negócio -->
+    <menuitem id="menu_business_rules"
+              name="Regras de Negócio"
+              parent="menu_business_rules_root"
+              action="action_business_rules"
+              sequence="10"/>
+    
+    <!-- Submenu para Regras Permanentes -->
+    <menuitem id="menu_business_rule_item"
+              name="Regras Permanentes"
+              parent="menu_business_rules_root"
+              action="action_business_rule_item"
+              sequence="20"/>
+    
+    <!-- Submenu para Regras Temporárias -->
+    <menuitem id="menu_business_temporary_rule"
+              name="Regras Temporárias"
+              parent="menu_business_rules_root"
+              action="action_business_temporary_rule"
+              sequence="30"/>
+</odoo>

@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+
+{% block title %}Erro - Visualizador de Configurações{% endblock %}
+
+{% block content %}
+<div class="alert alert-danger">
+    <h4 class="alert-heading">Erro!</h4>
+    <p>{{ message }}</p>
+    <hr>
+    <p class="mb-0">
+        <a href="/" class="btn btn-outline-danger">
+            <i class="bi bi-arrow-left"></i> Voltar para a página inicial
+        </a>
+    </p>
+</div>
+{% endblock %}

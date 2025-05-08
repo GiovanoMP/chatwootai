@@ -22,6 +22,7 @@ class AICredentialsAccessLog(models.Model):
         ('get_credentials', 'Obtenção de Credenciais'),
         ('sync_to_webhook', 'Sincronização com Webhook'),
         ('sync_to_yaml', 'Sincronização com YAML'),
+        ('sync_mapping', 'Sincronização de Mapeamento de Canal'),
     ], string='Operação', default='read')
     success = fields.Boolean('Sucesso', default=True)
     error_message = fields.Text('Mensagem de Erro')

@@ -2,7 +2,54 @@
 
 Este guia fornece instruções passo a passo para inicializar o sistema integrado Odoo-AI, configurar o Ngrok para expor o servidor local, e monitorar os logs para verificar o funcionamento correto do sistema.
 
-## Visão Geral do Processo
+
+# Simulador
+./start_simple_simulator.sh 
+
+# Abrir em:
+ http://localhost:8080/simple_simulator.html
+
+
+# Visualizador de Credenciais (para desenvolvimento)
+http://192.168.0.5:8080
+
+cd config-viewer
+./run.sh 
+
+#SENHA : Config@Viewer2025!
+
+# Visualizador de Credenciais (em produção)
+cd config-viewer
+docker-compose up -d
+
+## Serciço de configuração com logs
+ cd config-service && python -m uvicorn app.main:app --host 0.0.0.0 --port 8002 --log-level debug
+
+# Novo monitorrador integrado de logs
+
+SCRIPT de logs central: (deve-se continuar reiniciando o servidor)
+cd /home/giovano/Projetos/Chatwoot\ V4 && ./scripts/reiniciar_tudo.sh 
+
+Para reiniciar apenas o serviço de configuração e o visualizador:
+cd /home/giovano/Projetos/Chatwoot\ V4 && ./scripts/restart_config_services.sh
+
+
+
+Para monitorar apenas os logs do serviço de configuração e do visualizador:
+cd /home/giovano/Projetos/Chatwoot\ V4/config-service && ./scripts/monitor_logs.sh
+
+Para iniciar o servidor e monitorar os logs em um único comando:
+
+```bash
+# Método rápido: reinicia o servidor e inicia o monitoramento de logs
+cd /home/giovano/Projetos/Chatwoot\ V4 && ./scripts/restart_and_monitor.sh
+
+# Novo Metodo NGROK
+ngrok http 8001
+
+> **NOTA**: Este script automatiza a reinicialização do servidor e o monitoramento de logs em um único terminal. Se o comando `screen` estiver instalado, o servidor é executado em uma sessão screen em segundo plano. Se não estiver instalado, o script oferece a opção de instalá-lo ou continuar sem ele.
+
+## Visão Geral do Processo Detalhado
 
 1. Configurar o sistema de logs
 2. Iniciar o servidor unificado
@@ -16,10 +63,10 @@ Este guia fornece instruções passo a passo para inicializar o sistema integrad
 
 ### Terminal 1: Configurar Logs e Iniciar Servidor Unificado
 
-```bash
+
 # Passo 1-2: Configurar logs e iniciar servidor unificado
 cd /home/giovano/Projetos/Chatwoot\ V4 && python scripts/setup_logging.py && ./scripts/start_server.sh
-```
+
 
 > **IMPORTANTE**: Use o script `start_server.sh` para iniciar o servidor unificado. Este script garante que todos os componentes sejam inicializados corretamente.
 
@@ -39,8 +86,7 @@ cd /home/giovano/Projetos/Chatwoot\ V4 && ./scripts/start_ngrok.sh
 
 ```bash
 # Passo 4: Monitorar os logs do servidor unificado
-cd /home/giovano/Projetos/Chatwoot\ V4 && python scripts/monitor_logs.py --all
-
+cd /home/giovano/Projetos/Chatwoot\ V4 && ./scripts/restart_and_monitor.sh
 # Alternativas:
 # Monitorar logs específicos:
 # cd /home/giovano/Projetos/Chatwoot\ V4 && python scripts/monitor_logs.py --server-log logs/server.log --webhook-log logs/webhook.log
@@ -61,8 +107,9 @@ cd /home/giovano/Projetos/Chatwoot\ V4 && python scripts/monitor_logs.py --all
 ssh root@srv692745.hstgr.cloud
 
 # Após conectar na VPS, execute:
-docker exec webhook-proxy sed -i "s|FORWARD_URL *= *[\"'][^\"']*[\"']|FORWARD_URL = 'https://sua-url-do-ngrok.ngrok-free.app/webhook'|g" /app/simple_webhook.py && docker exec webhook-proxy grep FORWARD_URL /app/simple_webhook.py && docker restart webhook-proxy
-```
+
+docker exec webhook-proxy sed -i "s|FORWARD_URL *= *[\"'][^\"']*[\"']|FORWARD_URL = 'https://acfd-2804-2610-6721-6300-cbb3-1fd2-1758-5f7.ngrok-free.app/webhook'|g" /app/simple_webhook.py && docker exec webhook-proxy grep FORWARD_URL /app/simple_webhook.py && docker restart webhook-proxy
+
 
 > **IMPORTANTE**: Substitua `https://sua-url-do-ngrok.ngrok-free.app/webhook` pela URL real gerada pelo Ngrok. Note que você deve adicionar `/webhook` ao final da URL, pois o script `start_ngrok.sh` não adiciona automaticamente (diferente do script antigo).
 
@@ -133,6 +180,37 @@ cd /home/giovano/Projetos/Chatwoot\ V4 && curl "http://localhost:8001/api/v1/bus
 ```
 
 ## Solução de Problemas Comuns
+
+### Reinicialização Rápida do Sistema
+
+Se você precisar reiniciar o servidor e monitorar os logs rapidamente:
+
+```bash
+cd /home/giovano/Projetos/Chatwoot\ V4 && ./scripts/restart_and_monitor.sh
+```
+
+Este script automaticamente:
+1. Encerra qualquer instância do servidor em execução
+2. Configura o sistema de logs
+3. Verifica se o `screen` está instalado e oferece a opção de instalá-lo se não estiver
+4. Inicia o servidor (em uma sessão screen ou no terminal atual, dependendo da disponibilidade do `screen`)
+5. Inicia o monitoramento de logs
+
+#### Se o screen estiver instalado:
+
+Para acessar o servidor em execução na sessão screen:
+```bash
+screen -r server_session
+```
+
+Para sair da sessão screen sem encerrar o servidor: pressione `Ctrl+A, D`
+
+#### Se o screen não estiver instalado:
+
+O servidor será executado diretamente no terminal atual. Para monitorar logs, você precisará abrir outro terminal e executar:
+```bash
+cd /home/giovano/Projetos/Chatwoot\ V4 && python scripts/monitor_logs.py --all
+```
 
 ### Problema: O servidor unificado não inicia
 

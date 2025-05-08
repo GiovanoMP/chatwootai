@@ -23,24 +23,24 @@ services:
     networks:
       - network_public ## Nome da rede interna
     environment:
-      - CHATWOOT_HUB_URL=https://efetivia.com.br #
-      - INSTALLATION_NAME=Chatwoot ## Nome da empresa
+      - CHATWOOT_HUB_URL=https://sprintia.com.br #
+      - INSTALLATION_NAME=Sprintia ## Nome da empresa
       - NODE_ENV=production
       - RAILS_ENV=production
       - INSTALLATION_ENV=docker
-      - SECRET_KEY_BASE=123458bb7ef6402f6a8bcf5d3be54321 ## Key aleatória gerada aleatóriamente
-      - FRONTEND_URL=https://chatwoot.efetivia.com.br ## Url do Chatwoot
+      - SECRET_KEY_BASE=a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2 ## Key aleatória gerada aleatóriamente
+      - FRONTEND_URL=https://chat.sprintia.com.br ## Url do Chatwoot
       - DEFAULT_LOCALE=pt_BR
       - FORCE_SSL=true
       - ENABLE_ACCOUNT_SIGNUP=true ## false = Desativar novas inscrições no inicio | true = Ativar novas inscrições no inicio
       - ENABLE_DISALLOW_NON_BUSINESS_EMAIL=false ## Permitir e-mails pessoais (Gmail, Hotmail, etc.)
       - ENABLE_DOMAIN_FILTER=false ## Desativar completamente o filtro de domínio
       - DISALLOWED_BUSINESS_EMAIL_DOMAINS=[] ## Lista vazia de domínios bloqueados
-      - ALLOWED_BUSINESS_EMAIL_DOMAINS=gmail.com,hotmail.com,outlook.com,yahoo.com,efetivia.com.br ## Permitir explicitamente domínios comuns
+      - ALLOWED_BUSINESS_EMAIL_DOMAINS=gmail.com,hotmail.com,outlook.com,yahoo.com,sprintia.com.br ## Permitir explicitamente domínios comuns
       - REDIS_URL=redis://redis:6379
       - POSTGRES_HOST=postgres
       - POSTGRES_USERNAME=postgres
-      - POSTGRES_PASSWORD=Mfcd62!!Mfcd62!! ## Senha do postgres
+      - POSTGRES_PASSWORD=SprintiaDB2024! ## Senha do postgres
       - POSTGRES_DATABASE=chatwoot
       - ACTIVE_STORAGE_SERVICE=local
       - RAILS_LOG_TO_STDOUT=true
@@ -53,16 +53,16 @@ services:
       - ENABLE_RACK_ATTACK=false
       - WEBHOOKS_TRIGGER_TIMEOUT=40
       # Servidor de Email Gmail
-      - MAILER_SENDER_EMAIL=Chatwoot <giovano.neosquad@gmail.com>
-      - SMTP_DOMAIN=gmail.com
-      - SMTP_ADDRESS=smtp.gmail.com
+      - MAILER_SENDER_EMAIL=Chatwoot <giovano@sprintia.com.br>
+      - SMTP_DOMAIN=sprintia.com.br
+      - SMTP_ADDRESS=smtp.hostinger.com
       - SMTP_PORT=587
-      - SMTP_USERNAME=giovano.neosquad@gmail.com
-      - SMTP_PASSWORD=hfgtocadmssppylg ## Senha de app do Gmail
+      - SMTP_USERNAME=giovano@sprintia.com.br
+      - SMTP_PASSWORD=SuaSenhaDeEmailAqui ## Senha do email
       - SMTP_AUTHENTICATION=login
       - SMTP_ENABLE_STARTTLS_AUTO=true
       - SMTP_OPENSSL_VERIFY_MODE=peer
-      - MAILER_INBOUND_EMAIL_DOMAIN=giovano.neosquad@gmail.com
+      - MAILER_INBOUND_EMAIL_DOMAIN=giovano@sprintia.com.br
     deploy:
       mode: replicated
       replicas: 1
@@ -75,13 +75,13 @@ services:
           memory: 2048M
       labels:
         - traefik.enable=true
-        - traefik.http.routers.chatwoot_app.rule=Host(`chatwoot.efetivia.com.br`)
+        - traefik.http.routers.chatwoot_app.rule=Host(`chat.sprintia.com.br`)
         - traefik.http.routers.chatwoot_app.entrypoints=websecure
         - traefik.http.routers.chatwoot_app.tls.certresolver=letsencryptresolver
         - traefik.http.routers.chatwoot_app.priority=1
         - traefik.http.routers.chatwoot_app.service=chatwoot_app
-        - traefik.http.services.chatwoot_app.loadbalancer.server.port=3000 
-        - traefik.http.services.chatwoot_app.loadbalancer.passhostheader=true 
+        - traefik.http.services.chatwoot_app.loadbalancer.server.port=3000
+        - traefik.http.services.chatwoot_app.loadbalancer.passhostheader=true
         - traefik.http.middlewares.sslheader.headers.customrequestheaders.X-Forwarded-Proto=https
         - traefik.http.routers.chatwoot_app.middlewares=sslheader@docker
 
@@ -96,24 +96,24 @@ services:
     networks:
       - network_public ## Nome da rede interna
     environment:
-      - CHATWOOT_HUB_URL=https://efetivia.com.br #
-      - INSTALLATION_NAME=Chatwoot ## Nome da empresa
+      - CHATWOOT_HUB_URL=https://sprintia.com.br #
+      - INSTALLATION_NAME=Sprintia ## Nome da empresa
       - NODE_ENV=production
       - RAILS_ENV=production
       - INSTALLATION_ENV=docker
-      - SECRET_KEY_BASE=123458bb7ef6402f6a8bcf5d3be54321 ## Key aleatória gerada aleatóriamente
-      - FRONTEND_URL=https://chatwoot.efetivia.com.br ## Url do Chatwoot
+      - SECRET_KEY_BASE=a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2 ## Key aleatória gerada aleatóriamente
+      - FRONTEND_URL=https://chat.sprintia.com.br ## Url do Chatwoot
       - DEFAULT_LOCALE=pt_BR
       - FORCE_SSL=true
       - ENABLE_ACCOUNT_SIGNUP=true ## false = Desativar novas inscrições no inicio | true = Ativar novas inscrições no inicio
       - ENABLE_DISALLOW_NON_BUSINESS_EMAIL=false ## Permitir e-mails pessoais (Gmail, Hotmail, etc.)
       - ENABLE_DOMAIN_FILTER=false ## Desativar completamente o filtro de domínio
       - DISALLOWED_BUSINESS_EMAIL_DOMAINS=[] ## Lista vazia de domínios bloqueados
-      - ALLOWED_BUSINESS_EMAIL_DOMAINS=gmail.com,hotmail.com,outlook.com,yahoo.com,efetivia.com.br ## Permitir explicitamente domínios comuns
+      - ALLOWED_BUSINESS_EMAIL_DOMAINS=gmail.com,hotmail.com,outlook.com,yahoo.com,sprintia.com.br ## Permitir explicitamente domínios comuns
       - REDIS_URL=redis://redis:6379
       - POSTGRES_HOST=postgres
       - POSTGRES_USERNAME=postgres
-      - POSTGRES_PASSWORD=Mfcd62!!Mfcd62!! ## Senha do postgres
+      - POSTGRES_PASSWORD=SprintiaDB2024! ## Senha do postgres
       - POSTGRES_DATABASE=chatwoot
       - ACTIVE_STORAGE_SERVICE=local
       - RAILS_LOG_TO_STDOUT=true
@@ -126,16 +126,16 @@ services:
       - ENABLE_RACK_ATTACK=false
       - WEBHOOKS_TRIGGER_TIMEOUT=40
       # Servidor de Email Gmail
-      - MAILER_SENDER_EMAIL=Chatwoot <giovano.neosquad@gmail.com>
-      - SMTP_DOMAIN=gmail.com
-      - SMTP_ADDRESS=smtp.gmail.com
+      - MAILER_SENDER_EMAIL=Chatwoot <giovano@sprintia.com.br>
+      - SMTP_DOMAIN=sprintia.com.br
+      - SMTP_ADDRESS=smtp.hostinger.com
       - SMTP_PORT=587
-      - SMTP_USERNAME=giovano.neosquad@gmail.com
-      - SMTP_PASSWORD=hfgtocadmssppylg ## Senha de app do Gmail
+      - SMTP_USERNAME=giovano@sprintia.com.br
+      - SMTP_PASSWORD=SuaSenhaDeEmailAqui ## Senha do email
       - SMTP_AUTHENTICATION=login
       - SMTP_ENABLE_STARTTLS_AUTO=true
       - SMTP_OPENSSL_VERIFY_MODE=peer
-      - MAILER_INBOUND_EMAIL_DOMAIN=giovano.neosquad@gmail.com
+      - MAILER_INBOUND_EMAIL_DOMAIN=giovano@sprintia.com.br
     deploy:
       mode: replicated
       replicas: 1

@@ -1,0 +1,202 @@
+{% extends "base.html" %}
+
+{% block title %}Documentação - Visualizador de Configurações{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-8">
+        <h1>Documentação</h1>
+    </div>
+    <div class="col-md-4 text-end">
+        <a href="/" class="btn btn-primary">
+            <i class="bi bi-arrow-left"></i> Voltar para Configurações
+        </a>
+    </div>
+</div>
+
+<div class="card mb-4">
+    <div class="card-header bg-primary text-white">
+        <h5 class="card-title mb-0">Sobre o Visualizador de Configurações</h5>
+    </div>
+    <div class="card-body">
+        <p>O <strong>Visualizador de Configurações</strong> é uma ferramenta desenvolvida para facilitar a visualização e verificação das configurações armazenadas no PostgreSQL do config-service.</p>
+        
+        <p>Esta ferramenta é especialmente útil para:</p>
+        <ul>
+            <li>Verificar se as configurações estão sendo corretamente armazenadas no PostgreSQL</li>
+            <li>Monitorar a seção <code>enabled_collections</code> que é crítica para o funcionamento correto do sistema de IA</li>
+            <li>Visualizar o mapeamento Chatwoot para roteamento de mensagens</li>
+            <li>Acessar versões anteriores das configurações</li>
+        </ul>
+    </div>
+</div>
+
+<div class="card mb-4">
+    <div class="card-header bg-primary text-white">
+        <h5 class="card-title mb-0">Funcionalidades Principais</h5>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-6">
+                <div class="card mb-3">
+                    <div class="card-header bg-info text-white">
+                        <h6 class="card-title mb-0">Busca de Configurações</h6>
+                    </div>
+                    <div class="card-body">
+                        <p>Na página inicial, você pode buscar configurações por:</p>
+                        <ul>
+                            <li><strong>Tenant ID (Cliente)</strong>: Identificador do cliente (ex: account_1)</li>
+                            <li><strong>Domínio</strong>: Domínio da configuração (ex: retail)</li>
+                            <li><strong>Tipo</strong>: Tipo de configuração (config, credentials)</li>
+                        </ul>
+                        <p>A busca é flexível e permite encontrar configurações mesmo com informações parciais.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card mb-3">
+                    <div class="card-header bg-info text-white">
+                        <h6 class="card-title mb-0">Visualização de Configurações</h6>
+                    </div>
+                    <div class="card-body">
+                        <p>Ao clicar em "Visualizar" em uma configuração, você pode ver:</p>
+                        <ul>
+                            <li>Conteúdo JSON formatado</li>
+                            <li>Conteúdo YAML original</li>
+                            <li>Seção <code>enabled_collections</code> específica</li>
+                            <li>Histórico de versões da configuração</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="row">
+            <div class="col-md-6">
+                <div class="card mb-3">
+                    <div class="card-header bg-info text-white">
+                        <h6 class="card-title mb-0">Coleções Habilitadas</h6>
+                    </div>
+                    <div class="card-body">
+                        <p>A página "Coleções Habilitadas" mostra especificamente a seção <code>enabled_collections</code> de todas as configurações.</p>
+                        <p>Esta seção é crítica para o funcionamento correto do sistema de IA, pois determina quais coleções serão utilizadas pelos agentes.</p>
+                        <p>As coleções habilitadas podem incluir:</p>
+                        <ul>
+                            <li>business_rules</li>
+                            <li>products_informations</li>
+                            <li>scheduling_rules</li>
+                            <li>support_documents</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card mb-3">
+                    <div class="card-header bg-info text-white">
+                        <h6 class="card-title mb-0">Mapeamento Chatwoot</h6>
+                    </div>
+                    <div class="card-body">
+                        <p>A página "Mapeamento Chatwoot" mostra o mapeamento atual para roteamento de mensagens.</p>
+                        <p>Este mapeamento é essencial para o sistema multi-tenant, pois determina qual configuração será utilizada para cada conta Chatwoot.</p>
+                        <p>O mapeamento inclui:</p>
+                        <ul>
+                            <li>Mapeamento de accounts para domínios</li>
+                            <li>Mapeamento de inboxes para domínios (quando aplicável)</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card mb-4">
+    <div class="card-header bg-primary text-white">
+        <h5 class="card-title mb-0">Arquitetura do Sistema</h5>
+    </div>
+    <div class="card-body">
+        <p>O sistema de configurações é composto por:</p>
+        
+        <div class="row">
+            <div class="col-md-4">
+                <div class="card mb-3">
+                    <div class="card-header bg-success text-white">
+                        <h6 class="card-title mb-0">Config Service</h6>
+                    </div>
+                    <div class="card-body">
+                        <p>Microserviço responsável por armazenar e gerenciar as configurações no PostgreSQL.</p>
+                        <p>Fornece uma API RESTful para:</p>
+                        <ul>
+                            <li>Armazenar configurações</li>
+                            <li>Recuperar configurações</li>
+                            <li>Gerenciar mapeamento Chatwoot</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-4">
+                <div class="card mb-3">
+                    <div class="card-header bg-success text-white">
+                        <h6 class="card-title mb-0">PostgreSQL</h6>
+                    </div>
+                    <div class="card-body">
+                        <p>Banco de dados que armazena:</p>
+                        <ul>
+                            <li>Configurações YAML (tabela crew_configurations)</li>
+                            <li>Mapeamento Chatwoot (tabela chatwoot_mapping)</li>
+                        </ul>
+                        <p>Cada configuração é versionada para permitir rollback se necessário.</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-4">
+                <div class="card mb-3">
+                    <div class="card-header bg-success text-white">
+                        <h6 class="card-title mb-0">Visualizador de Configurações</h6>
+                    </div>
+                    <div class="card-body">
+                        <p>Interface web (esta aplicação) que permite:</p>
+                        <ul>
+                            <li>Visualizar configurações</li>
+                            <li>Buscar configurações</li>
+                            <li>Verificar coleções habilitadas</li>
+                            <li>Visualizar mapeamento Chatwoot</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card mb-4">
+    <div class="card-header bg-primary text-white">
+        <h5 class="card-title mb-0">Ferramentas Adicionais</h5>
+    </div>
+    <div class="card-body">
+        <h6>Script de Consulta com Fallback</h6>
+        <p>Além desta interface web, o sistema inclui um script de linha de comando <code>check_config.sh</code> que serve como fallback para consultar as configurações diretamente no PostgreSQL:</p>
+        
+        <pre><code>./check_config.sh</code></pre>
+        
+        <p>O script apresenta um menu interativo com opções para:</p>
+        <ol>
+            <li>Listar todas as configurações</li>
+            <li>Verificar uma configuração específica</li>
+            <li>Verificar especificamente a seção <code>enabled_collections</code></li>
+            <li>Verificar o mapeamento Chatwoot</li>
+        </ol>
+    </div>
+</div>
+
+<div class="card mb-4">
+    <div class="card-header bg-primary text-white">
+        <h5 class="card-title mb-0">Suporte e Contato</h5>
+    </div>
+    <div class="card-body">
+        <p>Para suporte ou dúvidas sobre o Visualizador de Configurações, entre em contato com a equipe de desenvolvimento.</p>
+    </div>
+</div>
+{% endblock %}

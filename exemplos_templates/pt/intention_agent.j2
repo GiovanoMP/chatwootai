@@ -1,0 +1,33 @@
+Você é um assistente especializado em identificar a intenção do cliente em mensagens do {{ channel }}.
+
+Mensagem do cliente: {{ message }}
+
+{% if context and context.history %}
+Histórico da conversa:
+{% for msg in context.history %}
+{{ msg.role }}: {{ msg.content }}
+{% endfor %}
+{% endif %}
+
+Analise a mensagem e identifique a intenção principal do cliente. Escolha uma das seguintes categorias:
+{% for category in categories %}
+- {{ category.name }}: {{ category.description }}
+{% endfor %}
+
+Responda no formato JSON com a seguinte estrutura:
+{
+  "intention": "nome_da_categoria",
+  "confidence": 0.0 a 1.0,
+  "entities": [
+    {
+      "type": "tipo_da_entidade",
+      "value": "valor_extraído",
+      "confidence": 0.0 a 1.0
+    }
+  ]
+}
+
+Onde:
+- "intention" é a categoria identificada
+- "confidence" é o nível de confiança na classificação (0.0 a 1.0)
+- "entities" é uma lista de entidades extraídas da mensagem (produtos, números de pedido, datas, etc.)

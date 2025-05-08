@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulador de WhatsApp Simplificado</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f0f0f0;
+        }
+        .container {
+            display: flex;
+            flex-direction: column;
+            height: 90vh;
+            border: 1px solid #ccc;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        .header {
+            background-color: #128C7E;
+            color: white;
+            padding: 10px 20px;
+            display: flex;
+            align-items: center;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 1.5rem;
+        }
+        .chat-container {
+            flex: 1;
+            background-color: #E5DDD5;
+            padding: 20px;
+            overflow-y: auto;
+        }
+        .message {
+            max-width: 70%;
+            padding: 10px 15px;
+            margin-bottom: 10px;
+            border-radius: 10px;
+            position: relative;
+            word-wrap: break-word;
+        }
+        .user-message {
+            background-color: #DCF8C6;
+            margin-left: auto;
+            border-radius: 10px 0 10px 10px;
+        }
+        .bot-message {
+            background-color: white;
+            margin-right: auto;
+            border-radius: 0 10px 10px 10px;
+        }
+        .message-time {
+            font-size: 0.7rem;
+            color: #999;
+            text-align: right;
+            margin-top: 5px;
+        }
+        .input-area {
+            display: flex;
+            padding: 10px;
+            background-color: #f0f0f0;
+        }
+        #message-input {
+            flex: 1;
+            padding: 10px;
+            border: none;
+            border-radius: 20px;
+            margin-right: 10px;
+        }
+        #send-button {
+            background-color: #128C7E;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            cursor: pointer;
+            font-size: 18px;
+        }
+        #send-button:hover {
+            background-color: #0d6d63;
+        }
+        .settings {
+            background-color: white;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .form-group {
+            margin-bottom: 10px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input[type="text"], input[type="number"] {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .status {
+            margin-top: 10px;
+            padding: 10px;
+            border-radius: 5px;
+        }
+        .success {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+    </style>
+</head>
+<body>
+    <div class="settings">
+        <h2>Configurações</h2>
+        <div class="form-group">
+            <label for="webhook-url">URL do Webhook:</label>
+            <input type="text" id="webhook-url" value="http://localhost:8001/webhook">
+        </div>
+        <div class="form-group">
+            <label for="conversation-id">ID da Conversa:</label>
+            <input type="number" id="conversation-id" value="4">
+        </div>
+        <div class="form-group">
+            <label for="contact-id">ID do Contato:</label>
+            <input type="number" id="contact-id" value="3">
+        </div>
+        <div class="form-group">
+            <label for="account-id">ID da Conta (Account ID):</label>
+            <input type="number" id="account-id" value="1">
+        </div>
+        <div id="status" class="status" style="display: none;"></div>
+    </div>
+
+    <div class="container">
+        <div class="header">
+            <h1>Simulador de WhatsApp</h1>
+        </div>
+        <div id="chat-container" class="chat-container">
+            <!-- Mensagens aparecerão aqui -->
+        </div>
+        <div class="input-area">
+            <input type="text" id="message-input" placeholder="Digite uma mensagem...">
+            <button id="send-button">➤</button>
+        </div>
+    </div>
+
+    <script>
+        // Elementos do DOM
+        const messageInput = document.getElementById('message-input');
+        const sendButton = document.getElementById('send-button');
+        const chatContainer = document.getElementById('chat-container');
+        const webhookUrlInput = document.getElementById('webhook-url');
+        const conversationIdInput = document.getElementById('conversation-id');
+        const contactIdInput = document.getElementById('contact-id');
+        const accountIdInput = document.getElementById('account-id');
+        const statusDiv = document.getElementById('status');
+
+        // Histórico de mensagens
+        let messageHistory = [];
+        
+        // Carregar histórico do localStorage se existir
+        if (localStorage.getItem('simpleSimulatorHistory')) {
+            try {
+                messageHistory = JSON.parse(localStorage.getItem('simpleSimulatorHistory'));
+                renderMessageHistory();
+            } catch (e) {
+                console.error('Erro ao carregar histórico:', e);
+            }
+        }
+
+        // Função para enviar mensagem
+        function sendMessage() {
+            const messageContent = messageInput.value.trim();
+            if (!messageContent) return;
+            
+            // Adicionar mensagem ao chat
+            addMessageToChat(messageContent, 'user');
+            
+            // Limpar campo de entrada
+            messageInput.value = '';
+            
+            // Mostrar status
+            showStatus('Enviando mensagem...', 'success');
+            
+            // Enviar webhook
+            const webhookUrl = webhookUrlInput.value;
+            const conversationId = parseInt(conversationIdInput.value);
+            const contactId = parseInt(contactIdInput.value);
+            const accountId = parseInt(accountIdInput.value);
+            
+            // Criar payload do webhook
+            const messageId = Math.floor(Math.random() * 1000) + 100;
+            const timestamp = Math.floor(Date.now() / 1000);
+            
+            const webhookData = {
+                "event": "message_created",
+                "message": {
+                    "id": messageId,
+                    "content": messageContent,
+                    "content_type": "text",
+                    "content_attributes": {},
+                    "created_at": new Date().toISOString(),
+                    "message_type": "incoming",
+                    "private": false,
+                    "source_id": null,
+                    "sender_type": "Contact",
+                    "sender_id": contactId
+                },
+                "conversation": {
+                    "id": conversationId,
+                    "inbox_id": 4,
+                    "status": "open",
+                    "additional_attributes": {},
+                    "channel": "Channel::Whatsapp",
+                    "contact_inbox": {
+                        "id": 3,
+                        "contact_id": contactId,
+                        "inbox_id": 4,
+                        "source_id": "5511977379888",
+                        "created_at": "2025-05-01T00:41:46.600Z",
+                        "updated_at": "2025-05-01T00:41:46.600Z",
+                        "hmac_verified": false,
+                        "pubsub_token": "AaTX14w68Yw3atKU3H93S8Vb"
+                    },
+                    "meta": {
+                        "sender": {
+                            "id": contactId,
+                            "name": "Usuário Simulado",
+                            "phone_number": "+5511977379888",
+                            "type": "contact"
+                        }
+                    },
+                    "timestamp": timestamp,
+                    "created_at": timestamp - 1000,
+                    "updated_at": timestamp
+                },
+                "account": {
+                    "id": accountId,
+                    "name": "Sprintia"
+                },
+                "inbox": {
+                    "id": 4,
+                    "name": "WhatsApp"
+                },
+                "sender": {
+                    "id": contactId,
+                    "name": "Usuário Simulado",
+                    "email": null,
+                    "type": "contact"
+                }
+            };
+            
+            // Enviar webhook
+            fetch(webhookUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(webhookData)
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                console.log('Resposta:', data);
+                showStatus('Mensagem enviada com sucesso!', 'success');
+                
+                // Simular resposta após 3 segundos
+                setTimeout(() => {
+                    checkForResponse(conversationId);
+                }, 3000);
+            })
+            .catch(error => {
+                console.error('Erro ao enviar mensagem:', error);
+                showStatus(`Erro ao enviar mensagem: ${error.message}`, 'error');
+            });
+        }
+        
+        // Função para verificar se há resposta
+        function checkForResponse(conversationId) {
+            // Aqui você pode implementar a lógica para verificar se há resposta
+            // Por enquanto, vamos apenas simular uma resposta
+            const responseContent = "Esta é uma resposta simulada. Em uma implementação real, você verificaria os logs do sistema para obter a resposta real.";
+            addMessageToChat(responseContent, 'bot');
+        }
+        
+        // Função para adicionar mensagem ao chat
+        function addMessageToChat(content, sender) {
+            const messageDiv = document.createElement('div');
+            messageDiv.classList.add('message');
+            messageDiv.classList.add(sender === 'user' ? 'user-message' : 'bot-message');
+            
+            messageDiv.textContent = content;
+            
+            const timeDiv = document.createElement('div');
+            timeDiv.classList.add('message-time');
+            const now = new Date();
+            timeDiv.textContent = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+            
+            messageDiv.appendChild(timeDiv);
+            chatContainer.appendChild(messageDiv);
+            
+            // Rolar para a última mensagem
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+            
+            // Adicionar ao histórico
+            messageHistory.push({
+                content: content,
+                sender: sender,
+                timestamp: now.toISOString()
+            });
+            
+            // Salvar histórico no localStorage
+            localStorage.setItem('simpleSimulatorHistory', JSON.stringify(messageHistory));
+        }
+        
+        // Função para renderizar o histórico de mensagens
+        function renderMessageHistory() {
+            chatContainer.innerHTML = '';
+            messageHistory.forEach(message => {
+                addMessageToChat(message.content, message.sender);
+            });
+        }
+        
+        // Função para mostrar status
+        function showStatus(message, type) {
+            statusDiv.textContent = message;
+            statusDiv.className = 'status';
+            statusDiv.classList.add(type);
+            statusDiv.style.display = 'block';
+            
+            // Esconder após 5 segundos
+            setTimeout(() => {
+                statusDiv.style.display = 'none';
+            }, 5000);
+        }
+        
+        // Adicionar event listeners
+        sendButton.addEventListener('click', sendMessage);
+        
+        messageInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
+    </script>
+</body>
+</html>

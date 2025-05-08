@@ -1,0 +1,169 @@
+#!/usr/bin/env python3
+"""
+Hub simplificado para a nova arquitetura do ChatwootAI.
+
+Este módulo implementa uma versão simplificada do Hub, focada apenas em:
+1. Identificar o account_id e domínio corretos para cada mensagem
+2. Direcionar a mensagem para a customer_service_crew
+3. Retornar a resposta
+
+Na nova arquitetura, todas as mensagens do Chatwoot são direcionadas para
+a customer_service_crew, que é configurada via YAML para cada account_id.
+"""
+
+import logging
+import os
+from typing import Dict, Any, Optional
+import yaml
+
+from src.core.domain.domain_manager import DomainManager
+
+# Configurar logging
+logger = logging.getLogger(__name__)
+
+class Hub:
+    """
+    Hub simplificado para a nova arquitetura do ChatwootAI.
+
+    Esta classe é responsável por direcionar mensagens do Chatwoot para
+    a customer_service_crew apropriada, com base no account_id e domínio.
+    """
+
+    def __init__(self, domain_manager: Optional[DomainManager] = None):
+        """
+        Inicializa o hub.
+
+        Args:
+            domain_manager: Gerenciador de domínios para multi-tenancy
+        """
+        self.domain_manager = domain_manager or DomainManager()
+
+        # Cache de crews para evitar recriação desnecessária
+        self.crew_cache = {}
+
+        logger.info("Hub inicializado")
+
+    async def process_message(self,
+                       message: Dict[str, Any],
+                       conversation_id: str,
+                       channel_type: str,
+                       domain_name: str = None,
+                       account_id: str = None) -> Dict[str, Any]:
+        """
+        Processa uma mensagem e a encaminha para a customer_service_crew.
+
+        Args:
+            message: A mensagem a ser processada
+            conversation_id: Identificador único da conversa
+            channel_type: Canal de origem (WhatsApp, Instagram, etc.)
+            domain_name: Nome do domínio para a conversa
+            account_id: ID interno da conta do cliente
+
+        Returns:
+            Resultado do processamento com mensagem, contexto e resposta
+        """
+        # Cria um contexto para a conversa
+        context = {
+            "channel_type": channel_type,
+            "conversation_id": conversation_id,
+            "interaction_count": 1  # Primeira interação
+        }
+
+        # Verificar se temos o domínio e account_id
+        if not domain_name or not account_id:
+            error_msg = "ERRO: Domínio ou account_id não fornecidos. Impossível processar a mensagem."
+            logger.error(error_msg)
+            return {
+                "message": message,
+                "context": context,
+                "error": error_msg,
+                "status": "error"
+            }
+
+        # Adicionar o domínio e account_id ao contexto
+        context["domain_name"] = domain_name
+        context["internal_account_id"] = account_id
+
+        # Adicionar a mensagem atual ao contexto
+        context["current_message"] = {
+            "content": message.get("content", ""),
+            "sender_id": message.get("sender_id", ""),
+            "timestamp": message.get("timestamp", "")
+        }
+
+        # Verificar se o arquivo de configuração existe
+        config_path = os.path.join("config", "domains", domain_name, account_id, "config.yaml")
+        if not os.path.exists(config_path):
+            error_msg = f"Arquivo de configuração não encontrado: {config_path}"
+            logger.error(error_msg)
+            return {
+                "message": message,
+                "context": context,
+                "response": None,
+                "domain_name": domain_name,
+                "account_id": account_id,
+                "error": error_msg,
+                "status": "error"
+            }
+
+        # Carregar a configuração
+        try:
+            with open(config_path, 'r') as f:
+                config = yaml.safe_load(f)
+
+            # Registrar que chegamos até aqui com sucesso
+            logger.info(f"Configuração carregada com sucesso para domínio {domain_name} e account_id {account_id}")
+
+            # Por enquanto, apenas retornar uma resposta de sucesso para teste
+            # Posteriormente, implementaremos a criação da customer_service_crew
+            return {
+                "message": message,
+                "context": context,
+                "response": {
+                    "content": "Mensagem recebida pelo novo Hub. A implementação da customer_service_crew está pendente.",
+                    "status": "success"
+                },
+                "domain_name": domain_name,
+                "account_id": account_id,
+                "status": "success"
+            }
+
+        except Exception as e:
+            error_msg = f"Erro ao carregar configuração para domínio {domain_name} e account_id {account_id}: {str(e)}"
+            logger.error(error_msg)
+            return {
+                "message": message,
+                "context": context,
+                "response": None,
+                "domain_name": domain_name,
+                "account_id": account_id,
+                "error": error_msg,
+                "status": "error"
+            }
+
+    async def finalize_conversation(self, conversation_id: str) -> Dict[str, Any]:
+        """
+        Finaliza uma conversa, liberando recursos.
+
+        Args:
+            conversation_id: ID da conversa a ser finalizada
+
+        Returns:
+            Resultado da finalização
+        """
+        try:
+            # Na nova arquitetura, não precisamos fazer nada especial para finalizar a conversa
+            return {
+                "conversation_id": conversation_id,
+                "status": "resolved",
+                "success": True
+            }
+
+        except Exception as e:
+            logger.error(f"Erro ao finalizar conversa {conversation_id}: {str(e)}")
+            return {
+                "conversation_id": conversation_id,
+                "status": "error",
+                "success": False,
+                "error": str(e)
+            }

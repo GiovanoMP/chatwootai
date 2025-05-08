@@ -185,8 +185,10 @@ class BusinessRuleSyncResponse(BaseModel):
     permanent_rules: int = Field(description="Número de regras permanentes sincronizadas")
     temporary_rules: int = Field(description="Número de regras temporárias sincronizadas")
     vectorized_rules: int = Field(description="Número de regras vetorizadas no Qdrant")
+    removed_rules: int = Field(default=0, description="Número de regras obsoletas removidas do Qdrant")
     sync_status: str = Field(description="Status da sincronização")
     timestamp: datetime = Field(description="Timestamp da sincronização")
+    error: Optional[str] = Field(default=None, description="Mensagem de erro, se houver")
 
 
 class DocumentUploadRequest(BaseModel):

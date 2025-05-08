@@ -1,0 +1,265 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="res_config_settings_view_form" model="ir.ui.view">
+        <field name="name">res.config.settings.view.form.inherit.company.services</field>
+        <field name="model">res.config.settings</field>
+        <field name="priority" eval="70"/>
+        <field name="inherit_id" ref="base.res_config_settings_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//div[hasclass('settings')]" position="inside">
+                <div class="app_settings_block" data-string="Empresa e Serviços" string="Empresa e Serviços" data-key="company_services">
+                    <h2>Configurações de Integração</h2>
+                    <div class="row mt16 o_settings_container">
+                        <div class="col-12 col-lg-6 o_setting_box">
+                            <div class="o_setting_left_pane"/>
+                            <div class="o_setting_right_pane">
+                                <span class="o_form_label">ID da Conta</span>
+                                <div class="text-muted">
+                                    ID da conta para identificação no sistema de IA
+                                </div>
+                                <div class="content-group">
+                                    <div class="mt16">
+                                        <field name="company_services_account_id" class="o_light_label" placeholder="account_1"/>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-12 col-lg-6 o_setting_box">
+                            <div class="o_setting_left_pane"/>
+                            <div class="o_setting_right_pane">
+                                <span class="o_form_label">Token de Segurança</span>
+                                <div class="text-muted">
+                                    Token único para autenticação no webhook
+                                </div>
+                                <div class="content-group">
+                                    <div class="mt16 d-flex">
+                                        <field name="company_services_security_token" class="o_light_label" password="True" placeholder="Token de segurança"/>
+                                        <button string="Gerar Token" name="generate_security_token" type="object" class="btn btn-secondary ml-2"/>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <h2>Serviço de Configuração</h2>
+                    <div class="row mt16 o_settings_container">
+                        <div class="col-12 col-lg-6 o_setting_box">
+                            <div class="o_setting_left_pane"/>
+                            <div class="o_setting_right_pane">
+                                <span class="o_form_label">URL do Serviço</span>
+                                <div class="text-muted">
+                                    URL do serviço de configuração
+                                </div>
+                                <div class="content-group">
+                                    <div class="mt16">
+                                        <field name="company_services_config_service_url" class="o_light_label" placeholder="http://localhost:8002"/>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-12 col-lg-6 o_setting_box">
+                            <div class="o_setting_left_pane"/>
+                            <div class="o_setting_right_pane">
+                                <span class="o_form_label">Chave de API</span>
+                                <div class="text-muted">
+                                    Chave de API para autenticação
+                                </div>
+                                <div class="content-group">
+                                    <div class="mt16">
+                                        <field name="company_services_config_service_api_key" class="o_light_label" password="True" placeholder="development-api-key"/>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <h2>Serviços Disponíveis</h2>
+                    <div class="alert alert-info" role="alert">
+                        <strong>Atenção:</strong> Configure aqui quais serviços estarão disponíveis para o cliente. Os serviços habilitados aparecerão na aba "Serviços de IA" do formulário principal.
+                    </div>
+
+                    <div class="row mt16 o_settings_container">
+                        <div class="col-12 o_setting_box">
+                            <div class="o_setting_left_pane">
+                                <field name="company_services_enable_sales"/>
+                            </div>
+                            <div class="o_setting_right_pane">
+                                <label for="company_services_enable_sales"/>
+                                <div class="text-muted">
+                                    Habilita o serviço de vendas de produtos e serviços
+                                </div>
+                                <div class="mt8" attrs="{'invisible': [('company_services_enable_sales', '=', False)]}">
+                                    <field name="company_services_sales_description" placeholder="Descrição do serviço de vendas" class="o_light_label"/>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-12 o_setting_box">
+                            <div class="o_setting_left_pane">
+                                <field name="company_services_enable_scheduling"/>
+                            </div>
+                            <div class="o_setting_right_pane">
+                                <label for="company_services_enable_scheduling"/>
+                                <div class="text-muted">
+                                    Habilita o serviço de agendamentos
+                                </div>
+                                <div class="mt8" attrs="{'invisible': [('company_services_enable_scheduling', '=', False)]}">
+                                    <field name="company_services_scheduling_description" placeholder="Descrição do serviço de agendamentos" class="o_light_label"/>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-12 o_setting_box">
+                            <div class="o_setting_left_pane">
+                                <field name="company_services_enable_delivery"/>
+                            </div>
+                            <div class="o_setting_right_pane">
+                                <label for="company_services_enable_delivery"/>
+                                <div class="text-muted">
+                                    Habilita o serviço de delivery
+                                </div>
+                                <div class="mt8" attrs="{'invisible': [('company_services_enable_delivery', '=', False)]}">
+                                    <field name="company_services_delivery_description" placeholder="Descrição do serviço de delivery" class="o_light_label"/>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-12 o_setting_box">
+                            <div class="o_setting_left_pane">
+                                <field name="company_services_enable_support"/>
+                            </div>
+                            <div class="o_setting_right_pane">
+                                <label for="company_services_enable_support"/>
+                                <div class="text-muted">
+                                    Habilita o serviço de suporte ao cliente
+                                </div>
+                                <div class="mt8" attrs="{'invisible': [('company_services_enable_support', '=', False)]}">
+                                    <field name="company_services_support_description" placeholder="Descrição do serviço de suporte" class="o_light_label"/>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <h2>Configurações de Desenvolvedor</h2>
+                    <div class="alert alert-info" role="alert">
+                        <strong>Atenção:</strong> As configurações abaixo são destinadas apenas para desenvolvedores. Elas definem como os agentes de IA acessarão o banco de dados.
+                    </div>
+
+                    <h3>Model Communication Protocol (MCP)</h3>
+                    <div class="row mt16 o_settings_container">
+                        <div class="col-12 col-lg-6 o_setting_box">
+                            <div class="o_setting_left_pane"/>
+                            <div class="o_setting_right_pane">
+                                <span class="o_form_label">Tipo de MCP</span>
+                                <div class="text-muted">
+                                    Tipo de MCP (Model Communication Protocol) utilizado
+                                </div>
+                                <div class="content-group">
+                                    <div class="mt16">
+                                        <field name="company_services_mcp_type" class="o_light_label"/>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-12 col-lg-6 o_setting_box">
+                            <div class="o_setting_left_pane"/>
+                            <div class="o_setting_right_pane">
+                                <span class="o_form_label">Versão do ERP</span>
+                                <div class="text-muted">
+                                    Versão do sistema ERP (ex: 14.0 para Odoo)
+                                </div>
+                                <div class="content-group">
+                                    <div class="mt16">
+                                        <field name="company_services_mcp_version" class="o_light_label" placeholder="14.0"/>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <h3>Conexão com Banco de Dados</h3>
+                    <div class="row mt16 o_settings_container">
+                        <div class="col-12 col-lg-6 o_setting_box">
+                            <div class="o_setting_left_pane"/>
+                            <div class="o_setting_right_pane">
+                                <span class="o_form_label">URL do Servidor</span>
+                                <div class="text-muted">
+                                    URL do servidor ERP (ex: http://localhost:8069)
+                                </div>
+                                <div class="content-group">
+                                    <div class="mt16">
+                                        <field name="company_services_db_url" class="o_light_label" placeholder="http://localhost:8069"/>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-12 col-lg-6 o_setting_box">
+                            <div class="o_setting_left_pane"/>
+                            <div class="o_setting_right_pane">
+                                <span class="o_form_label">Nome do Banco de Dados</span>
+                                <div class="text-muted">
+                                    Nome do banco de dados específico do tenant
+                                </div>
+                                <div class="content-group">
+                                    <div class="mt16">
+                                        <field name="company_services_db_name" class="o_light_label" placeholder="odoo"/>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-12 col-lg-6 o_setting_box">
+                            <div class="o_setting_left_pane"/>
+                            <div class="o_setting_right_pane">
+                                <span class="o_form_label">Usuário do Banco</span>
+                                <div class="text-muted">
+                                    Usuário com permissões adequadas para acesso ao banco
+                                </div>
+                                <div class="content-group">
+                                    <div class="mt16">
+                                        <field name="company_services_db_user" class="o_light_label" placeholder="admin"/>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-12 col-lg-6 o_setting_box">
+                            <div class="o_setting_left_pane"/>
+                            <div class="o_setting_right_pane">
+                                <span class="o_form_label">Senha do Banco</span>
+                                <div class="text-muted">
+                                    Senha do usuário (será armazenada de forma segura)
+                                </div>
+                                <div class="content-group">
+                                    <div class="mt16">
+                                        <field name="company_services_db_password" class="o_light_label" password="True" placeholder="********"/>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-12 col-lg-6 o_setting_box">
+                            <div class="o_setting_left_pane"/>
+                            <div class="o_setting_right_pane">
+                                <span class="o_form_label">Nível de Acesso</span>
+                                <div class="text-muted">
+                                    Nível de acesso ao banco de dados
+                                </div>
+                                <div class="content-group">
+                                    <div class="mt16">
+                                        <field name="company_services_db_access_level" class="o_light_label"/>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="company_services_settings_action" model="ir.actions.act_window">
+        <field name="name">Configurações</field>
+        <field name="type">ir.actions.act_window</field>
+        <field name="res_model">res.config.settings</field>
+        <field name="view_mode">form</field>
+        <field name="target">inline</field>
+        <field name="context">{'module' : 'company_services'}</field>
+    </record>
+</odoo>

@@ -42,11 +42,8 @@ load_dotenv()
 
 # Importa componentes necessários
 from src.webhook.webhook_handler import ChatwootWebhookHandler
-from src.core.hub import HubCrew
-from src.core.data_service_hub import DataServiceHub
-from src.core.domain import DomainManager
+from src.core.hub import Hub
 from odoo_api.integrations.chatwoot import ChatwootClient  # Usando a implementação da arquitetura hub-and-spoke
-from src.core.data_proxy_agent import DataProxyAgent
 from src.core.crews.crew_factory import get_crew_factory
 
 # Cria a aplicação FastAPI
@@ -93,59 +90,16 @@ def initialize_system():
     default_domain = os.getenv('DEFAULT_DOMAIN', 'cosmetics')
     logger.info(f"Domínio padrão (fallback) configurado: {default_domain}")
 
-    # Inicialização do DomainManager com o diretório de domínios
-    domain_manager = DomainManager(domains_dir=domains_dir, default_domain=default_domain)
+    # Na nova arquitetura, não precisamos mais desses componentes legados
+    logger.info("✅ Usando nova arquitetura simplificada")
 
-    # IMPORTANTE: Explicitamente inicializar o DomainManager para carregar configurações
-    try:
-        domain_manager.initialize()
-        logger.info("✅ DomainManager inicializado com sucesso")
-    except Exception as e:
-        logger.error(f"❌ Erro ao inicializar DomainManager: {str(e)}")
-        # Garantimos que pelo menos o domínio padrão será carregado
-        try:
-            domain_manager.set_active_domain(default_domain)
-            logger.info(f"✅ Domínio padrão {default_domain} configurado manualmente")
-        except Exception as e2:
-            logger.critical(f"❌ ERRO CRÍTICO: Não foi possível configurar domínio padrão: {str(e2)}")
-
-    # Carrega todos os domínios disponíveis no sistema e seus clientes
-    available_domains = domain_manager.loader.list_available_domains()
-    logger.info(f"✅ Domínios disponíveis carregados: {available_domains}")
-
-    # Para cada domínio, listar os clientes disponíveis
-    for domain in available_domains:
-        clients = domain_manager.loader.list_available_clients(domain)
-        if clients:
-            logger.info(f"✅ Clientes para o domínio {domain}: {clients}")
-
-    # Plugins agora são gerenciados diretamente pelas crews
-    logger.info("✅ Plugins serão gerenciados pelas crews")
-
-    # DataServiceHub - Ponto central de acesso a dados
-    data_service_hub = DataServiceHub()
-    logger.info("✅ DataServiceHub inicializado")
-
-    # Criar DataProxyAgent para acesso a dados
-    data_proxy_agent = DataProxyAgent(data_service_hub=data_service_hub, domain_manager=domain_manager)
-    logger.info("✅ DataProxyAgent inicializado")
-
-    # Cache de agentes será gerenciado internamente pelo CrewAI
-    logger.info("✅ Cache de agentes será gerenciado pelo CrewAI")
-    agent_cache = None
+    # Inicializa o Hub central
+    hub = Hub()
+    logger.info("✅ Hub inicializado")
 
     # Criar factory de crews
     crew_factory = get_crew_factory()
     logger.info("✅ CrewFactory inicializado")
-
-    # HubCrew - Centro da arquitetura hub-and-spoke
-    hub_crew = HubCrew(
-        data_proxy_agent=data_proxy_agent,
-        crew_factory=crew_factory,
-        domain_manager=domain_manager,
-        agent_cache=agent_cache
-    )
-    logger.info("✅ HubCrew inicializado")
 
     # Carrega o arquivo de mapeamento YAML
     mapping_file_path = os.path.join(config_dir, 'chatwoot_mapping.yaml')
@@ -161,27 +115,35 @@ def initialize_system():
             with open(mapping_file_path, 'r') as file:
                 mapping_config = yaml.safe_load(file) or {}
 
-                # Extrai os mapeamentos
-                account_domain_mapping = mapping_config.get('accounts', {})
-                inbox_domain_mapping = mapping_config.get('inboxes', {})
+                # Extrai os mapeamentos no novo formato
+                account_domain_mapping = mapping_config.get('account_domain_mapping', {})
+                inbox_domain_mapping = mapping_config.get('inbox_domain_mapping', {})
                 webhook_settings = mapping_config.get('webhook_settings', {})
+
+                # Se não encontrar no novo formato, tentar o formato legado
+                if not account_domain_mapping and "accounts" in mapping_config:
+                    logger.info("Usando formato legado para account_domain_mapping")
+                    legacy_accounts = mapping_config.get("accounts", {})
+                    # Converter do formato legado para o novo formato
+                    for account_id, account_info in legacy_accounts.items():
+                        if isinstance(account_info, dict) and "domain" in account_info:
+                            if isinstance(account_domain_mapping, dict):
+                                account_domain_mapping[account_id] = account_info["domain"]
+                            else:
+                                # Criar novo dicionário se account_domain_mapping não for um dicionário
+                                account_domain_mapping = {account_id: account_info["domain"]}
+
+                # Se não encontrar no novo formato, tentar o formato legado para inboxes
+                if not inbox_domain_mapping and "inboxes" in mapping_config:
+                    logger.info("Usando formato legado para inbox_domain_mapping")
+                    inbox_domain_mapping = mapping_config.get("inboxes", {})
 
                 logger.info(f"✅ Arquivo de mapeamento carregado: {mapping_file_path}")
                 logger.info(f"✅ Accounts mapeados: {len(account_domain_mapping)}")
                 logger.info(f"✅ Inboxes mapeados: {len(inbox_domain_mapping)}")
 
-                # Pré-carga de configurações de clientes para melhor desempenho
-                for account_id, mapping in account_domain_mapping.items():
-                    domain = mapping.get('domain')
-                    account_id_value = mapping.get('account_id')
-                    if domain and account_id_value:
-                        try:
-                            # Carrega a configuração do cliente para o cache
-                            client_config = domain_manager.loader.load_client_config(domain, account_id_value)
-                            if client_config:
-                                logger.info(f"✅ Configuração pré-carregada para account {account_id_value} do domínio {domain}")
-                        except Exception as e:
-                            logger.warning(f"⚠️ Não foi possível pré-carregar account {account_id_value}: {str(e)}")
+                # Na nova arquitetura, a pré-carga de configurações é feita pelo Hub
+                logger.info("✅ Pré-carga de configurações será gerenciada pelo Hub")
         else:
             logger.warning(f"⚠️ Arquivo de mapeamento não encontrado: {mapping_file_path}")
     except Exception as e:
@@ -206,12 +168,12 @@ def initialize_system():
         **webhook_settings
     }
 
-    # Inicializa o webhook handler com o HubCrew central
+    # Inicializa o webhook handler diretamente com o Hub
     webhook_handler = ChatwootWebhookHandler(
-        hub_crew=hub_crew,
+        hub=hub,
         config=webhook_config
     )
-    logger.info("✅ ChatwootWebhookHandler inicializado")
+    logger.info("✅ ChatwootWebhookHandler inicializado com o novo Hub")
 
     # Inicializa o cliente Chatwoot para comunicação com a API
     chatwoot_client = ChatwootClient(

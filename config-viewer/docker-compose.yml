@@ -1,0 +1,19 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    container_name: config-viewer
+    ports:
+      - "8080:8080"
+    environment:
+      - DB_HOST=host.docker.internal
+      - DB_PORT=5433
+      - DB_NAME=config_service
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres
+      - SECRET_KEY=change_this_in_production_environment
+      - ADMIN_PASSWORD=Config@Viewer2025!
+    volumes:
+      - .:/app
+    restart: unless-stopped

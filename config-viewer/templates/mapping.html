@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+
+{% block title %}Mapeamento Chatwoot - Visualizador de Configurações{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1>
+        Mapeamento Chatwoot
+        <span class="badge bg-secondary version-badge">Versão {{ mapping.version }}</span>
+    </h1>
+    <a href="/" class="btn btn-outline-primary">
+        <i class="bi bi-arrow-left"></i> Voltar
+    </a>
+</div>
+
+<div class="card">
+    <div class="card-header bg-primary text-white">
+        <h5 class="card-title mb-0">Informações</h5>
+    </div>
+    <div class="card-body">
+        <p><strong>ID:</strong> {{ mapping.id }}</p>
+        <p><strong>Versão:</strong> {{ mapping.version }}</p>
+        <p><strong>Criado em:</strong> {{ mapping.created_at.strftime('%d/%m/%Y %H:%M:%S') }}</p>
+        <p><strong>Atualizado em:</strong> {{ mapping.updated_at.strftime('%d/%m/%Y %H:%M:%S') }}</p>
+    </div>
+</div>
+
+<div class="card mt-4">
+    <div class="card-header bg-primary text-white">
+        <h5 class="card-title mb-0">Dados do Mapeamento</h5>
+    </div>
+    <div class="card-body">
+        <style>
+            {{ format_json('{}') }}
+            .highlight { background-color: transparent; }
+        </style>
+        {{ format_json(json_formatted) }}
+    </div>
+</div>
+{% endblock %}

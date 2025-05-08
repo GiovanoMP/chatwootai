@@ -34,6 +34,9 @@ Segurança:
         'views/menu_views.xml',
         'views/credentials_views.xml',
         'views/sync_queue_views.xml',
+        'views/channel_mapping_views.xml',
+        'views/config_service_views.xml',
+        'views/config_viewer_views.xml',
         'data/webhook_secret.xml',
     ],
     'demo': [],
@@ -42,4 +45,5 @@ Segurança:
     'auto_install': False,
     'license': 'LGPL-3',
     'images': ['static/description/banner.png'],
+    'post_init_hook': 'post_init_hook',
 }

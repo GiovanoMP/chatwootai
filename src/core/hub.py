@@ -1,274 +1,286 @@
 #!/usr/bin/env python3
 """
-Hub simplificado para a arquitetura baseada em domínios.
+Hub para o ChatwootAI
 
-Este módulo implementa uma versão simplificada do HubCrew, focada apenas em:
-1. Identificar o domínio e account_id corretos para cada mensagem
-2. Obter ou criar a crew apropriada para esse domínio/account_id
-3. Redirecionar a mensagem para essa crew
-4. Retornar a resposta
-
-Na nova arquitetura, cada domínio/account_id tem uma única crew, eliminando
-a necessidade de roteamento entre múltiplas crews funcionais.
+Este módulo implementa o Hub, responsável por direcionar mensagens para as crews
+apropriadas com base no canal de origem.
 """
 
 import logging
+import pickle
+import time
 from typing import Dict, Any, Optional
-# Removido a importação de RedisAgentCache pois o módulo foi descontinuado
-from src.core.data_proxy_agent import DataProxyAgent
-from src.core.domain.domain_manager import DomainManager
-from src.core.crews.crew_factory import CrewFactory, get_crew_factory
-# Usando o sistema de memória integrado do CrewAI em vez de um MemorySystem personalizado
+
+from src.utils.redis_client import get_redis_client, get_aioredis_client
+from src.core.config import get_config_registry
+from src.core.crews.crew_factory import get_crew_factory
 
 # Configurar logging
 logger = logging.getLogger(__name__)
 
-class HubCrew:
+class Hub:
     """
-    Implementação simplificada da HubCrew para a arquitetura baseada em domínios.
+    Hub para direcionar mensagens para crews específicas por canal.
 
-    Esta classe gerencia o fluxo de mensagens entre canais de comunicação e crews de domínio,
-    identificando o domínio/account_id correto e direcionando a mensagem para a crew apropriada.
-
-    Na nova arquitetura, cada domínio/account_id tem uma única crew, simplificando o fluxo de dados
-    e reduzindo a complexidade do sistema.
+    Esta classe é responsável por determinar o tipo de crew e canal apropriados
+    para cada mensagem, e direcionar a mensagem para a crew correspondente.
     """
 
-    def __init__(self,
-                 data_proxy_agent: Optional[DataProxyAgent] = None,
-                 crew_factory: Optional[CrewFactory] = None,
-                 domain_manager: Optional[DomainManager] = None,
-                 agent_cache: Optional[Any] = None):  # Alterado para Any pois RedisAgentCache foi removido
+    def __init__(self, redis_client=None, config_registry=None, crew_factory=None):
         """
-        Initialize the hub crew.
+        Inicializa o hub.
 
         Args:
-            data_proxy_agent: Agent for data access across different services
-            crew_factory: Factory for creating domain-specific crews
-            domain_manager: Manager for multi-tenant domains
-            agent_cache: Cache for agent responses (optional)
+            redis_client: Cliente Redis opcional
+            config_registry: Registro de configurações opcional
+            crew_factory: Fábrica de crews opcional
         """
-        # Armazenar atributos necessários
-        self.data_proxy_agent = data_proxy_agent
-        self.domain_manager = domain_manager
-        self.agent_cache = agent_cache
+        self.redis_client = redis_client or get_redis_client()
+        self.config_registry = config_registry or get_config_registry()
+        self.crew_factory = crew_factory or get_crew_factory()
+        self.redis_async_client = None  # Será inicializado sob demanda
 
-        # Inicializar ou armazenar o crew_factory
-        if crew_factory:
-            self.crew_factory = crew_factory
-        else:
-            # Criar uma nova instância do CrewFactory se não for fornecida
-            self.crew_factory = get_crew_factory(
-                data_proxy_agent=data_proxy_agent,
-                domain_manager=domain_manager
-            )
+        # Cache em memória para crews
+        self.memory_cache = {}
 
-        # Cache de crews para evitar recriação desnecessária
-        self.crew_cache = {}
+        logger.info("Hub inicializado")
+
+    async def _get_async_redis_client(self):
+        """
+        Obtém o cliente Redis assíncrono, inicializando-o se necessário.
+
+        Returns:
+            Cliente Redis assíncrono ou None se não for possível conectar
+        """
+        if self.redis_async_client is None:
+            self.redis_async_client = await get_aioredis_client()
+        return self.redis_async_client
 
     async def process_message(self,
                        message: Dict[str, Any],
                        conversation_id: str,
                        channel_type: str,
-                       functional_crews: Dict[str, Any] = None,  # Mantido para compatibilidade
                        domain_name: str = None,
                        account_id: str = None) -> Dict[str, Any]:
         """
-        Processa uma mensagem e a encaminha para a crew do domínio apropriado.
-
-        Este é o ponto de entrada principal para o processamento de mensagens.
-        Ele identifica o domínio/account_id correto e direciona a mensagem para a crew apropriada.
+        Processa uma mensagem e a encaminha para a crew apropriada.
 
         Args:
-            message: A mensagem a ser processada (conteúdo, informações do remetente, etc.)
+            message: A mensagem a ser processada
             conversation_id: Identificador único da conversa
             channel_type: Canal de origem (WhatsApp, Instagram, etc.)
-            functional_crews: Dicionário de crews funcionais disponíveis (mantido para compatibilidade)
             domain_name: Nome do domínio para a conversa
             account_id: ID interno da conta do cliente
 
         Returns:
-            Resultado do processamento com mensagem, contexto e resposta
+            Resultado do processamento
         """
-        # Cria um contexto para a conversa
-        # Na nova arquitetura, o CrewAI gerencia o contexto internamente
+        # Verificar se temos domínio e account_id
+        if not domain_name or not account_id:
+            error_msg = "ERRO: Domínio ou account_id não fornecidos. Impossível processar a mensagem."
+            logger.error(error_msg)
+            return {
+                "error": error_msg,
+                "status": "error"
+            }
+
+        # Criar contexto para a conversa
         context = {
             "channel_type": channel_type,
             "conversation_id": conversation_id,
-            "interaction_count": 1  # Primeira interação
+            "domain_name": domain_name,
+            "account_id": account_id
         }
 
-        # Determinar o domínio para esta conversa
-        # Prioridade: 1) domínio fornecido como parâmetro, 2) domínio no contexto, 3) domínio do cliente
-        active_domain = None
-        internal_account_id = None
+        # Determinar o tipo de crew e canal específico
+        crew_type, specific_channel = self._determine_crew_type(message, channel_type)
 
-        # 1. Verificar se o domínio foi fornecido como parâmetro
-        if domain_name:
-            active_domain = domain_name
-            logger.info(f"Usando domínio fornecido como parâmetro: {domain_name}")
-
-        # 1.1 Verificar se o account_id interno foi fornecido como parâmetro
-        if account_id:
-            internal_account_id = account_id
-            logger.info(f"Usando account_id fornecido como parâmetro: {account_id}")
-
-        # 2. Se não foi fornecido como parâmetro, verificar se está no contexto
-        if not active_domain and "domain_name" in context:
-            active_domain = context["domain_name"]
-            logger.info(f"Usando domínio do contexto: {active_domain}")
-
-        # 2.1 Verificar se o account_id está no contexto
-        if not internal_account_id and "internal_account_id" in context:
-            internal_account_id = context["internal_account_id"]
-            logger.info(f"Usando account_id do contexto: {internal_account_id}")
-
-        # 3. Se ainda não temos um domínio, tentar obter do DomainManager
-        if not active_domain and self.domain_manager:
-            # Tentar obter o domínio a partir do canal e outros metadados
-            channel_info = {
-                "channel_type": channel_type,
-                "sender_id": message.get("sender_id"),
-                "recipient_id": message.get("recipient_id")
-            }
-
-            domain_info = self.domain_manager.get_domain_for_channel(channel_info)
-            if domain_info and "domain_name" in domain_info:
-                active_domain = domain_info["domain_name"]
-                logger.info(f"Domínio determinado pelo DomainManager: {active_domain}")
-
-                # Se o DomainManager também retornou um account_id, usá-lo
-                if not internal_account_id and "account_id" in domain_info:
-                    internal_account_id = domain_info["account_id"]
-                    logger.info(f"Account ID determinado pelo DomainManager: {internal_account_id}")
-
-        # Se não tiver um domínio, isso é um erro
-        if not active_domain:
-            error_msg = "ERRO: Nenhum domínio determinado. Impossível processar a mensagem sem um domínio válido."
-            logger.error(error_msg)
-            return {
-                "message": message,
-                "context": context,
-                "error": error_msg,
-                "status": "error"
-            }
-
-        # Se não tiver um account_id interno, isso é um erro crítico
-        if not internal_account_id:
-            error_msg = "ERRO CRÍTICO: Nenhum account_id interno encontrado. Impossível processar a mensagem sem um account_id válido."
-            logger.error(error_msg)
-            return {
-                "message": message,
-                "context": context,
-                "error": error_msg,
-                "status": "error"
-            }
-
-        # Adicionar o domínio e account_id ao contexto
-        context["domain_name"] = active_domain
-        context["internal_account_id"] = internal_account_id
-
-        # Adicionamos a mensagem atual ao contexto
-        # Na nova arquitetura, o CrewAI gerencia o histórico de mensagens internamente
-        context["current_message"] = {
-            "content": message.get("content", ""),
-            "sender_id": message.get("sender_id", ""),
-            "timestamp": message.get("timestamp", "")
-        }
-
-        # Obter a crew para o domínio/account_id
+        # Obter a crew apropriada
         try:
-            # Criar a crew usando o CrewFactory
-            logger.info(f"Obtendo crew para domínio {active_domain} e account_id {internal_account_id}")
+            crew = await self.get_crew(
+                crew_type=crew_type,
+                domain_name=domain_name,
+                account_id=account_id,
+                channel_type=specific_channel
+            )
 
-            # Na nova arquitetura, o crew_id é sempre "domain_crew"
-            crew_id = "domain_crew"
+            # Processar a mensagem com a crew
+            result = await crew.process(message, context)
 
-            # Chave para o cache
-            cache_key = f"{active_domain}:{internal_account_id}:{crew_id}"
+            # Adicionar informações de roteamento ao resultado
+            result["routing"] = {
+                "crew_type": crew_type,
+                "channel_type": specific_channel,
+                "domain_name": domain_name,
+                "account_id": account_id
+            }
 
-            # Verificar se já existe no cache
-            if cache_key in self.crew_cache:
-                crew = self.crew_cache[cache_key]
-                logger.info(f"Usando crew do cache para o domínio {active_domain} e account_id {internal_account_id}")
-            else:
-                # Obter ou criar a crew
-                crew = self.crew_factory.get_crew_for_domain(crew_id, active_domain, internal_account_id)
-
-                # Armazenar no cache
-                if crew:
-                    self.crew_cache[cache_key] = crew
-                    logger.info(f"Crew criada e armazenada no cache para o domínio {active_domain} e account_id {internal_account_id}")
-
-            if not crew:
-                error_msg = f"Não foi possível obter a crew para o domínio {active_domain} e account_id {internal_account_id}"
-                logger.error(error_msg)
-                return {
-                    "message": message,
-                    "context": context,
-                    "response": None,
-                    "domain_name": active_domain,
-                    "account_id": internal_account_id,
-                    "error": error_msg,
-                    "status": "error"
-                }
-
-            # Processar a mensagem com a crew do domínio
-            try:
-                # As crews esperam um método process(message, context)
-                response = await crew.process(message, context)
-
-                # Adiciona metadata sobre o processamento
-                if isinstance(response, dict):
-                    response["hub_metadata"] = {
-                        "domain_name": active_domain,
-                        "account_id": internal_account_id,
-                        "processing_successful": True
-                    }
-                else:
-                    # Se o resultado não for um dicionário, encapsula-o
-                    response = {
-                        "result": response,
-                        "hub_metadata": {
-                            "domain_name": active_domain,
-                            "account_id": internal_account_id,
-                            "processing_successful": True
-                        }
-                    }
-
-                return response
-
-            except Exception as e:
-                logger.error(f"Erro ao processar mensagem na crew do domínio {active_domain}: {e}")
-                return {
-                    "message": message,
-                    "context": context,
-                    "response": None,
-                    "domain_name": active_domain,
-                    "account_id": internal_account_id,
-                    "error": str(e),
-                    "status": "error"
-                }
+            return result
 
         except Exception as e:
-            error_msg = f"Erro ao obter crew para domínio {active_domain} e account_id {internal_account_id}: {str(e)}"
+            error_msg = f"Erro ao processar mensagem: {str(e)}"
             logger.error(error_msg)
             return {
-                "message": message,
-                "context": context,
-                "response": None,
-                "domain_name": active_domain,
-                "account_id": internal_account_id,
                 "error": error_msg,
-                "status": "error"
+                "status": "error",
+                "routing": {
+                    "crew_type": crew_type,
+                    "channel_type": specific_channel,
+                    "domain_name": domain_name,
+                    "account_id": account_id
+                }
             }
+
+    def _determine_crew_type(self, message: Dict[str, Any], channel_type: str) -> tuple:
+        """
+        Determina o tipo de crew e canal específico com base na origem da mensagem.
+
+        Args:
+            message: A mensagem a ser processada
+            channel_type: Canal de origem (WhatsApp, Instagram, etc.)
+
+        Returns:
+            Tupla (tipo_de_crew, canal_específico)
+        """
+        # Por padrão, usar customer_service como tipo de crew
+        crew_type = "customer_service"
+
+        # Determinar o canal específico
+        specific_channel = "default"
+
+        # Se o canal for Chatwoot, determinar o canal específico
+        if channel_type == "chatwoot":
+            source_id = message.get("source_id", "").lower()
+
+            if "whatsapp" in source_id:
+                specific_channel = "whatsapp"
+            elif "instagram" in source_id:
+                specific_channel = "instagram"
+            elif "facebook" in source_id:
+                specific_channel = "facebook"
+            elif "twitter" in source_id or "x" in source_id:
+                specific_channel = "twitter"
+            elif "telegram" in source_id:
+                specific_channel = "telegram"
+            elif "web" in source_id:
+                specific_channel = "web"
+            else:
+                specific_channel = "default"
+
+        # Se for um canal específico direto, usar esse canal
+        elif channel_type in ["whatsapp", "instagram", "facebook", "twitter", "telegram", "web"]:
+            specific_channel = channel_type
+
+        # Se for um tipo de crew específico, usar esse tipo
+        elif channel_type in ["analytics", "sales", "support"]:
+            crew_type = channel_type
+            specific_channel = "default"
+
+        logger.info(f"Determinado tipo de crew: {crew_type}, canal específico: {specific_channel}")
+        return crew_type, specific_channel
+
+    async def get_crew(self, crew_type: str, domain_name: str, account_id: str, channel_type: str = None) -> Any:
+        """
+        Obtém uma crew para um domínio, account_id e canal específicos.
+
+        Implementa uma estratégia de cache em camadas:
+        1. Verificar cache em memória
+        2. Verificar Redis
+        3. Criar nova crew
+
+        Args:
+            crew_type: Tipo de crew (ex: "customer_service", "analytics")
+            domain_name: Nome do domínio
+            account_id: ID da conta
+            channel_type: Tipo de canal (ex: "whatsapp", "instagram")
+
+        Returns:
+            Instância da crew
+        """
+        # Chave de cache
+        cache_key = f"crew:{crew_type}:{channel_type or 'default'}:{domain_name}:{account_id}"
+
+        # Camada 1: Cache em memória
+        if cache_key in self.memory_cache:
+            logger.debug(f"Crew encontrada em cache de memória: {cache_key}")
+            return self.memory_cache[cache_key]
+
+        # Camada 2: Cache Redis
+        if self.redis_client:
+            try:
+                # Obter cliente Redis assíncrono
+                redis_async = await self._get_async_redis_client()
+                if redis_async:
+                    crew_data = await redis_async.get(cache_key)
+                    if crew_data:
+                        try:
+                            # Tentar carregar como JSON primeiro (novo formato)
+                            import json
+                            crew_info = json.loads(crew_data)
+                            # Criar nova crew com as informações armazenadas
+                            crew = await self.crew_factory.create_crew(
+                                crew_type=crew_info.get("crew_type"),
+                                domain_name=crew_info.get("domain_name"),
+                                account_id=crew_info.get("account_id"),
+                                channel_type=crew_info.get("channel_type")
+                            )
+                            # Atualizar cache em memória
+                            self.memory_cache[cache_key] = crew
+                            logger.debug(f"Crew encontrada em Redis (formato JSON): {cache_key}")
+                            return crew
+                        except Exception as json_error:
+                            logger.warning(f"Erro ao carregar crew do Redis como JSON: {json_error}")
+                            # Tentar carregar como pickle (formato antigo) - apenas para compatibilidade
+                            try:
+                                import pickle
+                                crew = pickle.loads(crew_data.encode('latin1') if isinstance(crew_data, str) else crew_data)
+                                # Atualizar cache em memória
+                                self.memory_cache[cache_key] = crew
+                                logger.debug(f"Crew encontrada em Redis (formato pickle): {cache_key}")
+                                return crew
+                            except Exception as pickle_error:
+                                logger.warning(f"Erro ao carregar crew do Redis como pickle: {pickle_error}")
+                                # Se ambos falharem, vamos criar uma nova crew
+            except Exception as e:
+                logger.warning(f"Erro ao acessar Redis para crew {cache_key}: {e}")
+
+        # Camada 3: Criar nova crew
+        crew = await self.crew_factory.create_crew(
+            crew_type=crew_type,
+            domain_name=domain_name,
+            account_id=account_id,
+            channel_type=channel_type
+        )
+
+        # Atualizar cache em memória
+        self.memory_cache[cache_key] = crew
+
+        # Atualizar Redis se disponível
+        if self.redis_client:
+            try:
+                # Obter cliente Redis assíncrono
+                redis_async = await self._get_async_redis_client()
+                if redis_async:
+                    # Armazenar apenas as informações necessárias para recriar a crew
+                    import json
+                    crew_info = {
+                        "crew_type": crew_type,
+                        "domain_name": domain_name,
+                        "account_id": account_id,
+                        "channel_type": channel_type,
+                        "timestamp": time.time()
+                    }
+                    crew_data = json.dumps(crew_info)
+                    await redis_async.set(cache_key, crew_data, ex=3600)  # 1 hora
+            except Exception as e:
+                logger.warning(f"Erro ao armazenar crew em Redis: {e}")
+
+        logger.info(f"Crew criada e armazenada em cache: {cache_key}")
+        return crew
 
     async def finalize_conversation(self, conversation_id: str) -> Dict[str, Any]:
         """
         Finaliza uma conversa, liberando recursos.
-
-        Na nova arquitetura, o CrewAI gerencia o contexto internamente,
-        então este método apenas retorna um status de sucesso.
 
         Args:
             conversation_id: ID da conversa a ser finalizada
@@ -276,21 +288,36 @@ class HubCrew:
         Returns:
             Resultado da finalização
         """
-        try:
-            # Na nova arquitetura, não precisamos fazer nada especial para finalizar a conversa
-            # O CrewAI gerencia o contexto internamente
+        # Na nova arquitetura, não precisamos fazer nada especial para finalizar a conversa
+        return {
+            "conversation_id": conversation_id,
+            "status": "resolved",
+            "success": True
+        }
 
-            return {
-                "conversation_id": conversation_id,
-                "status": "resolved",
-                "success": True
-            }
+# Instância singleton
+_hub = None
 
-        except Exception as e:
-            logger.error(f"Erro ao finalizar conversa {conversation_id}: {str(e)}")
-            return {
-                "conversation_id": conversation_id,
-                "status": "error",
-                "success": False,
-                "error": str(e)
-            }
+def get_hub(force_new=False, redis_client=None, config_registry=None, crew_factory=None) -> Hub:
+    """
+    Obtém a instância singleton do Hub.
+
+    Args:
+        force_new: Se True, força a criação de uma nova instância
+        redis_client: Cliente Redis opcional
+        config_registry: Registro de configurações opcional
+        crew_factory: Fábrica de crews opcional
+
+    Returns:
+        Instância do Hub
+    """
+    global _hub
+
+    if _hub is None or force_new:
+        _hub = Hub(
+            redis_client=redis_client,
+            config_registry=config_registry,
+            crew_factory=crew_factory
+        )
+
+    return _hub

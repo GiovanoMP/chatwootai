@@ -2159,13 +2159,14 @@ Conteúdo:
         }
         return days.get(day_number, str(day_number))
 
-    async def _update_company_config_yaml(self, account_id: str, metadata: Dict[str, Any]) -> None:
+    async def _update_company_config_yaml(self, account_id: str, metadata: Dict[str, Any], enabled_collections: list = None) -> None:
         """
         Atualiza o arquivo YAML principal de configuração da empresa com os metadados.
 
         Args:
             account_id: ID da conta
             metadata: Metadados da empresa
+            enabled_collections: Lista de coleções habilitadas
         """
         import os
         import yaml
@@ -2218,6 +2219,11 @@ Conteúdo:
             # Adicionar informações dos canais online
             if 'online_channels' in metadata:
                 config['company_metadata']['online_channels'] = metadata['online_channels']
+
+            # Adicionar coleções habilitadas no nível raiz do YAML
+            if enabled_collections is not None:
+                config['enabled_collections'] = enabled_collections
+                logger.info(f"Added enabled_collections to config: {enabled_collections}")
 
             # Salvar o arquivo YAML atualizado
             with open(yaml_path, 'w', encoding='utf-8') as file:
@@ -2415,11 +2421,29 @@ Conteúdo:
                 'inform_at_start': business_rule_data.get('inform_promotions_at_start', False),
             }
 
+            # Extrair coleções habilitadas
+            enabled_collections = []
+            # Sempre incluir business_rules como coleção padrão
+            enabled_collections.append('business_rules')
+
+            # Mapear as opções da interface para as coleções correspondentes
+            if business_rule_data.get('use_business_rules'):
+                enabled_collections.append('products_informations')
+            if business_rule_data.get('use_scheduling_rules'):
+                enabled_collections.append('scheduling_rules')
+            if business_rule_data.get('use_delivery_rules'):
+                enabled_collections.append('delivery_rules')
+            if business_rule_data.get('use_support_documents'):
+                enabled_collections.append('support_documents')
+
+            logger.info(f"Enabled collections for account {account_id}: {enabled_collections}")
+
             # Atualizar o arquivo YAML principal de configuração da empresa
             try:
                 await self._update_company_config_yaml(
                     account_id=account_id,
-                    metadata=metadata
+                    metadata=metadata,
+                    enabled_collections=enabled_collections
                 )
                 logger.info(f"Updated main company config YAML for account {account_id}")
             except Exception as e:

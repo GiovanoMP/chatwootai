@@ -13,7 +13,7 @@ class BusinessRules2(models.Model):
     _description = 'Regras de Negócio 2.0'
     _inherit = ['mail.thread', 'mail.activity.mixin']
 
-    name = fields.Char(string='Nome da Regra', required=True, tracking=True)
+    name = fields.Char(string='Nome da Regra', tracking=True, default='Regras de Negócio')
 
     # Regras e Sincronização
     rule_ids = fields.One2many('business.rule.item2', 'business_rule_id', string='Regras de Negócio')

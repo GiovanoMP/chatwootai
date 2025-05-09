@@ -1,0 +1,214 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Ações para os modelos relacionados (devem ser declaradas antes de serem referenciadas) -->
+    <record id="action_view_rule_items" model="ir.actions.act_window">
+        <field name="name">Regras de Negócio</field>
+        <field name="res_model">business.rule.item2</field>
+        <field name="view_mode">tree,form</field>
+        <field name="context">{'search_default_business_rule_id': active_id}</field>
+        <field name="domain">[('business_rule_id', '=', active_id)]</field>
+    </record>
+
+    <record id="action_view_temporary_rules" model="ir.actions.act_window">
+        <field name="name">Regras Temporárias</field>
+        <field name="res_model">business.temporary.rule2</field>
+        <field name="view_mode">tree,form</field>
+        <field name="context">{'search_default_business_rule_id': active_id}</field>
+        <field name="domain">[('business_rule_id', '=', active_id)]</field>
+    </record>
+
+    <record id="action_view_scheduling_rules" model="ir.actions.act_window">
+        <field name="name">Regras de Agendamento</field>
+        <field name="res_model">business.scheduling.rule2</field>
+        <field name="view_mode">tree,form</field>
+        <field name="context">{'search_default_business_rule_id': active_id}</field>
+        <field name="domain">[('business_rule_id', '=', active_id)]</field>
+    </record>
+
+    <record id="action_view_support_documents" model="ir.actions.act_window">
+        <field name="name">Documentos de Suporte</field>
+        <field name="res_model">business.support.document2</field>
+        <field name="view_mode">tree,form</field>
+        <field name="context">{'search_default_business_rule_ids': active_id}</field>
+        <field name="domain">[('business_rule_ids', 'in', active_id)]</field>
+    </record>
+
+    <!-- Vista de Formulário para Regras de Negócio -->
+    <record id="view_business_rules2_form" model="ir.ui.view">
+        <field name="name">business.rules2.form</field>
+        <field name="model">business.rules2</field>
+        <field name="arch" type="xml">
+            <form string="Regras de Negócio">
+                <header>
+                    <button name="action_sync_with_ai"
+                            string="Sincronizar com Sistema de IA"
+                            type="object"
+                            class="btn btn-success"
+                            icon="fa-sync"
+                            style="background-color: #00C853 !important; color: white !important; font-weight: bold !important; padding: 10px 20px !important; border-radius: 4px !important; box-shadow: 0 2px 4px rgba(0,0,0,0.2) !important;"/>
+                </header>
+                <sheet>
+                    <div class="oe_button_box" name="button_box">
+                        <button class="oe_stat_button" icon="fa-list" type="action" name="%(action_view_rule_items)d">
+                            <field name="active_permanent_rules_count" string="Regras Permanentes" widget="statinfo"/>
+                        </button>
+                        <button class="oe_stat_button" icon="fa-calendar" type="action" name="%(action_view_temporary_rules)d">
+                            <field name="active_temporary_rules_count" string="Regras Temporárias" widget="statinfo"/>
+                        </button>
+                        <button class="oe_stat_button" icon="fa-clock-o" type="action" name="%(action_view_scheduling_rules)d">
+                            <field name="active_scheduling_rules_count" string="Regras de Agendamento" widget="statinfo"/>
+                        </button>
+                        <button class="oe_stat_button" icon="fa-file-text-o" type="action" name="%(action_view_support_documents)d">
+                            <field name="support_documents_count" string="Documentos de Suporte" widget="statinfo"/>
+                        </button>
+                    </div>
+                    <div class="oe_title">
+                        <h1>
+                            <field name="name" placeholder="Nome da Empresa"/>
+                        </h1>
+                    </div>
+                    <group>
+                        <field name="description" placeholder="Descrição da empresa"/>
+                        <field name="last_sync_date" readonly="1"/>
+                    </group>
+                    <notebook>
+                        <page string="Regras de Negócio" name="business_rules">
+                            <p class="text-muted">
+                                Configure as regras de negócio permanentes da sua empresa. Estas regras serão utilizadas pelo sistema de IA para responder às consultas dos clientes.
+                            </p>
+                            <field name="rule_ids" mode="tree">
+                                <tree string="Regras de Negócio" editable="bottom">
+                                    <field name="name"/>
+                                    <field name="rule_type"/>
+                                    <field name="description"/>
+                                    <field name="active" widget="boolean_toggle"/>
+                                    <field name="visible_in_ai" widget="boolean_toggle"/>
+                                </tree>
+                            </field>
+                        </page>
+                        <page string="Regras Temporárias" name="temporary_rules">
+                            <p class="text-muted">
+                                Configure regras temporárias e promoções com prazo de validade. Estas regras serão automaticamente ativadas e desativadas conforme as datas definidas.
+                            </p>
+                            <field name="temporary_rule_ids" mode="tree">
+                                <tree string="Regras Temporárias" decoration-success="state == 'active'" decoration-info="state == 'draft'" decoration-muted="state == 'expired' or state == 'cancelled'">
+                                    <field name="name"/>
+                                    <field name="rule_type"/>
+                                    <field name="date_start"/>
+                                    <field name="date_end"/>
+                                    <field name="state"/>
+                                    <field name="active" widget="boolean_toggle"/>
+                                    <field name="visible_in_ai" widget="boolean_toggle"/>
+                                </tree>
+                            </field>
+                        </page>
+                        <page string="Regras de Agendamento" name="scheduling_rules">
+                            <p class="text-muted">
+                                Configure regras para agendamento de serviços, consultas ou reservas. Estas regras serão utilizadas pelo sistema de IA para orientar os clientes sobre disponibilidade e procedimentos de agendamento.
+                            </p>
+                            <field name="scheduling_rule_ids" mode="tree">
+                                <tree string="Regras de Agendamento">
+                                    <field name="name"/>
+                                    <field name="service_type"/>
+                                    <field name="duration"/>
+                                    <field name="active" widget="boolean_toggle"/>
+                                    <field name="visible_in_ai" widget="boolean_toggle"/>
+                                </tree>
+                            </field>
+                        </page>
+                        <page string="Documentos de Suporte" name="support_documents">
+                            <p class="text-muted">
+                                Adicione documentos de suporte ao cliente, como manuais, FAQs e instruções. Estes documentos serão utilizados pelo sistema de IA para responder às dúvidas dos clientes.
+                            </p>
+                            <field name="support_document_ids" mode="tree">
+                                <tree string="Documentos de Suporte">
+                                    <field name="name"/>
+                                    <field name="document_type"/>
+                                    <field name="active" widget="boolean_toggle"/>
+                                    <field name="visible_in_ai" widget="boolean_toggle"/>
+                                    <field name="last_sync_date"/>
+                                </tree>
+                            </field>
+                        </page>
+                        <page string="Serviços Habilitados" name="enabled_services">
+                            <p class="text-muted">
+                                Configure quais serviços estarão disponíveis no sistema de IA. Apenas os serviços habilitados serão considerados nas respostas aos clientes.
+                            </p>
+                            <group>
+                                <group string="Serviços Disponíveis">
+                                    <field name="use_business_rules"/>
+                                    <field name="use_scheduling_rules"/>
+                                    <field name="use_delivery_rules"/>
+                                    <field name="use_support_documents"/>
+                                </group>
+                                <group string="Configurações Gerais">
+                                    <field name="active"/>
+                                    <field name="visible_in_ai"/>
+                                    <field name="company_id" groups="base.group_multi_company"/>
+                                </group>
+                            </group>
+                        </page>
+                    </notebook>
+                </sheet>
+                <div class="oe_chatter">
+                    <field name="message_follower_ids"/>
+                    <field name="activity_ids"/>
+                    <field name="message_ids"/>
+                </div>
+            </form>
+        </field>
+    </record>
+
+    <!-- Vista de Árvore para Regras de Negócio -->
+    <record id="view_business_rules2_tree" model="ir.ui.view">
+        <field name="name">business.rules2.tree</field>
+        <field name="model">business.rules2</field>
+        <field name="arch" type="xml">
+            <tree string="Regras de Negócio">
+                <field name="name"/>
+                <field name="active_permanent_rules_count" string="Regras Permanentes"/>
+                <field name="active_temporary_rules_count" string="Regras Temporárias"/>
+                <field name="last_sync_date"/>
+                <field name="visible_in_ai" widget="boolean_toggle" string="Disponível no Sistema de IA"/>
+            </tree>
+        </field>
+    </record>
+
+    <!-- Vista de Pesquisa para Regras de Negócio -->
+    <record id="view_business_rules2_search" model="ir.ui.view">
+        <field name="name">business.rules2.search</field>
+        <field name="model">business.rules2</field>
+        <field name="arch" type="xml">
+            <search string="Regras de Negócio">
+                <field name="name"/>
+                <separator/>
+                <filter string="Disponíveis no Sistema de IA" name="visible_in_ai" domain="[('visible_in_ai', '=', True)]"/>
+                <filter string="Arquivadas" name="inactive" domain="[('active', '=', False)]"/>
+                <group expand="0" string="Agrupar Por">
+                    <filter string="Empresa" name="company" domain="[]" context="{'group_by': 'company_id'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <!-- Ação para Regras de Negócio -->
+    <record id="action_business_rules2" model="ir.actions.act_window">
+        <field name="name">Regras de Negócio</field>
+        <field name="res_model">business.rules2</field>
+        <field name="view_mode">tree,form</field>
+        <field name="search_view_id" ref="view_business_rules2_search"/>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Crie sua primeira regra de negócio
+            </p>
+            <p>
+                As regras de negócio permitem configurar como o sistema de IA responderá às consultas dos clientes.
+                Você pode criar regras permanentes, temporárias, de agendamento e adicionar documentos de suporte.
+            </p>
+        </field>
+    </record>
+
+    <!-- Menu para Regras de Negócio -->
+    <menuitem id="menu_business_rules2_root" name="Regras de Negócio 2.0" sequence="10"/>
+    <menuitem id="menu_business_rules2" parent="menu_business_rules2_root" name="Regras de Negócio" action="action_business_rules2" sequence="10"/>
+</odoo>

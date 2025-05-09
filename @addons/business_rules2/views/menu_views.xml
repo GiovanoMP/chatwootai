@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Menu Principal -->
+    <menuitem id="menu_business_rules2_root" name="Regras de Negócio 2.0" sequence="10"/>
+    
+    <!-- Submenu para Regras de Negócio -->
+    <menuitem id="menu_business_rules2" parent="menu_business_rules2_root" name="Regras de Negócio" action="action_business_rules2" sequence="10"/>
+    
+    <!-- Submenu para Configurações -->
+    <menuitem id="menu_business_rules2_config" name="Configurações" parent="menu_business_rules2_root" action="action_business_rules2_configuration" sequence="100"/>
+</odoo>

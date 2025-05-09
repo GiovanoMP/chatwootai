@@ -1,0 +1,139 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Vista de Formulário para Regras de Agendamento -->
+    <record id="view_scheduling_rule2_form" model="ir.ui.view">
+        <field name="name">business.scheduling.rule2.form</field>
+        <field name="model">business.scheduling.rule2</field>
+        <field name="arch" type="xml">
+            <form string="Regra de Agendamento">
+                <sheet>
+                    <div class="oe_title">
+                        <h1>
+                            <field name="name" placeholder="Nome da Regra"/>
+                        </h1>
+                    </div>
+                    <group>
+                        <group>
+                            <field name="service_type"/>
+                            <field name="service_type_other" attrs="{'invisible': [('service_type', '!=', 'other')], 'required': [('service_type', '=', 'other')]}"/>
+                            <field name="business_rule_id"/>
+                            <field name="sequence"/>
+                        </group>
+                        <group>
+                            <field name="duration"/>
+                            <field name="min_interval"/>
+                            <field name="min_advance_time"/>
+                            <field name="max_advance_time"/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page string="Descrição" name="description">
+                            <field name="description" placeholder="Descreva a regra de agendamento em detalhes..."/>
+                        </page>
+                        <page string="Dias e Horários" name="days_hours">
+                            <group>
+                                <group string="Dias Disponíveis">
+                                    <field name="monday_available"/>
+                                    <field name="tuesday_available"/>
+                                    <field name="wednesday_available"/>
+                                    <field name="thursday_available"/>
+                                    <field name="friday_available"/>
+                                    <field name="saturday_available"/>
+                                    <field name="sunday_available"/>
+                                </group>
+                                <group string="Horários (Segunda a Sexta)">
+                                    <field name="morning_start" widget="float_time"/>
+                                    <field name="morning_end" widget="float_time"/>
+                                    <field name="has_lunch_break"/>
+                                    <field name="afternoon_start" widget="float_time"/>
+                                    <field name="afternoon_end" widget="float_time"/>
+                                </group>
+                            </group>
+                            <group>
+                                <group string="Horários (Sábado)" attrs="{'invisible': [('saturday_available', '=', False)]}">
+                                    <field name="saturday_morning_start" widget="float_time"/>
+                                    <field name="saturday_morning_end" widget="float_time"/>
+                                    <field name="saturday_has_afternoon"/>
+                                    <field name="saturday_afternoon_start" widget="float_time" attrs="{'invisible': [('saturday_has_afternoon', '=', False)]}"/>
+                                    <field name="saturday_afternoon_end" widget="float_time" attrs="{'invisible': [('saturday_has_afternoon', '=', False)]}"/>
+                                </group>
+                                <group string="Horários (Domingo)" attrs="{'invisible': [('sunday_available', '=', False)]}">
+                                    <field name="sunday_morning_start" widget="float_time"/>
+                                    <field name="sunday_morning_end" widget="float_time"/>
+                                    <field name="sunday_has_afternoon"/>
+                                    <field name="sunday_afternoon_start" widget="float_time" attrs="{'invisible': [('sunday_has_afternoon', '=', False)]}"/>
+                                    <field name="sunday_afternoon_end" widget="float_time" attrs="{'invisible': [('sunday_has_afternoon', '=', False)]}"/>
+                                </group>
+                            </group>
+                        </page>
+                        <page string="Políticas" name="policies">
+                            <group>
+                                <field name="cancellation_policy" placeholder="Descreva a política de cancelamento..."/>
+                                <field name="rescheduling_policy" placeholder="Descreva a política de reagendamento..."/>
+                                <field name="required_information" placeholder="Informações necessárias para agendamento..."/>
+                                <field name="confirmation_instructions" placeholder="Instruções após confirmação do agendamento..."/>
+                            </group>
+                        </page>
+                        <page string="Configurações" name="settings">
+                            <group>
+                                <field name="active"/>
+                                <field name="visible_in_ai"/>
+                            </group>
+                        </page>
+                    </notebook>
+                </sheet>
+                <div class="oe_chatter">
+                    <field name="message_follower_ids"/>
+                    <field name="activity_ids"/>
+                    <field name="message_ids"/>
+                </div>
+            </form>
+        </field>
+    </record>
+
+    <!-- Vista de Árvore para Regras de Agendamento -->
+    <record id="view_scheduling_rule2_tree" model="ir.ui.view">
+        <field name="name">business.scheduling.rule2.tree</field>
+        <field name="model">business.scheduling.rule2</field>
+        <field name="arch" type="xml">
+            <tree string="Regras de Agendamento">
+                <field name="sequence" widget="handle"/>
+                <field name="name"/>
+                <field name="service_type"/>
+                <field name="duration" widget="float_time"/>
+                <field name="business_rule_id"/>
+                <field name="active" widget="boolean_toggle"/>
+                <field name="visible_in_ai" widget="boolean_toggle"/>
+            </tree>
+        </field>
+    </record>
+
+    <!-- Vista de Pesquisa para Regras de Agendamento -->
+    <record id="view_scheduling_rule2_search" model="ir.ui.view">
+        <field name="name">business.scheduling.rule2.search</field>
+        <field name="model">business.scheduling.rule2</field>
+        <field name="arch" type="xml">
+            <search string="Regras de Agendamento">
+                <field name="name"/>
+                <field name="service_type"/>
+                <field name="business_rule_id"/>
+                <separator/>
+                <filter string="Ativas" name="active" domain="[('active', '=', True)]"/>
+                <filter string="Disponíveis no Sistema de IA" name="visible_in_ai" domain="[('visible_in_ai', '=', True)]"/>
+                <group expand="0" string="Agrupar Por">
+                    <filter string="Tipo de Serviço" name="service_type" domain="[]" context="{'group_by': 'service_type'}"/>
+                    <filter string="Regra de Negócio" name="business_rule_id" domain="[]" context="{'group_by': 'business_rule_id'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <!-- Ação para Regras de Agendamento -->
+    <record id="action_view_scheduling_rules" model="ir.actions.act_window">
+        <field name="name">Regras de Agendamento</field>
+        <field name="res_model">business.scheduling.rule2</field>
+        <field name="view_mode">tree,form</field>
+        <field name="context">{'search_default_business_rule_id': active_id}</field>
+        <field name="domain">[('business_rule_id', '=', active_id)]</field>
+    </record>
+</odoo>

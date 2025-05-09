@@ -16,7 +16,7 @@
                         <group>
                             <field name="service_type"/>
                             <field name="service_type_other" attrs="{'invisible': [('service_type', '!=', 'other')], 'required': [('service_type', '=', 'other')]}"/>
-                            <field name="business_rule_id"/>
+                            <field name="business_rule_id" invisible="1"/>
                             <field name="sequence"/>
                         </group>
                         <group>
@@ -74,12 +74,7 @@
                                 <field name="confirmation_instructions" placeholder="Instruções após confirmação do agendamento..."/>
                             </group>
                         </page>
-                        <page string="Configurações" name="settings">
-                            <group>
-                                <field name="active"/>
-                                <field name="visible_in_ai"/>
-                            </group>
-                        </page>
+
                     </notebook>
                 </sheet>
                 <div class="oe_chatter">

@@ -6,9 +6,7 @@
         <field name="model">business.support.document2</field>
         <field name="arch" type="xml">
             <form string="Documento de Suporte">
-                <header>
-                    <button name="action_sync_document" string="Sincronizar com Sistema de IA" type="object" class="btn btn-success" style="background-color: #00C853 !important; color: white !important;"/>
-                </header>
+
                 <sheet>
                     <div class="oe_title">
                         <h1>
@@ -18,21 +16,30 @@
                     <group>
                         <group>
                             <field name="document_type"/>
-                            <field name="business_rule_ids" widget="many2many_tags"/>
+                            <field name="business_rule_ids" widget="many2many_tags" invisible="1"/>
                         </group>
                         <group>
-                            <field name="active"/>
-                            <field name="visible_in_ai"/>
-                            <field name="last_sync_date" readonly="1"/>
-                            <field name="vector_id" readonly="1" groups="base.group_system"/>
+                            <field name="active" invisible="1"/>
+                            <field name="visible_in_ai" invisible="1"/>
                         </group>
                     </group>
                     <notebook>
+                        <page string="Upload de Documentos" name="attachments">
+                            <div class="alert alert-info" role="alert">
+                                <p><strong>Importante:</strong> Faça upload de arquivos no formato TXT para melhor processamento pelo sistema de IA.</p>
+                                <p>Exemplos de arquivos TXT:</p>
+                                <ul>
+                                    <li>Documentos de texto simples</li>
+                                    <li>Manuais de instruções</li>
+                                    <li>FAQs e perguntas frequentes</li>
+                                    <li>Políticas e procedimentos</li>
+                                </ul>
+                                <p>Você pode criar arquivos TXT usando o Bloco de Notas (Windows), TextEdit (Mac) ou qualquer editor de texto simples.</p>
+                            </div>
+                            <field name="attachment_ids" widget="many2many_binary" class="btn-success"/>
+                        </page>
                         <page string="Conteúdo" name="content">
                             <field name="content" placeholder="Conteúdo do documento..."/>
-                        </page>
-                        <page string="Anexos" name="attachments">
-                            <field name="attachment_ids" widget="many2many_binary"/>
                         </page>
                     </notebook>
                 </sheet>
@@ -53,9 +60,7 @@
             <tree string="Documentos de Suporte">
                 <field name="name"/>
                 <field name="document_type"/>
-                <field name="active" widget="boolean_toggle"/>
-                <field name="visible_in_ai" widget="boolean_toggle"/>
-                <field name="last_sync_date"/>
+                <button name="unlink" type="object" string="Excluir" icon="fa-trash-o" class="text-danger"/>
             </tree>
         </field>
     </record>

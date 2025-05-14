@@ -1,0 +1,62 @@
+version: '3.8'
+
+services:
+  # MongoDB para armazenamento de configurações
+  mongodb:
+    image: mongo:6.0-focal
+    container_name: chatwoot-mongodb
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=admin
+      - MONGO_INITDB_ROOT_PASSWORD=${MONGO_ROOT_PASSWORD:-chatwoot_mongodb_password}
+    volumes:
+      - mongodb-data:/data/db
+      - ./mongo-init:/docker-entrypoint-initdb.d
+    networks:
+      - mongo-network
+    command: mongod --auth
+
+  # Interface web para MongoDB
+  mongo-express:
+    image: mongo-express:latest
+    container_name: chatwoot-mongo-express
+    restart: unless-stopped
+    ports:
+      - "8082:8081"
+    environment:
+      - ME_CONFIG_MONGODB_ADMINUSERNAME=admin
+      - ME_CONFIG_MONGODB_ADMINPASSWORD=${MONGO_ROOT_PASSWORD:-chatwoot_mongodb_password}
+      - ME_CONFIG_MONGODB_URL=mongodb://admin:${MONGO_ROOT_PASSWORD:-chatwoot_mongodb_password}@mongodb:27017/
+      - ME_CONFIG_BASICAUTH_USERNAME=${MONGO_EXPRESS_USER:-admin}
+      - ME_CONFIG_BASICAUTH_PASSWORD=${MONGO_EXPRESS_PASSWORD:-express_password}
+    depends_on:
+      - mongodb
+    networks:
+      - mongo-network
+
+  # Webhook para receber dados do módulo company_services
+  webhook-mongo:
+    build:
+      context: ../webhook-mongo
+      dockerfile: Dockerfile
+    container_name: chatwoot-webhook-mongo
+    restart: unless-stopped
+    ports:
+      - "8003:8003"
+    environment:
+      - MONGODB_URI=mongodb://config_user:config_password@mongodb:27017/config_service
+      - API_KEY=${MONGO_CONFIG_API_KEY:-development-api-key}
+    depends_on:
+      - mongodb
+    networks:
+      - mongo-network
+
+volumes:
+  mongodb-data:
+    name: chatwoot-mongodb-data
+
+networks:
+  mongo-network:
+    name: chatwoot-mongo-network

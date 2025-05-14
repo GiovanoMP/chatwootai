@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Menu Principal -->
+    <menuitem id="menu_business_rules_root" 
+              name="Regras de Negócio" 
+              web_icon="business_rules18,static/description/icon.png"
+              sequence="10"/>
+    
+    <!-- Submenu para Regras de Negócio -->
+    <menuitem id="menu_business_rules" 
+              parent="menu_business_rules_root" 
+              name="Regras de Negócio" 
+              action="action_business_rules" 
+              sequence="10"/>
+    
+    <!-- Submenu para Regras Temporárias -->
+    <menuitem id="menu_temporary_rules" 
+              parent="menu_business_rules_root" 
+              name="Regras Temporárias" 
+              action="action_temporary_rule" 
+              sequence="20"/>
+    
+    <!-- Submenu para Regras de Agendamento -->
+    <menuitem id="menu_scheduling_rules" 
+              parent="menu_business_rules_root" 
+              name="Regras de Agendamento" 
+              action="action_scheduling_rule" 
+              sequence="30"/>
+    
+    <!-- Submenu para Documentos de Suporte -->
+    <menuitem id="menu_support_documents" 
+              parent="menu_business_rules_root" 
+              name="Documentos de Suporte" 
+              action="action_business_support_document" 
+              sequence="40"/>
+    
+    <!-- Submenu para Configurações -->
+    <menuitem id="menu_business_rules_config" 
+              name="Configurações" 
+              parent="menu_business_rules_root" 
+              action="business_rules_settings_action" 
+              sequence="100"/>
+</odoo>

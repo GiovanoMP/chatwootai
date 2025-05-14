@@ -1,0 +1,35 @@
+version: '3.8'
+
+services:
+  vectorization-service:
+    image: vectorization-service:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: vectorization-service
+    restart: unless-stopped
+    ports:
+      - "8004:8004"
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - API_KEY=development-api-key
+      - QDRANT_HOST=qdrant
+      - QDRANT_PORT=6333
+      - REDIS_HOST=odoo_api-redis-1
+      - REDIS_PORT=6379
+      - LOG_LEVEL=INFO
+      - ENABLE_DOCUMENT_CHUNKING=true
+    networks:
+      - odoo14_default
+    volumes:
+      - ./logs:/app/logs
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8004/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+networks:
+  odoo14_default:
+    external: true

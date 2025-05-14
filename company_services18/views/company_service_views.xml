@@ -1,0 +1,171 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Form View -->
+    <record id="view_company_service_form" model="ir.ui.view">
+        <field name="name">company.service.form</field>
+        <field name="model">company.service</field>
+        <field name="arch" type="xml">
+            <form>
+                <header>
+                    <button name="action_sync_to_config_service" string="Sincronizar" type="object" class="oe_highlight" 
+                            attrs="{'invisible': [('sync_status', '=', 'syncing')]}"/>
+                    <field name="sync_status" widget="statusbar" statusbar_visible="not_synced,syncing,synced,error"/>
+                </header>
+                <sheet>
+                    <div class="oe_button_box" name="button_box">
+                        <!-- Botões de ação podem ser adicionados aqui -->
+                    </div>
+                    <div class="oe_title">
+                        <h1>
+                            <field name="name" placeholder="Nome da Empresa"/>
+                        </h1>
+                    </div>
+                    <group>
+                        <group>
+                            <field name="description" placeholder="Descrição da empresa..."/>
+                            <field name="last_sync" readonly="1"/>
+                        </group>
+                        <group>
+                            <field name="error_message" readonly="1" attrs="{'invisible': [('error_message', '=', False)]}"/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page string="Informações da Empresa" name="company_info">
+                            <group>
+                                <group string="Endereço">
+                                    <field name="street" placeholder="Endereço"/>
+                                    <field name="street2" placeholder="Complemento"/>
+                                    <field name="city" placeholder="Cidade"/>
+                                    <field name="state" placeholder="Estado"/>
+                                    <field name="zip" placeholder="CEP"/>
+                                    <field name="country" placeholder="País"/>
+                                    <field name="share_address"/>
+                                </group>
+                                <group string="Horário de Funcionamento">
+                                    <field name="monday"/>
+                                    <field name="tuesday"/>
+                                    <field name="wednesday"/>
+                                    <field name="thursday"/>
+                                    <field name="friday"/>
+                                    <field name="saturday"/>
+                                    <field name="sunday"/>
+                                    <field name="opening_time" widget="float_time"/>
+                                    <field name="closing_time" widget="float_time"/>
+                                    <field name="inform_business_hours"/>
+                                </group>
+                            </group>
+                        </page>
+                        <page string="Estilo de Comunicação" name="communication_style">
+                            <group>
+                                <group string="Personalidade do Agente">
+                                    <field name="tone"/>
+                                    <field name="voice"/>
+                                    <field name="formality"/>
+                                    <field name="emoji_usage"/>
+                                </group>
+                                <group string="Uso do Nome do Cliente">
+                                    <field name="use_name_in_greeting"/>
+                                    <field name="name_usage_frequency" attrs="{'invisible': [('use_name_in_greeting', '=', False)]}"/>
+                                </group>
+                            </group>
+                            <group string="Mensagens">
+                                <field name="greeting_message" placeholder="Olá! Bem-vindo à [Nome da Empresa]. Como posso ajudar?"/>
+                                <field name="farewell_message" placeholder="Obrigado por entrar em contato com a [Nome da Empresa]!"/>
+                            </group>
+                        </page>
+                        <page string="Serviços de IA" name="ai_services">
+                            <div class="alert alert-info" role="alert">
+                                <p><strong>Nota:</strong> Os serviços abaixo são configurados nas Configurações do módulo e são exibidos aqui apenas para referência.</p>
+                            </div>
+                            <group>
+                                <group string="Canais Habilitados">
+                                    <field name="channel_whatsapp" readonly="1"/>
+                                </group>
+                                <group string="Serviços Habilitados">
+                                    <field name="enable_sales" readonly="1"/>
+                                    <field name="enable_scheduling" readonly="1"/>
+                                    <field name="enable_delivery" readonly="1"/>
+                                    <field name="enable_support" readonly="1"/>
+                                </group>
+                            </group>
+                            <group string="Configurações de Promoções" attrs="{'invisible': [('enable_sales', '=', False)]}">
+                                <field name="inform_promotions"/>
+                            </group>
+                        </page>
+                        <page string="Site e Redes Sociais" name="website_social">
+                            <group>
+                                <group string="Site">
+                                    <field name="website_url" placeholder="https://www.exemplo.com.br"/>
+                                    <field name="website_mention" attrs="{'invisible': [('website_url', '=', False)]}"/>
+                                </group>
+                                <group string="Redes Sociais">
+                                    <field name="facebook_url" placeholder="https://www.facebook.com/exemplo"/>
+                                    <field name="facebook_mention" attrs="{'invisible': [('facebook_url', '=', False)]}"/>
+                                    <field name="instagram_url" placeholder="https://www.instagram.com/exemplo"/>
+                                    <field name="instagram_mention" attrs="{'invisible': [('instagram_url', '=', False)]}"/>
+                                </group>
+                            </group>
+                            <group string="Configurações de Finalização">
+                                <field name="use_farewell"/>
+                                <field name="request_rating"/>
+                                <field name="rating_request_message" attrs="{'invisible': [('request_rating', '=', False)]}" placeholder="Você poderia avaliar nosso atendimento de 1 a 5?"/>
+                            </group>
+                        </page>
+                    </notebook>
+                </sheet>
+                <div class="oe_chatter">
+                    <field name="message_follower_ids"/>
+                    <field name="activity_ids"/>
+                    <field name="message_ids"/>
+                </div>
+            </form>
+        </field>
+    </record>
+
+    <!-- Tree View -->
+    <record id="view_company_service_tree" model="ir.ui.view">
+        <field name="name">company.service.tree</field>
+        <field name="model">company.service</field>
+        <field name="arch" type="xml">
+            <tree>
+                <field name="name"/>
+                <field name="sync_status"/>
+                <field name="last_sync"/>
+            </tree>
+        </field>
+    </record>
+
+    <!-- Search View -->
+    <record id="view_company_service_search" model="ir.ui.view">
+        <field name="name">company.service.search</field>
+        <field name="model">company.service</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="name"/>
+                <field name="description"/>
+                <filter string="Sincronizado" name="synced" domain="[('sync_status', '=', 'synced')]"/>
+                <filter string="Não Sincronizado" name="not_synced" domain="[('sync_status', '=', 'not_synced')]"/>
+                <filter string="Erro" name="error" domain="[('sync_status', '=', 'error')]"/>
+                <group expand="0" string="Agrupar Por">
+                    <filter string="Status de Sincronização" name="group_by_sync_status" context="{'group_by': 'sync_status'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <!-- Action -->
+    <record id="action_company_service" model="ir.actions.act_window">
+        <field name="name">Empresa e Serviços</field>
+        <field name="res_model">company.service</field>
+        <field name="view_mode">tree,form</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Configure sua empresa e serviços
+            </p>
+            <p>
+                Configure as informações da sua empresa, estilo de comunicação do agente de IA,
+                e sincronize com o serviço de configuração.
+            </p>
+        </field>
+    </record>
+</odoo>

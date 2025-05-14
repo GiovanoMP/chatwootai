@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Vista de Formulário para Documentos de Suporte -->
+    <record id="view_business_support_document2_form" model="ir.ui.view">
+        <field name="name">business.support.document2.form</field>
+        <field name="model">business.support.document2</field>
+        <field name="arch" type="xml">
+            <form string="Documento de Suporte">
+
+                <sheet>
+                    <div class="oe_title">
+                        <h1>
+                            <field name="name" placeholder="Nome do Documento"/>
+                        </h1>
+                    </div>
+                    <group>
+                        <group>
+                            <field name="document_type"/>
+                            <field name="business_rule_ids" widget="many2many_tags" invisible="1"/>
+                        </group>
+                        <group>
+                            <field name="active" invisible="1"/>
+                            <field name="visible_in_ai" invisible="1"/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page string="Upload de Documentos" name="attachments">
+                            <div class="alert alert-info" role="alert">
+                                <p><strong>Importante:</strong> Faça upload de arquivos no formato TXT para melhor processamento pelo sistema de IA.</p>
+                                <p>Exemplos de arquivos TXT:</p>
+                                <ul>
+                                    <li>Documentos de texto simples</li>
+                                    <li>Manuais de instruções</li>
+                                    <li>FAQs e perguntas frequentes</li>
+                                    <li>Políticas e procedimentos</li>
+                                </ul>
+                                <p>Você pode criar arquivos TXT usando o Bloco de Notas (Windows), TextEdit (Mac) ou qualquer editor de texto simples.</p>
+                            </div>
+                            <field name="attachment_ids" widget="many2many_binary" class="btn-success"/>
+                        </page>
+                        <page string="Conteúdo" name="content">
+                            <field name="content" placeholder="Conteúdo do documento..."/>
+                        </page>
+                    </notebook>
+                </sheet>
+                <div class="oe_chatter">
+                    <field name="message_follower_ids"/>
+                    <field name="activity_ids"/>
+                    <field name="message_ids"/>
+                </div>
+            </form>
+        </field>
+    </record>
+
+    <!-- Vista de Árvore para Documentos de Suporte -->
+    <record id="view_business_support_document2_tree" model="ir.ui.view">
+        <field name="name">business.support.document2.tree</field>
+        <field name="model">business.support.document2</field>
+        <field name="arch" type="xml">
+            <tree string="Documentos de Suporte">
+                <field name="name"/>
+                <field name="document_type"/>
+                <button name="unlink" type="object" string="Excluir" icon="fa-trash-o" class="text-danger"/>
+            </tree>
+        </field>
+    </record>
+
+    <!-- Vista de Pesquisa para Documentos de Suporte -->
+    <record id="view_business_support_document2_search" model="ir.ui.view">
+        <field name="name">business.support.document2.search</field>
+        <field name="model">business.support.document2</field>
+        <field name="arch" type="xml">
+            <search string="Documentos de Suporte">
+                <field name="name"/>
+                <field name="document_type"/>
+                <field name="content"/>
+                <separator/>
+                <filter string="Ativos" name="active" domain="[('active', '=', True)]"/>
+                <filter string="Disponíveis no Sistema de IA" name="visible_in_ai" domain="[('visible_in_ai', '=', True)]"/>
+                <filter string="Sincronizados" name="synced" domain="[('last_sync_date', '!=', False)]"/>
+                <filter string="Não Sincronizados" name="not_synced" domain="[('last_sync_date', '=', False)]"/>
+                <group expand="0" string="Agrupar Por">
+                    <filter string="Tipo de Documento" name="document_type" domain="[]" context="{'group_by': 'document_type'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <!-- Ação para Documentos de Suporte -->
+    <record id="action_view_support_documents" model="ir.actions.act_window">
+        <field name="name">Documentos de Suporte</field>
+        <field name="res_model">business.support.document2</field>
+        <field name="view_mode">tree,form</field>
+        <field name="context">{'search_default_business_rule_ids': active_id}</field>
+        <field name="domain">[('business_rule_ids', 'in', active_id)]</field>
+    </record>
+</odoo>

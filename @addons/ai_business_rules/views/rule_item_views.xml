@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Vista de Formulário para Itens de Regra -->
+    <record id="view_rule_item2_form" model="ir.ui.view">
+        <field name="name">business.rule.item2.form</field>
+        <field name="model">business.rule.item2</field>
+        <field name="arch" type="xml">
+            <form string="Regra de Negócio">
+                <sheet>
+                    <group>
+                        <group>
+                            <field name="name"/>
+                            <field name="rule_type"/>
+                            <field name="business_rule_id" invisible="1"/>
+                        </group>
+                        <group>
+                            <field name="create_date" readonly="1"/>
+                            <field name="write_date" readonly="1"/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page string="Descrição" name="description">
+                            <field name="description" placeholder="Descreva a regra em detalhes..."/>
+                        </page>
+                    </notebook>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <!-- Vista de Árvore para Itens de Regra -->
+    <record id="view_rule_item2_tree" model="ir.ui.view">
+        <field name="name">business.rule.item2.tree</field>
+        <field name="model">business.rule.item2</field>
+        <field name="arch" type="xml">
+            <tree string="Regras de Negócio">
+                <field name="name"/>
+                <field name="rule_type"/>
+                <field name="business_rule_id"/>
+                <field name="active" widget="boolean_toggle"/>
+                <field name="visible_in_ai" widget="boolean_toggle"/>
+            </tree>
+        </field>
+    </record>
+
+    <!-- Vista de Pesquisa para Itens de Regra -->
+    <record id="view_rule_item2_search" model="ir.ui.view">
+        <field name="name">business.rule.item2.search</field>
+        <field name="model">business.rule.item2</field>
+        <field name="arch" type="xml">
+            <search string="Regras de Negócio">
+                <field name="name"/>
+                <field name="rule_type"/>
+                <field name="business_rule_id"/>
+                <separator/>
+                <filter string="Ativas" name="active" domain="[('active', '=', True)]"/>
+                <filter string="Disponíveis no Sistema de IA" name="visible_in_ai" domain="[('visible_in_ai', '=', True)]"/>
+                <group expand="0" string="Agrupar Por">
+                    <filter string="Tipo de Regra" name="rule_type" domain="[]" context="{'group_by': 'rule_type'}"/>
+                    <filter string="Regra de Negócio" name="business_rule_id" domain="[]" context="{'group_by': 'business_rule_id'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <!-- Ação para Itens de Regra movida para business_rules_views.xml -->
+</odoo>

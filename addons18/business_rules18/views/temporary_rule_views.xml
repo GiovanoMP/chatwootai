@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Vista de Formulário para Regras Temporárias -->
+    <record id="view_temporary_rule_form" model="ir.ui.view">
+        <field name="name">business.temporary.rule.form</field>
+        <field name="model">business.temporary.rule</field>
+        <field name="arch" type="xml">
+            <form>
+                <sheet>
+                    <div class="oe_title">
+                        <h1>
+                            <field name="name" placeholder="Nome da Regra"/>
+                        </h1>
+                    </div>
+                    <group>
+                        <group>
+                            <field name="rule_type"/>
+                            <field name="business_rule_id" invisible="1"/>
+                            <field name="state"/>
+                        </group>
+                        <group>
+                            <field name="date_start"/>
+                            <field name="date_end"/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page string="Descrição" name="description">
+                            <field name="description" placeholder="Descreva a regra temporária em detalhes..."/>
+                        </page>
+                    </notebook>
+                </sheet>
+                <div class="oe_chatter">
+                    <field name="message_follower_ids"/>
+                    <field name="activity_ids"/>
+                    <field name="message_ids"/>
+                </div>
+            </form>
+        </field>
+    </record>
+
+    <!-- Vista de Árvore para Regras Temporárias -->
+    <record id="view_temporary_rule_tree" model="ir.ui.view">
+        <field name="name">business.temporary.rule.tree</field>
+        <field name="model">business.temporary.rule</field>
+        <field name="arch" type="xml">
+            <tree decoration-success="state == 'active'" decoration-info="state == 'draft'" decoration-muted="state == 'expired' or state == 'cancelled'">
+                <field name="name"/>
+                <field name="rule_type"/>
+                <field name="date_start"/>
+                <field name="date_end"/>
+                <field name="state"/>
+                <field name="business_rule_id"/>
+                <field name="active" widget="boolean_toggle"/>
+                <field name="visible_in_ai" widget="boolean_toggle"/>
+            </tree>
+        </field>
+    </record>
+
+    <!-- Vista de Pesquisa para Regras Temporárias -->
+    <record id="view_temporary_rule_search" model="ir.ui.view">
+        <field name="name">business.temporary.rule.search</field>
+        <field name="model">business.temporary.rule</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="name"/>
+                <field name="rule_type"/>
+                <field name="business_rule_id"/>
+                <separator/>
+                <filter string="Ativas" name="active" domain="[('active', '=', True)]"/>
+                <filter string="Disponíveis no Sistema de IA" name="visible_in_ai" domain="[('visible_in_ai', '=', True)]"/>
+                <separator/>
+                <filter string="Rascunho" name="draft" domain="[('state', '=', 'draft')]"/>
+                <filter string="Ativa" name="active_state" domain="[('state', '=', 'active')]"/>
+                <filter string="Expirada" name="expired" domain="[('state', '=', 'expired')]"/>
+                <filter string="Cancelada" name="cancelled" domain="[('state', '=', 'cancelled')]"/>
+                <group expand="0" string="Agrupar Por">
+                    <filter string="Tipo de Regra" name="rule_type" domain="[]" context="{'group_by': 'rule_type'}"/>
+                    <filter string="Estado" name="state" domain="[]" context="{'group_by': 'state'}"/>
+                    <filter string="Regra de Negócio" name="business_rule_id" domain="[]" context="{'group_by': 'business_rule_id'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <!-- Ação para Regras Temporárias -->
+    <record id="action_temporary_rule" model="ir.actions.act_window">
+        <field name="name">Regras Temporárias</field>
+        <field name="res_model">business.temporary.rule</field>
+        <field name="view_mode">tree,form</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Crie sua primeira regra temporária
+            </p>
+            <p>
+                As regras temporárias são utilizadas pelo sistema de IA para responder às consultas dos clientes durante um período específico.
+                Elas são ideais para promoções, eventos sazonais ou qualquer regra com prazo de validade.
+            </p>
+        </field>
+    </record>
+</odoo>

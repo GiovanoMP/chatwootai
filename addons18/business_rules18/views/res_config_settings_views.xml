@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="res_config_settings_view_form" model="ir.ui.view">
+        <field name="name">res.config.settings.view.form.inherit.business.rules</field>
+        <field name="model">res.config.settings</field>
+        <field name="priority" eval="70"/>
+        <field name="inherit_id" ref="base.res_config_settings_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//div[hasclass('settings')]" position="inside">
+                <div class="app_settings_block" data-string="Regras de Negócio" string="Regras de Negócio" data-key="business_rules18">
+                    <h2>Configurações do Microsserviço de Vetorização</h2>
+                    <div class="row mt16 o_settings_container">
+                        <div class="col-12 col-lg-6 o_setting_box">
+                            <div class="o_setting_left_pane"/>
+                            <div class="o_setting_right_pane">
+                                <span class="o_form_label">URL do Webhook</span>
+                                <div class="text-muted">
+                                    URL do webhook para o microsserviço de vetorização
+                                </div>
+                                <div class="content-group">
+                                    <div class="mt16">
+                                        <field name="business_rules_webhook_url" class="o_light_label" placeholder="http://localhost:8004"/>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-12 col-lg-6 o_setting_box">
+                            <div class="o_setting_left_pane"/>
+                            <div class="o_setting_right_pane">
+                                <span class="o_form_label">Token de API</span>
+                                <div class="text-muted">
+                                    Token de autenticação para o microsserviço de vetorização
+                                </div>
+                                <div class="content-group">
+                                    <div class="mt16">
+                                        <field name="business_rules_api_token" class="o_light_label" password="True" placeholder="development-api-key"/>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-12 col-lg-6 o_setting_box">
+                            <div class="o_setting_left_pane"/>
+                            <div class="o_setting_right_pane">
+                                <span class="o_form_label">ID da Conta</span>
+                                <div class="text-muted">
+                                    ID da conta para identificação no sistema de IA
+                                </div>
+                                <div class="content-group">
+                                    <div class="mt16">
+                                        <field name="business_rules_account_id" class="o_light_label" placeholder="account_1"/>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-12 col-lg-6 o_setting_box">
+                            <div class="o_setting_left_pane"/>
+                            <div class="o_setting_right_pane">
+                                <span class="o_form_label">Nome da Empresa</span>
+                                <div class="text-muted">
+                                    Nome da empresa para identificação no microsserviço de vetorização
+                                </div>
+                                <div class="content-group">
+                                    <div class="mt16">
+                                        <field name="business_rules_company_name" class="o_light_label" placeholder="Minha Empresa"/>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="business_rules_settings_action" model="ir.actions.act_window">
+        <field name="name">Configurações</field>
+        <field name="type">ir.actions.act_window</field>
+        <field name="res_model">res.config.settings</field>
+        <field name="view_mode">form</field>
+        <field name="target">inline</field>
+        <field name="context">{'module' : 'business_rules18'}</field>
+    </record>
+</odoo>

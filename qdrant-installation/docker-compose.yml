@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: qdrant
+    restart: unless-stopped
+    volumes:
+      - qdrant_data:/qdrant/storage
+    ports:
+      - "6333:6333"  # API REST
+      - "6334:6334"  # gRPC
+    networks:
+      - chatwootai_network_public
+
+volumes:
+  qdrant_data:
+    name: qdrant_data
+
+networks:
+  chatwootai_network_public:
+    external: true

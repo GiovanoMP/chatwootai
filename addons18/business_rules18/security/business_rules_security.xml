@@ -1,0 +1,143 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="0">
+        <!-- Categoria de Segurança -->
+        <record id="module_category_business_rules" model="ir.module.category">
+            <field name="name">Regras de Negócio</field>
+            <field name="description">Gerencia permissões para o módulo Regras de Negócio</field>
+            <field name="sequence">20</field>
+        </record>
+
+        <!-- Grupo de Usuário -->
+        <record id="group_business_rules_user" model="res.groups">
+            <field name="name">Usuário</field>
+            <field name="category_id" ref="module_category_business_rules"/>
+            <field name="implied_ids" eval="[(4, ref('base.group_user'))]"/>
+        </record>
+
+        <!-- Grupo de Gerente -->
+        <record id="group_business_rules_manager" model="res.groups">
+            <field name="name">Gerente</field>
+            <field name="category_id" ref="module_category_business_rules"/>
+            <field name="implied_ids" eval="[(4, ref('group_business_rules_user'))]"/>
+            <field name="users" eval="[(4, ref('base.user_admin'))]"/>
+        </record>
+    </data>
+
+    <data noupdate="1">
+        <!-- Regras de Registro para Regras de Negócio -->
+        <record id="business_rules_rule" model="ir.rule">
+            <field name="name">Regras de Negócio: acesso global</field>
+            <field name="model_id" ref="model_business_rules"/>
+            <field name="domain_force">[(1, '=', 1)]</field>
+            <field name="groups" eval="[(4, ref('group_business_rules_user'))]"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="False"/>
+            <field name="perm_create" eval="False"/>
+            <field name="perm_unlink" eval="False"/>
+        </record>
+
+        <record id="business_rules_manager_rule" model="ir.rule">
+            <field name="name">Regras de Negócio: acesso gerente</field>
+            <field name="model_id" ref="model_business_rules"/>
+            <field name="domain_force">[(1, '=', 1)]</field>
+            <field name="groups" eval="[(4, ref('group_business_rules_manager'))]"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="True"/>
+            <field name="perm_unlink" eval="True"/>
+        </record>
+
+        <!-- Regras de Registro para Itens de Regra -->
+        <record id="business_rule_item_rule" model="ir.rule">
+            <field name="name">Itens de Regra: acesso global</field>
+            <field name="model_id" ref="model_business_rule_item"/>
+            <field name="domain_force">[(1, '=', 1)]</field>
+            <field name="groups" eval="[(4, ref('group_business_rules_user'))]"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="False"/>
+            <field name="perm_create" eval="False"/>
+            <field name="perm_unlink" eval="False"/>
+        </record>
+
+        <record id="business_rule_item_manager_rule" model="ir.rule">
+            <field name="name">Itens de Regra: acesso gerente</field>
+            <field name="model_id" ref="model_business_rule_item"/>
+            <field name="domain_force">[(1, '=', 1)]</field>
+            <field name="groups" eval="[(4, ref('group_business_rules_manager'))]"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="True"/>
+            <field name="perm_unlink" eval="True"/>
+        </record>
+
+        <!-- Regras de Registro para Regras Temporárias -->
+        <record id="business_temporary_rule_rule" model="ir.rule">
+            <field name="name">Regras Temporárias: acesso global</field>
+            <field name="model_id" ref="model_business_temporary_rule"/>
+            <field name="domain_force">[(1, '=', 1)]</field>
+            <field name="groups" eval="[(4, ref('group_business_rules_user'))]"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="False"/>
+            <field name="perm_create" eval="False"/>
+            <field name="perm_unlink" eval="False"/>
+        </record>
+
+        <record id="business_temporary_rule_manager_rule" model="ir.rule">
+            <field name="name">Regras Temporárias: acesso gerente</field>
+            <field name="model_id" ref="model_business_temporary_rule"/>
+            <field name="domain_force">[(1, '=', 1)]</field>
+            <field name="groups" eval="[(4, ref('group_business_rules_manager'))]"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="True"/>
+            <field name="perm_unlink" eval="True"/>
+        </record>
+
+        <!-- Regras de Registro para Regras de Agendamento -->
+        <record id="business_scheduling_rule_rule" model="ir.rule">
+            <field name="name">Regras de Agendamento: acesso global</field>
+            <field name="model_id" ref="model_business_scheduling_rule"/>
+            <field name="domain_force">[(1, '=', 1)]</field>
+            <field name="groups" eval="[(4, ref('group_business_rules_user'))]"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="False"/>
+            <field name="perm_create" eval="False"/>
+            <field name="perm_unlink" eval="False"/>
+        </record>
+
+        <record id="business_scheduling_rule_manager_rule" model="ir.rule">
+            <field name="name">Regras de Agendamento: acesso gerente</field>
+            <field name="model_id" ref="model_business_scheduling_rule"/>
+            <field name="domain_force">[(1, '=', 1)]</field>
+            <field name="groups" eval="[(4, ref('group_business_rules_manager'))]"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="True"/>
+            <field name="perm_unlink" eval="True"/>
+        </record>
+
+        <!-- Regras de Registro para Documentos de Suporte -->
+        <record id="business_support_document_rule" model="ir.rule">
+            <field name="name">Documentos de Suporte: acesso global</field>
+            <field name="model_id" ref="model_business_support_document"/>
+            <field name="domain_force">[(1, '=', 1)]</field>
+            <field name="groups" eval="[(4, ref('group_business_rules_user'))]"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="False"/>
+            <field name="perm_create" eval="False"/>
+            <field name="perm_unlink" eval="False"/>
+        </record>
+
+        <record id="business_support_document_manager_rule" model="ir.rule">
+            <field name="name">Documentos de Suporte: acesso gerente</field>
+            <field name="model_id" ref="model_business_support_document"/>
+            <field name="domain_force">[(1, '=', 1)]</field>
+            <field name="groups" eval="[(4, ref('group_business_rules_manager'))]"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="True"/>
+            <field name="perm_unlink" eval="True"/>
+        </record>
+    </data>
+</odoo>

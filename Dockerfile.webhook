@@ -1,0 +1,19 @@
+FROM python:3.10-slim
+
+WORKDIR /app
+
+# Install dependencies
+RUN pip install --no-cache-dir "pymongo<4.0.0" "motor<3.0.0" fastapi uvicorn pydantic
+
+# Copy the application
+COPY webhook_app.py /app/
+
+# Expose the port
+EXPOSE 8000
+
+# Set environment variables
+ENV MONGODB_URI=mongodb://chatwoot-mongodb:27017/config_service
+ENV API_KEY=development-api-key
+
+# Run the application
+CMD ["python", "webhook_app.py"]

@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Integração com MongoDB - Documentação</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            margin: 20px;
+            color: #333;
+        }
+        h1 {
+            color: #2C3E50;
+            border-bottom: 2px solid #3498DB;
+            padding-bottom: 10px;
+        }
+        h2 {
+            color: #2980B9;
+            margin-top: 25px;
+        }
+        h3 {
+            color: #3498DB;
+        }
+        .section {
+            margin-bottom: 30px;
+        }
+        code {
+            background-color: #f5f5f5;
+            padding: 2px 5px;
+            border-radius: 3px;
+            font-family: monospace;
+        }
+        pre {
+            background-color: #f5f5f5;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+        }
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            margin: 20px 0;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px 12px;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+        .note {
+            background-color: #e7f3fe;
+            border-left: 6px solid #2196F3;
+            padding: 10px;
+            margin: 15px 0;
+        }
+        .warning {
+            background-color: #ffffcc;
+            border-left: 6px solid #ffeb3b;
+            padding: 10px;
+            margin: 15px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>Integração com MongoDB - Documentação</h1>
+    
+    <div class="section">
+        <h2>Visão Geral</h2>
+        <p>
+            Este módulo permite a integração do Odoo com um sistema de IA através de um webhook que armazena as configurações em um banco de dados MongoDB.
+            A integração é multi-tenant, o que significa que cada cliente (identificado pelo <code>account_id</code>) terá seu próprio documento no MongoDB.
+        </p>
+    </div>
+    
+    <div class="section">
+        <h2>Arquitetura da Integração</h2>
+        <p>A integração é composta por três componentes principais:</p>
+        <ol>
+            <li><strong>Módulo Odoo (company_services)</strong>: Responsável por coletar e enviar as configurações</li>
+            <li><strong>Webhook MongoDB</strong>: API REST que recebe os dados e os armazena no MongoDB</li>
+            <li><strong>MongoDB</strong>: Banco de dados NoSQL que armazena as configurações em formato JSON</li>
+        </ol>
+        <p>O fluxo de dados é o seguinte:</p>
+        <ol>
+            <li>O usuário configura o módulo Odoo</li>
+            <li>Ao clicar em "Sincronizar com Sistema de IA", os dados são enviados para o webhook</li>
+            <li>O webhook valida os dados e os armazena no MongoDB</li>
+            <li>O sistema de IA acessa os dados no MongoDB para configurar os agentes</li>
+        </ol>
+    </div>
+    
+    <div class="section">
+        <h2>Configuração do Módulo</h2>
+        
+        <h3>1. Configurações Básicas</h3>
+        <table>
+            <tr>
+                <th>Campo</th>
+                <th>Descrição</th>
+                <th>Exemplo</th>
+            </tr>
+            <tr>
+                <td>ID da Conta</td>
+                <td>Identificador único para o cliente. Este é o identificador chave usado no MongoDB.</td>
+                <td><code>account_1</code>, <code>account_2</code></td>
+            </tr>
+            <tr>
+                <td>Token de Segurança</td>
+                <td>Token para autenticação no webhook. Use o botão "Gerar Token" para criar um novo.</td>
+                <td><code>550e8400-e29b-41d4-a716-446655440000</code></td>
+            </tr>
+            <tr>
+                <td>URL do Serviço de Configuração</td>
+                <td>URL do webhook que receberá os dados.</td>
+                <td><code>http://localhost:8003</code></td>
+            </tr>
+            <tr>
+                <td>Chave de API</td>
+                <td>Chave para autenticação no webhook.</td>
+                <td><code>development-api-key</code></td>
+            </tr>
+        </table>
+        
+        <h3>2. Configurações de MCP</h3>
+        <p>O MCP (Model Communication Protocol) é a camada de abstração que permite aos agentes de IA se comunicarem com diferentes ERPs.</p>
+        <table>
+            <tr>
+                <th>Campo</th>
+                <th>Descrição</th>
+                <th>Exemplo</th>
+            </tr>
+            <tr>
+                <td>Tipo de MCP</td>
+                <td>Tipo de ERP utilizado.</td>
+                <td><code>odoo</code></td>
+            </tr>
+            <tr>
+                <td>Versão do ERP</td>
+                <td>Versão do sistema ERP.</td>
+                <td><code>14.0</code></td>
+            </tr>
+            <tr>
+                <td>URL do Servidor</td>
+                <td>URL do servidor ERP.</td>
+                <td><code>http://localhost:8069</code></td>
+            </tr>
+            <tr>
+                <td>Nome do Banco de Dados</td>
+                <td>Nome do banco de dados. Deve ser o mesmo que o ID da Conta.</td>
+                <td><code>account_1</code></td>
+            </tr>
+            <tr>
+                <td>Usuário do Banco</td>
+                <td>Usuário com permissões adequadas.</td>
+                <td><code>admin</code></td>
+            </tr>
+            <tr>
+                <td>Senha do Banco</td>
+                <td>Senha do usuário. Será armazenada de forma segura.</td>
+                <td><code>admin</code></td>
+            </tr>
+            <tr>
+                <td>Nível de Acesso</td>
+                <td>Nível de acesso ao banco de dados.</td>
+                <td><code>read</code></td>
+            </tr>
+        </table>
+        
+        <div class="note">
+            <p><strong>Nota:</strong> O campo "Nome do Banco de Dados" será preenchido automaticamente com o valor do "ID da Conta" quando este for alterado.</p>
+        </div>
+    </div>
+    
+    <div class="section">
+        <h2>Sincronização com o Sistema de IA</h2>
+        <p>
+            Após configurar todos os campos necessários, clique no botão "Sincronizar com Sistema de IA" no formulário principal do módulo.
+            Isso enviará os dados para o webhook, que os armazenará no MongoDB.
+        </p>
+        <p>
+            O sistema exibirá uma mensagem de sucesso se a sincronização for bem-sucedida, ou uma mensagem de erro caso contrário.
+        </p>
+        <div class="warning">
+            <p><strong>Atenção:</strong> Certifique-se de que o webhook e o MongoDB estejam rodando antes de tentar sincronizar os dados.</p>
+        </div>
+    </div>
+    
+    <div class="section">
+        <h2>Verificação dos Dados no MongoDB</h2>
+        <p>
+            Você pode verificar se os dados foram armazenados corretamente no MongoDB acessando o Mongo Express:
+        </p>
+        <ol>
+            <li>Acesse <a href="http://localhost:8082" target="_blank">http://localhost:8082</a></li>
+            <li>Faça login com as credenciais configuradas (padrão: admin/express_password)</li>
+            <li>Selecione o banco de dados <code>config_service</code></li>
+            <li>Selecione a coleção <code>company_services</code></li>
+            <li>Verifique se existe um documento com o <code>account_id</code> correspondente ao configurado no módulo</li>
+        </ol>
+    </div>
+    
+    <div class="section">
+        <h2>Solução de Problemas</h2>
+        <h3>Problemas Comuns</h3>
+        <table>
+            <tr>
+                <th>Problema</th>
+                <th>Possível Causa</th>
+                <th>Solução</th>
+            </tr>
+            <tr>
+                <td>Erro de conexão com o webhook</td>
+                <td>O webhook não está rodando ou a URL está incorreta</td>
+                <td>Verifique se o webhook está rodando e se a URL está correta</td>
+            </tr>
+            <tr>
+                <td>Erro de autenticação</td>
+                <td>A chave de API ou o token de segurança estão incorretos</td>
+                <td>Verifique se a chave de API e o token de segurança estão corretos</td>
+            </tr>
+            <tr>
+                <td>Erro ao armazenar os dados no MongoDB</td>
+                <td>O MongoDB não está rodando ou as credenciais estão incorretas</td>
+                <td>Verifique se o MongoDB está rodando e se as credenciais estão corretas</td>
+            </tr>
+        </table>
+    </div>
+</body>
+</html>

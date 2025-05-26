@@ -1,0 +1,42 @@
+Plano Revisado para Início do Projeto ChatwootAI
+Fase 1: Inventário e Documentação da Infraestrutura
+Verificar contêineres Docker ativos e parados
+Documentar redes e volumes Docker existentes
+Analisar o docker-compose.yml atual
+Criar documento de infraestrutura com mapeamento de portas e serviços
+Fase 2: Configuração do Ambiente
+Verificar/criar arquivo .env com variáveis necessárias
+Documentar todas as credenciais e configurações necessárias
+Criar arquivo .env.example como modelo para referência
+Fase 3: Reinstalação dos Serviços Básicos
+Verificar configuração do MongoDB no docker-compose
+Adicionar/ajustar configuração se necessário
+Iniciar serviços básicos (MongoDB, Redis)
+Verificar logs e confirmar funcionamento
+Fase 4: Análise Comparativa dos MCPs
+Analisar MCP-Odoo local existente
+Clonar MCP-Odoo do GitHub para comparação
+Documentar diferenças e complementaridades
+Decidir abordagem de integração
+Fase 5: Implementação do MCP-Odoo
+Selecionar a melhor base (local ou GitHub)
+Implementar funcionalidades complementares
+Adaptar para suporte multi-tenant
+Criar/ajustar Dockerfile
+Integrar ao docker-compose
+Fase 6: Implementação dos Demais MCPs
+Clonar e analisar MCP-MongoDB
+Clonar e analisar MCP-Qdrant
+Implementar adaptações necessárias
+Integrar ao docker-compose
+Fase 7: Implementação do Orquestrador
+Configurar MCP-Orchestrator
+Implementar rotas para todos os MCPs
+Configurar autenticação e autorização
+Testar comunicação entre componentes
+Fase 8: Testes e Validação
+Testar cada componente isoladamente
+Testar integração entre componentes
+Validar funcionamento multi-tenant
+Documentar resultados e ajustes necessários
+Cada fase será documentada detalhadamente, criando um registro completo do processo de implementação e facilitando futuras manutenções e expansões do sistema.

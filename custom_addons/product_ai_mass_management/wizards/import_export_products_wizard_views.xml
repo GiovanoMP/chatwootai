@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Formulário do Wizard de Importação/Exportação -->
+    <record id="view_product_import_export_wizard_form" model="ir.ui.view">
+        <field name="name">product.import.export.wizard.form</field>
+        <field name="model">product.import.export.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Importar/Exportar Produtos">
+                <field name="state" invisible="1"/>
+                
+                <!-- Cabeçalho -->
+                <div class="alert alert-info" role="alert" attrs="{'invisible': [('state', '!=', 'draft')]}">
+                    <p>Este assistente permite importar produtos de um arquivo CSV ou Excel, ou exportar produtos para esses formatos.</p>
+                    <p>Para importação, o arquivo deve conter pelo menos uma coluna para identificar o produto (Código ou Nome).</p>
+                </div>
+                
+                <!-- Configurações Iniciais -->
+                <group attrs="{'invisible': [('state', 'not in', ['draft'])]}">
+                    <group>
+                        <field name="operation" widget="radio"/>
+                        <field name="file_format" widget="radio"/>
+                    </group>
+                    <group>
+                        <field name="channel_id" options="{'no_create': True}" 
+                               attrs="{'invisible': [('operation', '=', 'export'), ('export_scope', '!=', 'selected')]}"/>
+                    </group>
+                </group>
+                
+                <!-- Configurações de Importação -->
+                <group attrs="{'invisible': ['|', ('operation', '!=', 'import'), ('state', '!=', 'draft')]}">
+                    <field name="import_file" filename="import_filename" required="1"/>
+                    <field name="import_filename" invisible="1"/>
+                </group>
+                
+                <!-- Configurações de Exportação -->
+                <group attrs="{'invisible': ['|', ('operation', '!=', 'export'), ('state', '!=', 'draft')]}">
+                    <group>
+                        <field name="export_scope" widget="radio"/>
+                        <field name="include_inactive"/>
+                    </group>
+                    <group>
+                        <field name="channel_id" options="{'no_create': True}"/>
+                    </group>
+                </group>
+                
+                <!-- Resultados da Importação -->
+                <group attrs="{'invisible': [('state', '!=', 'imported')]}">
+                    <group string="Estatísticas de Importação">
+                        <field name="total_rows"/>
+                        <field name="processed_rows"/>
+                        <field name="success_rows"/>
+                        <field name="error_rows"/>
+                    </group>
+                    <group>
+                        <field name="import_log" readonly="1" nolabel="1" colspan="2" 
+                               attrs="{'invisible': [('import_log', '=', False)]}"
+                               style="font-family: monospace"/>
+                    </group>
+                </group>
+                
+                <!-- Resultados da Exportação -->
+                <group attrs="{'invisible': [('state', '!=', 'exported')]}">
+                    <div class="alert alert-success" role="alert">
+                        <p>Exportação concluída com sucesso!</p>
+                        <p>Clique no botão abaixo para baixar o arquivo.</p>
+                    </div>
+                    <field name="export_file" readonly="1" filename="export_filename" widget="binary"/>
+                    <field name="export_filename" invisible="1"/>
+                </group>
+                
+                <!-- Botões -->
+                <footer>
+                    <button name="action_import" string="Importar" type="object" class="btn-primary"
+                            attrs="{'invisible': ['|', ('operation', '!=', 'import'), ('state', '!=', 'draft')]}"/>
+                    <button name="action_export" string="Exportar" type="object" class="btn-primary"
+                            attrs="{'invisible': ['|', ('operation', '!=', 'export'), ('state', '!=', 'draft')]}"/>
+                    <button string="Fechar" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+    
+    <!-- Ação para o Wizard de Importação/Exportação -->
+    <record id="action_product_import_export_wizard" model="ir.actions.act_window">
+        <field name="name">Importar/Exportar Produtos</field>
+        <field name="res_model">product.import.export.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+        <field name="binding_model_id" ref="product.model_product_template"/>
+        <field name="binding_view_types">list</field>
+    </record>
+</odoo>

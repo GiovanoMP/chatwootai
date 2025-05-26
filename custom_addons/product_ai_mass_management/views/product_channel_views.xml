@@ -1,0 +1,256 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Vista de Formulário para Canal de Vendas -->
+    <record id="view_product_sales_channel_form" model="ir.ui.view">
+        <field name="name">product.sales.channel.form</field>
+        <field name="model">product.sales.channel</field>
+        <field name="arch" type="xml">
+            <form string="Canal de Vendas">
+                <sheet>
+                    <div class="oe_button_box" name="button_box">
+                        <button name="action_view_products" type="object" class="oe_stat_button" icon="fa-cubes">
+                            <field name="product_count" widget="statinfo" string="Produtos"/>
+                        </button>
+                    </div>
+                    <div class="oe_title">
+                        <label for="name" class="oe_edit_only"/>
+                        <h1><field name="name" placeholder="Nome do Canal"/></h1>
+                    </div>
+                    <group>
+                        <group>
+                            <field name="code"/>
+                            <field name="sequence"/>
+                            <field name="active" widget="boolean_toggle"/>
+                        </group>
+                        <group>
+                            <field name="price_multiplier"/>
+                            <field name="auto_sync"/>
+                            <field name="color" widget="color_picker"/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page string="Descrição" name="description">
+                            <field name="description" placeholder="Descreva este canal de vendas..."/>
+                        </page>
+                    </notebook>
+                </sheet>
+            </form>
+        </field>
+    </record>
+    
+    <!-- Vista de Árvore para Canal de Vendas -->
+    <record id="view_product_sales_channel_tree" model="ir.ui.view">
+        <field name="name">product.sales.channel.tree</field>
+        <field name="model">product.sales.channel</field>
+        <field name="arch" type="xml">
+            <tree string="Canais de Venda" sample="1">
+                <field name="sequence" widget="handle"/>
+                <field name="name"/>
+                <field name="code"/>
+                <field name="price_multiplier"/>
+                <field name="product_count"/>
+                <field name="auto_sync"/>
+                <field name="active" widget="boolean_toggle"/>
+            </tree>
+        </field>
+    </record>
+    
+    <!-- Vista Kanban para Canal de Vendas -->
+    <record id="view_product_sales_channel_kanban" model="ir.ui.view">
+        <field name="name">product.sales.channel.kanban</field>
+        <field name="model">product.sales.channel</field>
+        <field name="arch" type="xml">
+            <kanban class="o_kanban_mobile" sample="1">
+                <field name="name"/>
+                <field name="code"/>
+                <field name="product_count"/>
+                <field name="color"/>
+                <templates>
+                    <t t-name="kanban-box">
+                        <div t-attf-class="oe_kanban_card oe_kanban_global_click o_kanban_record_has_image_fill o_product_channel_kanban" t-attf-style="background-color:#{kanban_color(record.color.raw_value)}">
+                            <div class="o_kanban_record_top">
+                                <div class="o_kanban_record_headings">
+                                    <strong class="o_kanban_record_title">
+                                        <field name="name"/>
+                                    </strong>
+                                    <span class="o_kanban_record_subtitle">
+                                        <field name="code"/>
+                                    </span>
+                                </div>
+                            </div>
+                            <div class="o_kanban_record_bottom">
+                                <div class="oe_kanban_bottom_left">
+                                    <span class="badge badge-pill badge-primary">
+                                        <i class="fa fa-cubes"/> <field name="product_count"/> Produtos
+                                    </span>
+                                </div>
+                                <div class="oe_kanban_bottom_right">
+                                    <field name="active" widget="boolean_toggle"/>
+                                </div>
+                            </div>
+                        </div>
+                    </t>
+                </templates>
+            </kanban>
+        </field>
+    </record>
+    
+    <!-- Vista de Busca para Canal de Vendas -->
+    <record id="view_product_sales_channel_search" model="ir.ui.view">
+        <field name="name">product.sales.channel.search</field>
+        <field name="model">product.sales.channel</field>
+        <field name="arch" type="xml">
+            <search string="Buscar Canais de Venda">
+                <field name="name"/>
+                <field name="code"/>
+                <separator/>
+                <filter string="Ativos" name="active" domain="[('active', '=', True)]"/>
+                <filter string="Arquivados" name="inactive" domain="[('active', '=', False)]"/>
+                <separator/>
+                <filter string="Sincronização Automática" name="auto_sync" domain="[('auto_sync', '=', True)]"/>
+                <group expand="0" string="Agrupar Por">
+                    <filter string="Status" name="groupby_active" context="{'group_by': 'active'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+    
+    <!-- Ação para Canal de Vendas -->
+    <record id="action_product_sales_channel" model="ir.actions.act_window">
+        <field name="name">Canais de Venda</field>
+        <field name="res_model">product.sales.channel</field>
+        <field name="view_mode">kanban,tree,form</field>
+        <field name="search_view_id" ref="view_product_sales_channel_search"/>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Crie seu primeiro canal de vendas!
+            </p>
+            <p>
+                Os canais de venda permitem gerenciar seus produtos em diferentes plataformas,
+                como sistema de IA, marketplaces, e-commerce, etc.
+            </p>
+        </field>
+    </record>
+    
+    <!-- Vista de Formulário para Mapeamento de Canal -->
+    <record id="view_product_channel_mapping_form" model="ir.ui.view">
+        <field name="name">product.channel.mapping.form</field>
+        <field name="model">product.channel.mapping</field>
+        <field name="arch" type="xml">
+            <form string="Mapeamento de Canal">
+                <sheet>
+                    <group>
+                        <group>
+                            <field name="product_id" options="{'no_create': True}"/>
+                            <field name="channel_id" options="{'no_create': True}"/>
+                            <field name="active" widget="boolean_toggle"/>
+                        </group>
+                        <group>
+                            <field name="use_specific_price"/>
+                            <field name="specific_price" attrs="{'readonly': [('use_specific_price', '=', False)]}"/>
+                            <field name="price_difference" readonly="1" widget="percentage"/>
+                        </group>
+                    </group>
+                    <group string="Status de Sincronização">
+                        <group>
+                            <field name="sync_status" widget="badge"
+                                   decoration-success="sync_status == 'synced'"
+                                   decoration-danger="sync_status == 'not_synced'"
+                                   decoration-warning="sync_status == 'needs_update'"
+                                   decoration-info="sync_status == 'syncing'"/>
+                            <field name="last_sync"/>
+                        </group>
+                        <group>
+                            <field name="popularity_level" widget="badge"
+                                   decoration-success="popularity_level == 'high'"
+                                   decoration-warning="popularity_level == 'medium'"
+                                   decoration-danger="popularity_level == 'low'"
+                                   decoration-info="popularity_level == 'new'"/>
+                            <field name="popularity_score" readonly="1"/>
+                        </group>
+                    </group>
+                    <group string="Estatísticas">
+                        <group>
+                            <field name="views_count"/>
+                            <field name="sales_count"/>
+                        </group>
+                    </group>
+                    <div class="oe_chatter">
+                        <button name="sync_with_channel" string="Sincronizar" type="object" class="btn btn-primary"/>
+                    </div>
+                </sheet>
+            </form>
+        </field>
+    </record>
+    
+    <!-- Vista de Árvore para Mapeamento de Canal -->
+    <record id="view_product_channel_mapping_tree" model="ir.ui.view">
+        <field name="name">product.channel.mapping.tree</field>
+        <field name="model">product.channel.mapping</field>
+        <field name="arch" type="xml">
+            <tree string="Mapeamentos de Canal" multi_edit="1" sample="1">
+                <field name="product_id"/>
+                <field name="channel_id"/>
+                <field name="specific_price"/>
+                <field name="use_specific_price" widget="boolean_toggle"/>
+                <field name="sync_status" widget="badge"
+                       decoration-success="sync_status == 'synced'"
+                       decoration-danger="sync_status == 'not_synced'"
+                       decoration-warning="sync_status == 'needs_update'"
+                       decoration-info="sync_status == 'syncing'"/>
+                <field name="popularity_level" widget="badge"
+                       decoration-success="popularity_level == 'high'"
+                       decoration-warning="popularity_level == 'medium'"
+                       decoration-danger="popularity_level == 'low'"
+                       decoration-info="popularity_level == 'new'"/>
+                <field name="last_sync"/>
+                <field name="active" widget="boolean_toggle"/>
+                <button name="sync_with_channel" string="Sincronizar" type="object" icon="fa-refresh"/>
+            </tree>
+        </field>
+    </record>
+    
+    <!-- Vista de Busca para Mapeamento de Canal -->
+    <record id="view_product_channel_mapping_search" model="ir.ui.view">
+        <field name="name">product.channel.mapping.search</field>
+        <field name="model">product.channel.mapping</field>
+        <field name="arch" type="xml">
+            <search string="Buscar Mapeamentos">
+                <field name="product_id"/>
+                <field name="channel_id"/>
+                <separator/>
+                <filter string="Não Sincronizados" name="not_synced" domain="[('sync_status', '=', 'not_synced')]"/>
+                <filter string="Sincronizados" name="synced" domain="[('sync_status', '=', 'synced')]"/>
+                <filter string="Precisam Atualização" name="needs_update" domain="[('sync_status', '=', 'needs_update')]"/>
+                <separator/>
+                <filter string="Alta Popularidade" name="high_popularity" domain="[('popularity_level', '=', 'high')]"/>
+                <filter string="Novos no Canal" name="new_in_channel" domain="[('popularity_level', '=', 'new')]"/>
+                <separator/>
+                <filter string="Preço Específico" name="specific_price" domain="[('use_specific_price', '=', True)]"/>
+                <filter string="Ativos" name="active" domain="[('active', '=', True)]"/>
+                <group expand="0" string="Agrupar Por">
+                    <filter string="Canal" name="groupby_channel" context="{'group_by': 'channel_id'}"/>
+                    <filter string="Status de Sincronização" name="groupby_sync_status" context="{'group_by': 'sync_status'}"/>
+                    <filter string="Popularidade" name="groupby_popularity" context="{'group_by': 'popularity_level'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+    
+    <!-- Ação para Mapeamento de Canal -->
+    <record id="action_product_channel_mapping" model="ir.actions.act_window">
+        <field name="name">Mapeamentos de Canal</field>
+        <field name="res_model">product.channel.mapping</field>
+        <field name="view_mode">tree,form</field>
+        <field name="search_view_id" ref="view_product_channel_mapping_search"/>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Adicione produtos aos canais de venda!
+            </p>
+            <p>
+                Os mapeamentos de canal permitem configurar preços específicos e
+                sincronizar produtos com diferentes canais de venda.
+            </p>
+        </field>
+    </record>
+</odoo>

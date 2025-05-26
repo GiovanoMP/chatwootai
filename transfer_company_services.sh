@@ -8,11 +8,75 @@ BLUE="\033[0;34m"
 RESET="\033[0m"
 BOLD="\033[1m"
 
-# Configurações
+# Configurações padrão
 MODULE_NAME="company_services"
 SOURCE_DIR="/home/giovano/Projetos/ai_stack/custom_addons/$MODULE_NAME"
 TARGET_DIR="/home/giovano/Projetos/odoo16/custom-addons/$MODULE_NAME"
 BACKUP_DIR="/home/giovano/Projetos/backups/modules"
+AUTO_RESTART=false
+SKIP_XML_CHECK=false
+SKIP_BACKUP=false
+
+# Função para exibir ajuda
+function show_help() {
+    echo -e "${BOLD}Uso:${RESET} $0 [opções]"
+    echo
+    echo -e "${BOLD}Opções:${RESET}"
+    echo -e "  -m, --module NOME      Nome do módulo a ser transferido (padrão: $MODULE_NAME)"
+    echo -e "  -s, --source DIR       Diretório de origem (padrão: $SOURCE_DIR)"
+    echo -e "  -t, --target DIR       Diretório de destino (padrão: $TARGET_DIR)"
+    echo -e "  -b, --backup DIR       Diretório de backup (padrão: $BACKUP_DIR)"
+    echo -e "  -r, --restart          Reiniciar o servidor Odoo automaticamente após a transferência"
+    echo -e "  --skip-xml-check       Pular verificação de arquivos XML"
+    echo -e "  --skip-backup          Pular criação de backup"
+    echo -e "  -h, --help             Exibir esta ajuda"
+    echo
+    exit 0
+}
+
+# Processar argumentos de linha de comando
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -m|--module)
+            MODULE_NAME="$2"
+            SOURCE_DIR="/home/giovano/Projetos/ai_stack/custom_addons/$MODULE_NAME"
+            TARGET_DIR="/home/giovano/Projetos/odoo16/custom-addons/$MODULE_NAME"
+            shift 2
+            ;;
+        -s|--source)
+            SOURCE_DIR="$2"
+            shift 2
+            ;;
+        -t|--target)
+            TARGET_DIR="$2"
+            shift 2
+            ;;
+        -b|--backup)
+            BACKUP_DIR="$2"
+            shift 2
+            ;;
+        -r|--restart)
+            AUTO_RESTART=true
+            shift
+            ;;
+        --skip-xml-check)
+            SKIP_XML_CHECK=true
+            shift
+            ;;
+        --skip-backup)
+            SKIP_BACKUP=true
+            shift
+            ;;
+        -h|--help)
+            show_help
+            ;;
+        *)
+            echo -e "${RED}Opção desconhecida: $1${RESET}"
+            echo "Use '$0 --help' para ver as opções disponíveis."
+            exit 1
+            ;;
+    esac
+done
 
 # Função para exibir mensagens
 function echo_status() {
@@ -47,7 +111,7 @@ function check_xml_files() {
     
     # Encontra todos os arquivos XML no diretório
     find "$dir" -name "*.xml" | while read -r xml_file; do
-        echo_status "blue" "📄" "Verificando $xml_file"
+        echo_status "blue" "📝" "Verificando $xml_file"
         
         # Verifica a sintaxe do XML
         if ! xmllint --noout "$xml_file" 2>/tmp/xml_error; then
@@ -55,10 +119,34 @@ function check_xml_files() {
             cat /tmp/xml_error
             has_errors=true
         fi
+        
+        # Verifica problemas comuns em arquivos XML do Odoo
+        echo_status "blue" "🔎" "Verificando problemas comuns do Odoo em $xml_file..."
+        
+        # Verifica labels sem atributo for e sem a classe o_form_label
+        if grep -q "<label " "$xml_file"; then
+            # Conta labels problemáticos (sem for e sem o_form_label)
+            invalid_labels=$(grep -n "<label " "$xml_file" | grep -v "for=" | grep -v "o_form_label")
+            if [ -n "$invalid_labels" ]; then
+                echo_status "yellow" "⚠️" "Possíveis elementos <label> problemáticos encontrados em $xml_file:"
+                echo "$invalid_labels"
+                echo_status "yellow" "💡" "Dica: Todo elemento <label> deve ter um atributo 'for' ou usar a classe 'o_form_label' exclusivamente."
+                has_errors=true
+            fi
+            
+            # Verifica labels com o_form_label combinada com outras classes
+            mixed_labels=$(grep -n "<label " "$xml_file" | grep "o_form_label" | grep -E "class=\"[^\"]*o_form_label[^\"]*\s[^\"]*\"")
+            if [ -n "$mixed_labels" ]; then
+                echo_status "yellow" "⚠️" "Elementos <label> com classe o_form_label combinada com outras classes em $xml_file:"
+                echo "$mixed_labels"
+                echo_status "yellow" "💡" "Dica: A classe 'o_form_label' deve ser usada exclusivamente, sem outras classes."
+                has_errors=true
+            fi
+        fi
     done
     
     if [ "$has_errors" = true ]; then
-        echo_status "yellow" "⚠️" "Foram encontrados erros de XML. Deseja continuar mesmo assim? (s/N)"
+        echo_status "yellow" "⚠️" "Foram encontrados erros ou avisos nos arquivos XML. Deseja continuar mesmo assim? (s/N)"
         read -r continue_choice
         if [[ ! "$continue_choice" =~ ^[Ss]$ ]]; then
             echo_status "red" "❌" "Transferência cancelada pelo usuário."
@@ -106,20 +194,47 @@ fi
 
 echo_status "green" "✅" "Diretório de origem encontrado: $SOURCE_DIR"
 
-# Verifica arquivos XML antes da transferência
-check_xml_files "$SOURCE_DIR"
+# Verificação de permissões no diretório de destino
+TARGET_PARENT_DIR="$(dirname "$TARGET_DIR")"
+if [ ! -w "$TARGET_PARENT_DIR" ] && [ -d "$TARGET_PARENT_DIR" ]; then
+    echo_status "red" "⚠️" "Sem permissão de escrita no diretório de destino: $TARGET_PARENT_DIR"
+    echo_status "yellow" "🔐" "Você pode precisar executar o script com sudo ou ajustar as permissões."
+    exit 1
+fi
 
-# Cria backup do módulo existente
-create_backup
+# Verifica arquivos XML antes da transferência (se não estiver desativado)
+if [ "$SKIP_XML_CHECK" = false ]; then
+    check_xml_files "$SOURCE_DIR"
+else
+    echo_status "blue" "⏭️" "Verificação de XML ignorada conforme solicitado."
+fi
+
+# Cria backup do módulo existente (se não estiver desativado)
+if [ "$SKIP_BACKUP" = false ]; then
+    create_backup
+else
+    echo_status "blue" "⏭️" "Criação de backup ignorada conforme solicitado."
+fi
 
 # Remove o módulo no diretório de destino se existir
 if [ -d "$TARGET_DIR" ]; then
-    echo_status "yellow" "🚮" "Removendo módulo existente em $TARGET_DIR..."
+    echo_status "yellow" "🚩" "Removendo módulo existente em $TARGET_DIR..."
     rm -rf "$TARGET_DIR"
+    if [ $? -ne 0 ]; then
+        echo_status "red" "❌" "Erro ao remover o módulo existente. Verifique as permissões."
+        exit 1
+    fi
 fi
 
 # Cria o diretório de destino se não existir
-mkdir -p "/home/giovano/Projetos/odoo16/custom-addons"
+if [ ! -d "$(dirname "$TARGET_DIR")" ]; then
+    echo_status "blue" "💾" "Criando diretório de destino $(dirname "$TARGET_DIR")..."
+    mkdir -p "$(dirname "$TARGET_DIR")"
+    if [ $? -ne 0 ]; then
+        echo_status "red" "❌" "Erro ao criar o diretório de destino. Verifique as permissões."
+        exit 1
+    fi
+fi
 
 # Copia o módulo para o diretório de destino
 echo_status "blue" "📝" "Copiando $MODULE_NAME de $SOURCE_DIR para $TARGET_DIR..."
@@ -128,15 +243,45 @@ cp -r "$SOURCE_DIR" "$TARGET_DIR"
 # Verifica se a cópia foi bem-sucedida
 if [ $? -eq 0 ]; then
     echo_status "green" "🎉" "Transferência do módulo $MODULE_NAME concluída com sucesso!"
-    echo_status "yellow" "ℹ️" "Não esqueça de reiniciar o servidor Odoo para aplicar as alterações."
-    echo_status "blue" "🔄" "Comando: sudo systemctl restart odoo"
     
-    # Lista todos os possíveis serviços Odoo para ajudar o usuário
+    # Configura permissões para garantir que o Odoo possa acessar os arquivos
+    echo_status "blue" "🔒" "Ajustando permissões do módulo..."
+    chmod -R 755 "$TARGET_DIR"
+    
+    # Detecta o serviço Odoo disponível
+    ODOO_SERVICE=""
     for service in "odoo" "odoo16" "odoo-server" "odoo-bin" "odoo15" "odoo14"; do
         if command -v systemctl &> /dev/null && systemctl list-unit-files | grep -q "$service\.service"; then
-            echo -e "   ${BLUE}sudo systemctl restart $service${RESET}"
+            ODOO_SERVICE="$service"
+            break
         fi
     done
+    
+    # Reinicia o servidor Odoo automaticamente se solicitado
+    if [ "$AUTO_RESTART" = true ] && [ -n "$ODOO_SERVICE" ]; then
+        echo_status "blue" "🔄" "Reiniciando o servidor Odoo ($ODOO_SERVICE)..."
+        if sudo systemctl restart "$ODOO_SERVICE"; then
+            echo_status "green" "✅" "Servidor Odoo reiniciado com sucesso!"
+        else
+            echo_status "red" "❌" "Erro ao reiniciar o servidor Odoo. Tente manualmente:"
+            echo -e "   ${BLUE}sudo systemctl restart $ODOO_SERVICE${RESET}"
+        fi
+    else
+        echo_status "yellow" "ℹ️" "Não esqueça de reiniciar o servidor Odoo para aplicar as alterações."
+        
+        if [ -n "$ODOO_SERVICE" ]; then
+            echo_status "blue" "🔄" "Comando: sudo systemctl restart $ODOO_SERVICE"
+        else
+            echo_status "blue" "🔄" "Comando: sudo systemctl restart odoo"
+            
+            # Lista todos os possíveis serviços Odoo para ajudar o usuário
+            for service in "odoo" "odoo16" "odoo-server" "odoo-bin" "odoo15" "odoo14"; do
+                if command -v systemctl &> /dev/null && systemctl list-unit-files | grep -q "$service\.service"; then
+                    echo -e "   ${BLUE}sudo systemctl restart $service${RESET}"
+                fi
+            done
+        fi
+    fi
 else
     echo_status "red" "❌" "Erro ao copiar o módulo. Verifique as permissões e tente novamente."
     exit 1

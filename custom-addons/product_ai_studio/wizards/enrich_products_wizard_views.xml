@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <!-- Form View -->
+        <record id="view_enrich_products_wizard_form" model="ir.ui.view">
+            <field name="name">product.enrich.wizard.form</field>
+            <field name="model">product.enrich.wizard</field>
+            <field name="arch" type="xml">
+                <form string="Enriquecer Produtos">
+                    <sheet>
+                        <!-- Alertas e Banners -->
+                        <div class="alert alert-info mb-4" role="alert" style="border-left: 4px solid #2196F3; background-color: #f8f9fa;">
+                            <div class="d-flex">
+                                <i class="fa fa-magic fa-2x me-3 text-primary"></i>
+                                <div>
+                                    <h4 class="alert-heading">Enriquecimento em Massa</h4>
+                                    <p class="mb-0">Você selecionou <field name="product_count"/> produtos para enriquecimento. Configure as opções abaixo e clique em "Enriquecer" para iniciar o processo.</p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <group>
+                            <field name="product_ids" widget="many2many_tags" options="{'no_create': True}"/>
+                        </group>
+                        
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="card" style="border-left: 4px solid #2196F3; border-radius: 4px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin-bottom: 16px; padding: 16px;">
+                                    <h3 style="margin-top: 0; color: #212529; font-size: 16px; font-weight: bold;">Configurações de Enriquecimento</h3>
+                                    <group>
+                                        <field name="enrichment_profile_id" options="{'no_create': True, 'no_open': True}"/>
+                                        <field name="marketplace_id" options="{'no_create': True, 'no_open': True}"/>
+                                        <field name="create_marketplace_descriptions" attrs="{'invisible': [('marketplace_id', '=', False)]}"/>
+                                    </group>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="card" style="border-left: 4px solid #4CAF50; border-radius: 4px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin-bottom: 16px; padding: 16px;">
+                                    <h3 style="margin-top: 0; color: #212529; font-size: 16px; font-weight: bold;">Opções Adicionais</h3>
+                                    <div class="d-flex flex-column">
+                                        <div class="custom-control custom-switch mb-2">
+                                            <field name="suggest_images" widget="boolean_toggle"/>
+                                            <label for="suggest_images" class="ml-2">Sugerir Imagens</label>
+                                        </div>
+                                        <div class="custom-control custom-switch mb-2">
+                                            <field name="vectorize_products" widget="boolean_toggle"/>
+                                            <label for="vectorize_products" class="ml-2">Vetorizar Produtos</label>
+                                        </div>
+                                        <div class="custom-control custom-switch mb-2">
+                                            <field name="auto_process" widget="boolean_toggle"/>
+                                            <label for="auto_process" class="ml-2">Processar Automaticamente</label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="alert alert-warning" role="alert" attrs="{'invisible': [('product_count', '&lt;=', 50)]}">
+                            <i class="fa fa-exclamation-triangle"></i>
+                            <strong>Atenção:</strong> Você está prestes a enriquecer mais de 50 produtos. Para continuar, ative a opção "Processar Automaticamente".
+                        </div>
+                    </sheet>
+                    <footer>
+                        <button string="Enriquecer" name="action_enrich_products" type="object" class="btn-primary"/>
+                        <button string="Cancelar" class="btn-secondary" special="cancel"/>
+                    </footer>
+                </form>
+            </field>
+        </record>
+        
+        <!-- Action -->
+        <record id="action_enrich_products_wizard" model="ir.actions.act_window">
+            <field name="name">Enriquecer Produtos</field>
+            <field name="res_model">product.enrich.wizard</field>
+            <field name="view_mode">form</field>
+            <field name="target">new</field>
+            <field name="binding_model_id" ref="product.model_product_template"/>
+            <field name="binding_view_types">list</field>
+        </record>
+    </data>
+</odoo>

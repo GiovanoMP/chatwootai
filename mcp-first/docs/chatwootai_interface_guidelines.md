@@ -24,7 +24,8 @@ Seguimos os princípios de design inspirados no Stripe e Linear, priorizando:
 │ ┌─────────────────────────────────────────────┐ │
 │ │ Seção Principal                             │ │
 │ │ ┌─────────────────────────────────────────┐ │ │
-│ │ │ Card de Conteúdo                        │ │ │
+│ │ │ Card de Conteúdo                      
+  │ │ │
 │ │ └─────────────────────────────────────────┘ │ │
 │ └─────────────────────────────────────────────┘ │
 │                                                 │

@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+    <t t-name="ProductAIStudioPreviewEditor">
+        <div class="o_product_ai_studio o_preview_editor">
+            <div class="preview-header">
+                <div class="preview-title">
+                    Editor de Prévia
+                </div>
+                <div class="preview-actions">
+                    <button class="btn btn-primary o_preview_editor_apply">
+                        <i class="fa fa-check"></i> Aplicar
+                    </button>
+                    <button class="btn btn-secondary o_preview_editor_refresh">
+                        <i class="fa fa-refresh"></i> Atualizar
+                    </button>
+                </div>
+            </div>
+            
+            <div class="preview-tabs">
+                <ul class="nav nav-tabs" role="tablist">
+                    <t t-foreach="marketplaces" t-as="marketplace">
+                        <li class="nav-item">
+                            <a t-attf-class="nav-link o_preview_editor_marketplace_tab #{marketplace_index == 0 ? 'active' : ''}" 
+                               t-att-data-marketplace-id="marketplace.id" href="#" role="tab">
+                                <t t-esc="marketplace.name"/>
+                            </a>
+                        </li>
+                    </t>
+                </ul>
+            </div>
+            
+            <div class="preview-content">
+                <div class="editor-pane">
+                    <textarea class="o_preview_editor_content" placeholder="Edite o conteúdo aqui..."></textarea>
+                </div>
+                <div class="preview-pane">
+                    <div class="preview-container">
+                        <!-- Conteúdo dinâmico renderizado pelo JS -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </t>
+    
+    <t t-name="ProductAIStudioPreviewContent">
+        <t t-if="activeMarketplace">
+            <t t-set="marketplace" t-value="_.find(marketplaces, function(m) { return m.id === activeMarketplace; })"/>
+            <t t-set="previewData" t-value="data[activeMarketplace] || {}"/>
+            
+            <div t-attf-class="marketplace-preview #{marketplace ? marketplace.code : ''}">
+                <div class="product-title">
+                    <t t-esc="previewData.title || 'Título do Produto'"/>
+                </div>
+                
+                <div class="product-price">
+                    <t t-esc="previewData.price_formatted || 'R$ 0,00'"/>
+                </div>
+                
+                <div class="product-description" t-raw="previewData.description || 'Descrição do produto...'"/>
+                
+                <div class="product-attributes mt-4" t-if="previewData.attributes &amp;&amp; previewData.attributes.length">
+                    <h4>Especificações</h4>
+                    <table class="table table-sm">
+                        <tbody>
+                            <t t-foreach="previewData.attributes" t-as="attr">
+                                <tr>
+                                    <th><t t-esc="attr.name"/></th>
+                                    <td><t t-esc="attr.value"/></td>
+                                </tr>
+                            </t>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </t>
+        <t t-else="">
+            <div class="text-center text-muted py-5">
+                <i class="fa fa-info-circle fa-3x mb-3"></i>
+                <p>Selecione um marketplace para visualizar a prévia</p>
+            </div>
+        </t>
+    </t>
+</templates>

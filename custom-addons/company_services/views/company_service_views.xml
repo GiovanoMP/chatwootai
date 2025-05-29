@@ -1,0 +1,1357 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Visualização de formulário -->
+    <record id="view_company_service_form" model="ir.ui.view">
+        <field name="name">company.service.form</field>
+        <field name="model">company.service</field>
+        <field name="arch" type="xml">
+            <form string="Empresa e Serviços">
+                <header>
+                    <button name="action_save_company_info"
+                            string="Salvar Informações da Empresa e Atendimento"
+                            type="object"
+                            class="btn btn-primary"
+                            icon="fa-save"
+                            style="background-color: #2196F3 !important; color: white !important; font-weight: bold !important; padding: 10px 20px !important; border-radius: 4px !important; box-shadow: 0 2px 4px rgba(0,0,0,0.2) !important;"
+                            />
+                    <button name="action_sync_to_config_service"
+                            string="Sincronizar com Sistema de IA"
+                            type="object"
+                            class="btn btn-success"
+                            icon="fa-sync"
+                            style="background-color: #00C853 !important; color: white !important; font-weight: bold !important; padding: 10px 20px !important; border-radius: 4px !important; box-shadow: 0 2px 4px rgba(0,0,0,0.2) !important;"
+                            attrs="{'invisible': [('sync_status', '=', 'syncing')]}"/>
+                    <field name="sync_status" widget="statusbar" statusbar_visible="not_synced,syncing,synced,error"/>
+                </header>
+                <sheet>
+                    <div class="oe_title">
+                        <h1>
+                            <field name="name" placeholder="Nome da Empresa" readonly="1"/>
+                        </h1>
+                    </div>
+                    <group>
+                        <field name="company_id" options="{'no_create': True, 'no_open': True}"/>
+                        <field name="description" placeholder="Descrição da empresa"/>
+                    </group>
+                    <!-- Campos computados invisíveis necessários para attrs -->
+                    <field name="enable_sales" invisible="1"/>
+                    <field name="enable_scheduling" invisible="1"/>
+                    <field name="enable_delivery" invisible="1"/>
+                    <field name="enable_support" invisible="1"/>
+                    <notebook>
+                        <page string="Informações da Empresa" name="company_info">
+                            <p class="text-muted">
+                                Estas informações são obtidas automaticamente do cadastro da empresa na Sprintia. Para modificá-las, acesse Configurações > Empresas. Após qualquer alteração, não esqueça de sincronizar com o sistema de IA usando o botão acima.
+                            </p>
+                            
+                            <group string="Endereço da Empresa">
+                                <group>
+                                    <field name="street" placeholder="Rua" readonly="1"/>
+                                    <field name="street2" placeholder="Complemento" readonly="1"/>
+                                    <field name="city" placeholder="Cidade" readonly="1"/>
+                                </group>
+                                <group>
+                                    <field name="state" placeholder="Estado" readonly="1"/>
+                                    <field name="zip" placeholder="CEP" readonly="1"/>
+                                    <field name="country" placeholder="País" readonly="1"/>
+                                </group>
+                            </group>
+                            
+                            <group string="Informações de Contato">
+                                <group>
+                                    <field name="phone" placeholder="Telefone" readonly="1" widget="phone"/>
+                                    <field name="mobile" placeholder="Celular" readonly="1" widget="phone"/>
+                                </group>
+                                <group>
+                                    <field name="email" placeholder="E-mail" readonly="1" widget="email"/>
+                                </group>
+                            </group>
+                            
+                            <group string="Informações Fiscais">
+                                <group>
+                                    <field name="vat" placeholder="CNPJ/CPF" readonly="1"/>
+                                </group>
+                                <group>
+                                </group>
+                            </group>
+                        </page>
+                        <page string="Presença Digital" name="digital_presence">
+                            <!-- Alerta informativo -->
+                            <div class="alert alert-primary mb-4" role="alert" style="border-left: 4px solid #2196F3; background-color: #f8f9fa;">
+                                <div class="d-flex">
+                                    <i class="fa fa-globe fa-2x me-3 text-primary"></i>
+                                    <div>
+                                        <h4 class="alert-heading">Canais Digitais da Empresa</h4>
+                                        <p class="mb-0">Configure aqui os canais digitais da sua empresa para que o agente de IA possa fornecer informações precisas aos clientes sobre sua presença online.</p>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Site Principal -->
+                            <div class="o_settings_container mt-4 mb-4 p-3" style="background-color: #f8f9fa; border-radius: 8px;">
+                                <div class="d-flex align-items-center mb-3">
+                                    <i class="fa fa-desktop fa-2x me-2" style="color: #00C853;"></i>
+                                    <div>
+                                        <h3 class="m-0">Site Principal</h3>
+                                        <p class="text-muted mb-0">Endereço do site oficial da sua empresa</p>
+                                    </div>
+                                </div>
+                                
+                                <div class="row">
+                                    <div class="col-lg-12">
+                                        <div class="card shadow-sm mb-3">
+                                            <div class="card-body p-3">
+                                                <div class="mb-3">
+                                                    <label for="website" class="form-label fw-bold">Endereço do Site</label>
+                                                    <div class="d-flex align-items-center">
+                                                        <i class="fa fa-link text-primary me-2"></i>
+                                                        <field name="website" placeholder="https://www.exemplo.com.br" class="w-100" help="Informe o endereço completo do site principal da sua empresa, incluindo 'https://'"/>
+                                                    </div>
+                                                    <small class="text-muted mt-1">Exemplo: https://www.suaempresa.com.br</small>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Redes Sociais -->
+                            <div class="o_settings_container mt-4 mb-4 p-3" style="background-color: #f8f9fa; border-radius: 8px;">
+                                <div class="d-flex align-items-center mb-3">
+                                    <i class="fa fa-share-alt fa-2x me-2" style="color: #00C853;"></i>
+                                    <div>
+                                        <h3 class="m-0">Redes Sociais</h3>
+                                        <p class="text-muted mb-0">Canais oficiais da sua empresa nas redes sociais</p>
+                                    </div>
+                                </div>
+                                
+                                <div class="row">
+                                    <div class="col-lg-6">
+                                        <div class="card shadow-sm mb-3">
+                                            <div class="card-body p-3">
+                                                <div class="mb-3">
+                                                    <div class="d-flex align-items-center mb-2">
+                                                        <i class="fa fa-facebook-square text-primary me-2" style="font-size: 1.5em;"></i>
+                                                        <label for="facebook_url" class="form-label fw-bold mb-0">Facebook</label>
+                                                    </div>
+                                                    <field name="facebook_url" placeholder="https://www.facebook.com/exemplo" class="w-100" help="URL completa da página oficial da sua empresa no Facebook"/>
+                                                </div>
+                                                
+                                                <div class="mb-3">
+                                                    <div class="d-flex align-items-center mb-2">
+                                                        <i class="fa fa-instagram text-danger me-2" style="font-size: 1.5em;"></i>
+                                                        <label for="instagram_url" class="form-label fw-bold mb-0">Instagram</label>
+                                                    </div>
+                                                    <field name="instagram_url" placeholder="https://www.instagram.com/exemplo" class="w-100" help="URL completa do perfil oficial da sua empresa no Instagram"/>
+                                                </div>
+                                                
+                                                <div class="mb-3">
+                                                    <div class="d-flex align-items-center mb-2">
+                                                        <i class="fa fa-twitter text-info me-2" style="font-size: 1.5em;"></i>
+                                                        <label for="twitter_url" class="form-label fw-bold mb-0">Twitter/X</label>
+                                                    </div>
+                                                    <field name="twitter_url" placeholder="https://twitter.com/exemplo" class="w-100" help="URL completa do perfil oficial da sua empresa no Twitter/X"/>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="col-lg-6">
+                                        <div class="card shadow-sm mb-3">
+                                            <div class="card-body p-3">
+                                                <div class="mb-3">
+                                                    <div class="d-flex align-items-center mb-2">
+                                                        <i class="fa fa-linkedin-square text-primary me-2" style="font-size: 1.5em;"></i>
+                                                        <label for="linkedin_url" class="form-label fw-bold mb-0">LinkedIn</label>
+                                                    </div>
+                                                    <field name="linkedin_url" placeholder="https://www.linkedin.com/company/exemplo" class="w-100" help="URL completa da página oficial da sua empresa no LinkedIn"/>
+                                                </div>
+                                                
+                                                <div class="mb-3">
+                                                    <div class="d-flex align-items-center mb-2">
+                                                        <i class="fa fa-youtube-play text-danger me-2" style="font-size: 1.5em;"></i>
+                                                        <label for="youtube_url" class="form-label fw-bold mb-0">YouTube</label>
+                                                    </div>
+                                                    <field name="youtube_url" placeholder="https://www.youtube.com/c/exemplo" class="w-100" help="URL completa do canal oficial da sua empresa no YouTube"/>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Marketplaces -->
+                            <div class="o_settings_container mt-4 mb-4 p-3" style="background-color: #f8f9fa; border-radius: 8px;">
+                                <div class="d-flex align-items-center mb-3">
+                                    <i class="fa fa-shopping-cart fa-2x me-2" style="color: #00C853;"></i>
+                                    <div>
+                                        <h3 class="m-0">Marketplaces</h3>
+                                        <p class="text-muted mb-0">Lojas oficiais da sua empresa em marketplaces</p>
+                                    </div>
+                                </div>
+                                
+                                <div class="row">
+                                    <div class="col-lg-6">
+                                        <div class="card shadow-sm mb-3">
+                                            <div class="card-body p-3">
+                                                <div class="mb-3">
+                                                    <div class="d-flex align-items-center mb-2">
+                                                        <span class="badge bg-warning text-dark me-2" style="font-size: 0.9em; padding: 5px 8px;">ML</span>
+                                                        <label for="mercadolivre_url" class="form-label fw-bold mb-0">Mercado Livre</label>
+                                                    </div>
+                                                    <field name="mercadolivre_url" placeholder="https://www.mercadolivre.com.br/perfil/exemplo" class="w-100" help="URL completa da loja oficial da sua empresa no Mercado Livre"/>
+                                                </div>
+                                                
+                                                <div class="mb-3">
+                                                    <div class="d-flex align-items-center mb-2">
+                                                        <span class="badge bg-dark text-white me-2" style="font-size: 0.9em; padding: 5px 8px;">AMZ</span>
+                                                        <label for="amazon_url" class="form-label fw-bold mb-0">Amazon</label>
+                                                    </div>
+                                                    <field name="amazon_url" placeholder="https://www.amazon.com.br/s?me=exemplo" class="w-100" help="URL completa da loja oficial da sua empresa na Amazon"/>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="col-lg-6">
+                                        <div class="card shadow-sm mb-3">
+                                            <div class="card-body p-3">
+                                                <div class="mb-3">
+                                                    <div class="d-flex align-items-center mb-2">
+                                                        <span class="badge bg-danger text-white me-2" style="font-size: 0.9em; padding: 5px 8px;">SHP</span>
+                                                        <label for="shopee_url" class="form-label fw-bold mb-0">Shopee</label>
+                                                    </div>
+                                                    <field name="shopee_url" placeholder="https://shopee.com.br/exemplo" class="w-100" help="URL completa da loja oficial da sua empresa na Shopee"/>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </page>
+                        
+                        <page string="Horários de Funcionamento" name="business_hours">
+                            <!-- Status atual e alerta informativo -->
+                            <div class="alert alert-info mb-4" role="alert" style="border-left: 4px solid #2196F3; background-color: #f8f9fa;">
+                                <div class="d-flex">
+                                    <i class="fa fa-info-circle fa-2x me-3 text-primary"></i>
+                                    <div>
+                                        <h4 class="alert-heading">Horários de Funcionamento</h4>
+                                        <p class="mb-0">Configure os dias e horários de funcionamento da sua empresa. Estes horários serão informados aos clientes pelo agente de IA quando solicitados.</p>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Status atual -->
+                            <div class="o_settings_container mb-4 p-3" style="background-color: #f0f8ff; border-radius: 8px; border: 1px solid #e3f2fd;">
+                                <div class="d-flex align-items-center">
+                                    <div class="me-3">
+                                        <i class="fa fa-clock-o fa-3x text-primary"></i>
+                                    </div>
+                                    <div>
+                                        <h3 class="m-0">Status de Funcionamento</h3>
+                                        <p class="text-muted mb-2">Resumo dos horários configurados</p>
+                                        <div>
+                                            <span class="badge bg-success me-2">Aberto</span>
+                                            <span class="fw-bold">Segunda a Sexta:</span> <field name="start_time" readonly="1" nolabel="1" class="d-inline"/> - <field name="end_time" readonly="1" nolabel="1" class="d-inline"/>
+                                        </div>
+                                        <div attrs="{'invisible': [('saturday', '=', False)]}">
+                                            <span class="fw-bold">Sábado:</span> <field name="saturday_start_time" readonly="1" nolabel="1" class="d-inline"/> - <field name="saturday_end_time" readonly="1" nolabel="1" class="d-inline"/>
+                                        </div>
+                                        <div attrs="{'invisible': [('sunday', '=', False)]}">
+                                            <span class="fw-bold">Domingo:</span> <field name="sunday_start_time" readonly="1" nolabel="1" class="d-inline"/> - <field name="sunday_end_time" readonly="1" nolabel="1" class="d-inline"/>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Horário Padrão -->
+                            <div class="o_settings_container mb-4 p-3" style="background-color: #f8f9fa; border-radius: 8px;">
+                                <div class="d-flex align-items-center mb-3">
+                                    <i class="fa fa-calendar-check-o fa-2x me-2" style="color: #00C853;"></i>
+                                    <div>
+                                        <h3 class="m-0">Horário Padrão</h3>
+                                        <p class="text-muted mb-0">Horário aplicado aos dias úteis selecionados</p>
+                                    </div>
+                                </div>
+                                
+                                <div class="row">
+                                    <!-- Horário de abertura e fechamento -->
+                                    <div class="col-lg-6">
+                                        <div class="card shadow-sm mb-3">
+                                            <div class="card-header bg-light">
+                                                <h5 class="card-title m-0"><i class="fa fa-sun-o me-2 text-warning"></i>Horário Comercial</h5>
+                                            </div>
+                                            <div class="card-body p-3">
+                                                <div class="row mb-3">
+                                                    <div class="col-md-6">
+                                                        <label for="start_time" class="form-label fw-bold">Abertura</label>
+                                                        <field name="start_time" widget="time" help="Horário de abertura da empresa nos dias de semana." class="d-block"/>
+                                                    </div>
+                                                    <div class="col-md-6">
+                                                        <label for="end_time" class="form-label fw-bold">Fechamento</label>
+                                                        <field name="end_time" widget="time" help="Horário de fechamento da empresa nos dias de semana." class="d-block"/>
+                                                    </div>
+                                                </div>
+                                                <div class="form-check form-switch">
+                                                    <field name="has_lunch_break" widget="boolean_toggle" help="Marque se sua empresa possui um intervalo de almoço durante o qual o atendimento é reduzido ou suspenso."/>
+                                                    <label for="has_lunch_break" class="form-check-label">Intervalo de Almoço</label>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Intervalo de almoço -->
+                                    <div class="col-lg-6" attrs="{'invisible': [('has_lunch_break', '=', False)]}">
+                                        <div class="card shadow-sm mb-3">
+                                            <div class="card-header bg-light">
+                                                <h5 class="card-title m-0"><i class="fa fa-cutlery me-2 text-danger"></i>Intervalo de Almoço</h5>
+                                            </div>
+                                            <div class="card-body p-3">
+                                                <div class="row">
+                                                    <div class="col-md-6">
+                                                        <label for="lunch_break_start" class="form-label fw-bold">Início</label>
+                                                        <field name="lunch_break_start" widget="time" help="Horário de início do intervalo de almoço." class="d-block"/>
+                                                    </div>
+                                                    <div class="col-md-6">
+                                                        <label for="lunch_break_end" class="form-label fw-bold">Fim</label>
+                                                        <field name="lunch_break_end" widget="time" help="Horário de término do intervalo de almoço." class="d-block"/>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Dias de Funcionamento -->
+                            <div class="o_settings_container mb-4 p-3" style="background-color: #f8f9fa; border-radius: 8px;">
+                                <div class="d-flex align-items-center mb-3">
+                                    <i class="fa fa-calendar fa-2x me-2" style="color: #2196F3;"></i>
+                                    <div>
+                                        <h3 class="m-0">Dias de Funcionamento</h3>
+                                        <p class="text-muted mb-0">Selecione os dias em que sua empresa atende</p>
+                                    </div>
+                                </div>
+                                
+                                <div class="card shadow-sm mb-3">
+                                    <div class="card-header bg-light">
+                                        <h5 class="card-title m-0"><i class="fa fa-calendar-check-o me-2 text-primary"></i>Selecione os dias de funcionamento</h5>
+                                    </div>
+                                    <div class="card-body p-3">
+                                        <!-- Dias da semana em formato de tabela -->
+                                        <div class="table-responsive">
+                                            <table class="table table-hover">
+                                                <thead>
+                                                    <tr>
+                                                        <th>Dia</th>
+                                                        <th>Aberto</th>
+                                                        <th>Horário</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    <!-- Segunda -->
+                                                    <tr>
+                                                        <td class="align-middle">
+                                                            <span class="fw-bold">Segunda-feira</span>
+                                                        </td>
+                                                        <td class="align-middle">
+                                                            <div class="form-check form-switch">
+                                                                <field name="monday" widget="boolean_toggle" help="Marque se sua empresa funciona às segundas-feiras."/>
+                                                            </div>
+                                                        </td>
+                                                        <td class="align-middle">
+                                                            <span attrs="{'invisible': [('monday', '=', False)]}">Horário padrão</span>
+                                                            <span class="text-muted" attrs="{'invisible': [('monday', '=', True)]}">Fechado</span>
+                                                        </td>
+                                                    </tr>
+                                                    <!-- Terça -->
+                                                    <tr>
+                                                        <td class="align-middle">
+                                                            <span class="fw-bold">Terça-feira</span>
+                                                        </td>
+                                                        <td class="align-middle">
+                                                            <div class="form-check form-switch">
+                                                                <field name="tuesday" widget="boolean_toggle" help="Marque se sua empresa funciona às terças-feiras."/>
+                                                            </div>
+                                                        </td>
+                                                        <td class="align-middle">
+                                                            <span attrs="{'invisible': [('tuesday', '=', False)]}">Horário padrão</span>
+                                                            <span class="text-muted" attrs="{'invisible': [('tuesday', '=', True)]}">Fechado</span>
+                                                        </td>
+                                                    </tr>
+                                                    <!-- Quarta -->
+                                                    <tr>
+                                                        <td class="align-middle">
+                                                            <span class="fw-bold">Quarta-feira</span>
+                                                        </td>
+                                                        <td class="align-middle">
+                                                            <div class="form-check form-switch">
+                                                                <field name="wednesday" widget="boolean_toggle" help="Marque se sua empresa funciona às quartas-feiras."/>
+                                                            </div>
+                                                        </td>
+                                                        <td class="align-middle">
+                                                            <span attrs="{'invisible': [('wednesday', '=', False)]}">Horário padrão</span>
+                                                            <span class="text-muted" attrs="{'invisible': [('wednesday', '=', True)]}">Fechado</span>
+                                                        </td>
+                                                    </tr>
+                                                    <!-- Quinta -->
+                                                    <tr>
+                                                        <td class="align-middle">
+                                                            <span class="fw-bold">Quinta-feira</span>
+                                                        </td>
+                                                        <td class="align-middle">
+                                                            <div class="form-check form-switch">
+                                                                <field name="thursday" widget="boolean_toggle" help="Marque se sua empresa funciona às quintas-feiras."/>
+                                                            </div>
+                                                        </td>
+                                                        <td class="align-middle">
+                                                            <span attrs="{'invisible': [('thursday', '=', False)]}">Horário padrão</span>
+                                                            <span class="text-muted" attrs="{'invisible': [('thursday', '=', True)]}">Fechado</span>
+                                                        </td>
+                                                    </tr>
+                                                    <!-- Sexta -->
+                                                    <tr>
+                                                        <td class="align-middle">
+                                                            <span class="fw-bold">Sexta-feira</span>
+                                                        </td>
+                                                        <td class="align-middle">
+                                                            <div class="form-check form-switch">
+                                                                <field name="friday" widget="boolean_toggle" help="Marque se sua empresa funciona às sextas-feiras."/>
+                                                            </div>
+                                                        </td>
+                                                        <td class="align-middle">
+                                                            <span attrs="{'invisible': [('friday', '=', False)]}">Horário padrão</span>
+                                                            <span class="text-muted" attrs="{'invisible': [('friday', '=', True)]}">Fechado</span>
+                                                        </td>
+                                                    </tr>
+                                                    <!-- Sábado -->
+                                                    <tr>
+                                                        <td class="align-middle">
+                                                            <span class="fw-bold">Sábado</span>
+                                                        </td>
+                                                        <td class="align-middle">
+                                                            <div class="form-check form-switch">
+                                                                <field name="saturday" widget="boolean_toggle" help="Marque se sua empresa funciona aos sábados."/>
+                                                            </div>
+                                                        </td>
+                                                        <td class="align-middle">
+                                                            <div attrs="{'invisible': [('saturday', '=', False)]}">
+                                                                <div class="d-flex align-items-center">
+                                                                    <field name="saturday_start_time" widget="time" class="me-1" help="Horário de abertura no sábado."/>
+                                                                    <span class="mx-1">-</span>
+                                                                    <field name="saturday_end_time" widget="time" class="ms-1" help="Horário de fechamento no sábado."/>
+                                                                </div>
+                                                            </div>
+                                                            <span class="text-muted" attrs="{'invisible': [('saturday', '=', True)]}">Fechado</span>
+                                                        </td>
+                                                    </tr>
+                                                    <!-- Domingo -->
+                                                    <tr>
+                                                        <td class="align-middle">
+                                                            <span class="fw-bold">Domingo</span>
+                                                        </td>
+                                                        <td class="align-middle">
+                                                            <div class="form-check form-switch">
+                                                                <field name="sunday" widget="boolean_toggle" help="Marque se sua empresa funciona aos domingos."/>
+                                                            </div>
+                                                        </td>
+                                                        <td class="align-middle">
+                                                            <div attrs="{'invisible': [('sunday', '=', False)]}">
+                                                                <div class="d-flex align-items-center">
+                                                                    <field name="sunday_start_time" widget="time" class="me-1" help="Horário de abertura no domingo."/>
+                                                                    <span class="mx-1">-</span>
+                                                                    <field name="sunday_end_time" widget="time" class="ms-1" help="Horário de fechamento no domingo."/>
+                                                                </div>
+                                                            </div>
+                                                            <span class="text-muted" attrs="{'invisible': [('sunday', '=', True)]}">Fechado</span>
+                                                        </td>
+                                                    </tr>
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                    <div class="card-footer bg-light">
+                                        <small class="text-muted"><i class="fa fa-info-circle me-1"></i> Os horários de fim de semana podem ser diferentes do horário padrão.</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </page>
+                        <page string="Configurações de Atendimento" name="service_config">
+                            <div class="alert alert-info mb-4" role="alert" style="border-left: 4px solid #2196F3; background-color: #f8f9fa;">
+                                <div class="d-flex">
+                                    <i class="fa fa-magic fa-2x me-3 text-primary"></i>
+                                    <div>
+                                        <h4 class="alert-heading">Personalize a experiência de atendimento</h4>
+                                        <p class="mb-0">Configure como o agente de IA interagirá com seus clientes, definindo o tom, estilo e mensagens utilizadas durante as conversas.</p>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Fluxo de Conversa -->
+                            <div class="o_settings_container mb-4 p-3" style="background-color: #f8f9fa; border-radius: 8px;">
+                                <div class="d-flex align-items-center mb-3">
+                                    <i class="fa fa-exchange fa-2x me-2" style="color: #2196F3;"></i>
+                                    <div>
+                                        <h3 class="m-0">Fluxo de Conversa</h3>
+                                        <p class="text-muted mb-0">Configure as mensagens e interações do início ao fim da conversa</p>
+                                    </div>
+                                </div>
+                                
+                                <!-- Etapas da conversa em formato de timeline -->
+                                <div class="card shadow-sm mb-4">
+                                    <div class="card-header bg-light">
+                                        <h5 class="card-title m-0"><i class="fa fa-comments-o me-2 text-primary"></i>Etapas da Conversa</h5>
+                                    </div>
+                                    <div class="card-body">
+                                        <!-- Início da conversa -->
+                                        <div class="d-flex mb-4">
+                                            <div class="me-3 text-center">
+                                                <div class="rounded-circle bg-primary text-white d-flex align-items-center justify-content-center" style="width: 40px; height: 40px;">
+                                                    <i class="fa fa-play"></i>
+                                                </div>
+                                                <div class="mt-2 mb-2" style="border-left: 2px dashed #ccc; height: 30px;"></div>
+                                            </div>
+                                            <div class="flex-grow-1">
+                                                <div class="card border-primary">
+                                                    <div class="card-header bg-primary text-white">
+                                                        <h6 class="m-0">Início da Conversa</h6>
+                                                    </div>
+                                                    <div class="card-body">
+                                                        <label for="greeting_message" class="form-label fw-bold">Mensagem de Boas-vindas</label>
+                                                        <field name="greeting_message" placeholder="Ex: Olá! Sou o assistente virtual da [Nome da Empresa]. Como posso ajudar hoje?" class="w-100" help="Mensagem inicial que o agente de IA enviará ao iniciar uma conversa com o cliente."/>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <!-- Durante a conversa -->
+                                        <div class="d-flex mb-4">
+                                            <div class="me-3 text-center">
+                                                <div class="rounded-circle bg-success text-white d-flex align-items-center justify-content-center" style="width: 40px; height: 40px;">
+                                                    <i class="fa fa-comments"></i>
+                                                </div>
+                                                <div class="mt-2 mb-2" style="border-left: 2px dashed #ccc; height: 30px;"></div>
+                                            </div>
+                                            <div class="flex-grow-1">
+                                                <div class="card border-success">
+                                                    <div class="card-header bg-success text-white">
+                                                        <h6 class="m-0">Durante a Conversa</h6>
+                                                    </div>
+                                                    <div class="card-body">
+                                                        <p class="text-muted">O agente usará o estilo de comunicação configurado na seção "Personalidade do Agente" abaixo.</p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <!-- Finalização da conversa -->
+                                        <div class="d-flex mb-4">
+                                            <div class="me-3 text-center">
+                                                <div class="rounded-circle bg-info text-white d-flex align-items-center justify-content-center" style="width: 40px; height: 40px;">
+                                                    <i class="fa fa-flag-checkered"></i>
+                                                </div>
+                                                <div class="mt-2 mb-2" style="border-left: 2px dashed #ccc; height: 30px;"></div>
+                                            </div>
+                                            <div class="flex-grow-1">
+                                                <div class="card border-info">
+                                                    <div class="card-header bg-info text-white">
+                                                        <h6 class="m-0">Finalização da Conversa</h6>
+                                                    </div>
+                                                    <div class="card-body">
+                                                        <!-- Mensagem de despedida apenas, opção de redes sociais movida para seção "Outras Configurações" -->
+                                                        <div class="alert alert-light border mb-3">
+                                                            <div class="d-flex">
+                                                                <i class="fa fa-info-circle me-2 text-primary"></i>
+                                                                <div>
+                                                                    <p class="mb-0 small">Configure a mensagem de despedida que o agente enviará ao finalizar a conversa.</p>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                        <label for="farewell_message" class="form-label fw-bold">Mensagem de Despedida</label>
+                                                        <field name="farewell_message" placeholder="Ex: Obrigado por entrar em contato com a [Nome da Empresa]. Tenha um ótimo dia!" class="w-100" help="Mensagem de despedida que o agente de IA enviará ao finalizar uma conversa com o cliente."/>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <!-- Avaliação (opcional) -->
+                                        <div class="d-flex">
+                                            <div class="me-3 text-center">
+                                                <div class="rounded-circle bg-warning text-white d-flex align-items-center justify-content-center" style="width: 40px; height: 40px;">
+                                                    <i class="fa fa-star"></i>
+                                                </div>
+                                            </div>
+                                            <div class="flex-grow-1">
+
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Personalidade do Agente -->
+                            <div class="o_settings_container mb-4 p-3" style="background-color: #f8f9fa; border-radius: 8px;">
+                                <div class="d-flex align-items-center mb-3">
+                                    <i class="fa fa-user-circle fa-2x me-2" style="color: #673AB7;"></i>
+                                    <div>
+                                        <h3 class="m-0">Personalidade do Agente</h3>
+                                        <p class="text-muted mb-0">Configure o estilo de comunicação e personalidade do seu assistente virtual</p>
+                                    </div>
+                                </div>
+                                
+                                <div class="card shadow-sm mb-4">
+                                    <div class="card-header bg-light">
+                                        <h5 class="card-title m-0"><i class="fa fa-sliders me-2 text-primary"></i>Ajustes de Personalidade</h5>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="row">
+                                            <!-- Tom de Comunicação -->
+                                            <div class="col-lg-6 mb-4">
+                                                <div class="card border-primary h-100">
+                                                    <div class="card-header bg-primary text-white">
+                                                        <div class="d-flex align-items-center">
+                                                            <i class="fa fa-comment me-2"></i>
+                                                            <h6 class="m-0">Tom de Comunicação</h6>
+                                                        </div>
+                                                    </div>
+                                                    <div class="card-body">
+                                                        <p class="text-muted small mb-3">Como o agente deve soar nas conversas com os clientes</p>
+                                                        <field name="tone" widget="radio" options="{'horizontal': True}" help="Define o tom geral que o agente de IA usará nas conversas. Escolha o que melhor representa a personalidade da sua marca."/>
+                                                        <div class="mt-2 small text-muted fst-italic">Dica: O tom "Amigável" é ideal para a maioria dos negócios.</div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            
+                                            <!-- Voz do Agente -->
+                                            <div class="col-lg-6 mb-4">
+                                                <div class="card border-success h-100">
+                                                    <div class="card-header bg-success text-white">
+                                                        <div class="d-flex align-items-center">
+                                                            <i class="fa fa-volume-up me-2"></i>
+                                                            <h6 class="m-0">Voz do Agente</h6>
+                                                        </div>
+                                                    </div>
+                                                    <div class="card-body">
+                                                        <p class="text-muted small mb-3">A energia e dinamismo que o agente transmitirá</p>
+                                                        <field name="voice" widget="radio" options="{'horizontal': True}" help="Define a energia e o estilo da comunicação do agente. Selecione de acordo com o tipo de experiência que deseja proporcionar aos clientes."/>
+                                                        <div class="mt-2 small text-muted fst-italic">Dica: A voz "Equilibrada" funciona bem para a maioria dos setores.</div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            
+                                            <!-- Nível de Formalidade -->
+                                            <div class="col-lg-6 mb-4">
+                                                <div class="card border-info h-100">
+                                                    <div class="card-header bg-info text-white">
+                                                        <div class="d-flex align-items-center">
+                                                            <i class="fa fa-user-tie me-2"></i>
+                                                            <h6 class="m-0">Nível de Formalidade</h6>
+                                                        </div>
+                                                    </div>
+                                                    <div class="card-body">
+                                                        <p class="text-muted small mb-3">Quão formal o agente deve ser nas interações</p>
+                                                        <field name="formality" widget="radio" options="{'horizontal': True}" help="Define o nível de formalidade na linguagem do agente. Considere seu público-alvo e o tipo de relacionamento que deseja estabelecer."/>
+                                                        <div class="mt-2 small text-muted fst-italic">Dica: "Semi-formal" é versátil e adequado para a maioria dos contextos.</div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            
+                                            <!-- Uso de Emojis -->
+                                            <div class="col-lg-6 mb-4">
+                                                <div class="card border-warning h-100">
+                                                    <div class="card-header bg-warning text-white">
+                                                        <div class="d-flex align-items-center">
+                                                            <i class="fa fa-smile-o me-2"></i>
+                                                            <h6 class="m-0">Uso de Emojis</h6>
+                                                        </div>
+                                                    </div>
+                                                    <div class="card-body">
+                                                        <p class="text-muted small mb-3">Se e com que frequência o agente usará emojis</p>
+                                                        <field name="emoji_usage" widget="radio" options="{'horizontal': True}" help="Define se e com que frequência o agente usará emojis nas conversas. Emojis podem tornar a conversa mais descontraída, mas podem não ser adequados para todos os contextos."/>
+                                                        <div class="mt-2 small text-muted fst-italic">Dica: "Moderado" é adequado para a maioria dos negócios.</div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Recomendações de Personalidade -->
+                                <div class="card shadow-sm">
+                                    <div class="card-header bg-light d-flex align-items-center">
+                                        <i class="fa fa-lightbulb-o me-2 text-warning"></i>
+                                        <h5 class="m-0">Recomendações de Personalidade</h5>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="alert alert-light border mb-4">
+                                            <div class="d-flex">
+                                                <i class="fa fa-info-circle me-2 text-primary"></i>
+                                                <div>
+                                                    <p class="mb-0">Abaixo estão algumas combinações recomendadas para diferentes tipos de negócios.</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="table-responsive">
+                                            <table class="table table-hover border">
+                                                <thead class="table-light">
+                                                    <tr>
+                                                        <th>Tipo de Negócio</th>
+                                                        <th>Tom</th>
+                                                        <th>Voz</th>
+                                                        <th>Formalidade</th>
+                                                        <th>Emojis</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    <tr>
+                                                        <td><span class="badge bg-primary">E-commerce</span></td>
+                                                        <td>Amigável</td>
+                                                        <td>Energético</td>
+                                                        <td>Moderado</td>
+                                                        <td>Uso Moderado</td>
+                                                    </tr>
+                                                    <tr>
+                                                        <td><span class="badge bg-success">Serviços Profissionais</span></td>
+                                                        <td>Profissional</td>
+                                                        <td>Calmo</td>
+                                                        <td>Formal</td>
+                                                        <td>Não Usar</td>
+                                                    </tr>
+                                                    <tr>
+                                                        <td><span class="badge bg-info">Saúde e Bem-estar</span></td>
+                                                        <td>Acolhedor</td>
+                                                        <td>Calmo</td>
+                                                        <td>Moderado</td>
+                                                        <td>Uso Mínimo</td>
+                                                    </tr>
+                                                    <tr>
+                                                        <td><span class="badge bg-warning text-dark">Tecnologia</span></td>
+                                                        <td>Técnico</td>
+                                                        <td>Objetivo</td>
+                                                        <td>Moderado</td>
+                                                        <td>Não Usar</td>
+                                                    </tr>
+                                                    <tr>
+                                                        <td><span class="badge bg-danger">Entretenimento</span></td>
+                                                        <td>Amigável</td>
+                                                        <td>Energético</td>
+                                                        <td>Informal</td>
+                                                        <td>Uso Moderado</td>
+                                                    </tr>
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="card-footer bg-light">
+                                <small class="text-muted"><i class="fa fa-info-circle me-1"></i> Escolha a combinação que melhor representa a personalidade da sua marca. Você pode testar o resultado na aba "Teste do Agente".</small>
+                            </div>
+                            
+                            <!-- Seção de Outras Configurações -->
+                            <div class="card mt-4 border">
+                                <div class="card-header bg-light">
+                                    <h5 class="mb-0"><i class="fa fa-cog me-2"></i>Outras Configurações</h5>
+                                </div>
+                                <div class="card-body">
+                                     <!-- Opções de Vendas -->
+                                     <div class="mb-4">
+                                         <h6 class="text-primary mb-3"><i class="fa fa-shopping-cart me-2"></i>Opções de Vendas</h6>
+                                         <p class="text-muted small mb-3">Configure como o agente deve se comportar em relação a vendas e promoções</p>
+                                         
+                                         <div class="row mb-3">
+                                              <div class="col-12">
+                                                  <table class="table table-borderless">
+                                                      <tr>
+                                                          <td style="width: 70%;">
+                                                              <label for="inform_promotions" class="fw-bold">Informar promoções e sugerir produtos durante a conversa?</label>
+                                                              <div class="text-muted small">Se ativado, quando o cliente demonstrar interesse em produtos ou serviços, o agente poderá informar sobre promoções ativas e sugerir produtos relacionados de forma proativa.</div>
+                                                          </td>
+                                                          <td class="align-middle">
+                                                              <div class="form-check form-switch d-flex justify-content-center">
+                                                                  <field name="inform_promotions" widget="boolean_toggle"/>
+                                                              </div>
+                                                          </td>
+                                                      </tr>
+                                                  </table>
+                                              </div>
+                                          </div>
+                                     </div>
+                                     
+                                     <!-- Opções de Finalização -->
+                                     <div class="mb-4">
+                                         <h6 class="text-primary mb-3"><i class="fa fa-flag-checkered me-2"></i>Opções de Finalização</h6>
+                                         <p class="text-muted small mb-3">Configure como o agente deve finalizar as conversas</p>
+                                        
+                                        <div class="row mb-3">
+                                            <div class="col-12">
+                                                <table class="table table-borderless">
+                                                    <tr>
+                                                        <td style="width: 70%;">
+                                                            <label for="request_rating" class="fw-bold">Solicitar ao Cliente avaliação sobre o atendimento?</label>
+                                                            <div class="text-muted small">Se ativado, o agente solicitará uma avaliação do atendimento ao finalizar a conversa</div>
+                                                        </td>
+                                                        <td class="align-middle">
+                                                            <div class="form-check form-switch d-flex justify-content-center">
+                                                                <field name="request_rating" widget="boolean_toggle"/>
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                </table>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="row mb-3" attrs="{'invisible': [('request_rating', '=', False)]}">
+                                             <div class="col-12">
+                                                 <label for="rating_type" class="form-label fw-bold">Tipo de Avaliação</label>
+                                                 <field name="rating_type" widget="radio" options="{'horizontal': true}" style="z-index: 1; position: relative; display: block;"/>
+                                                 <div class="text-muted small mt-1">Escolha o formato de avaliação que o agente solicitará ao cliente</div>
+                                             </div>
+                                         </div>
+                                         
+                                         <div class="row mb-3" attrs="{'invisible': ['|', ('request_rating', '=', False), ('rating_type', '=', 'numeric_1_10')]}">
+                                             <div class="col-12">
+                                                 <div class="alert alert-info">
+                                                     <i class="fa fa-info-circle me-2"></i>
+                                                     <span>Para o tipo "Nota de 1 a 10", a mensagem padrão será: "Sua opinião é muito importante para nós. Em uma nota de 1 a 10, como você avalia nosso atendimento?"</span>
+                                                 </div>
+                                             </div>
+                                         </div>
+                                         
+                                         <div class="row mb-3" attrs="{'invisible': ['|', ('request_rating', '=', False), ('rating_type', '=', 'numeric_1_5')]}">
+                                             <div class="col-12">
+                                                 <div class="alert alert-info">
+                                                     <i class="fa fa-info-circle me-2"></i>
+                                                     <span>Para o tipo "Nota de 1 a 5", a mensagem padrão será: "Sua opinião é muito importante para nós. Em uma nota de 1 a 5, como você avalia nosso atendimento?"</span>
+                                                 </div>
+                                             </div>
+                                         </div>
+                                         
+                                         <div class="row mb-3" attrs="{'invisible': ['|', ('request_rating', '=', False), ('rating_type', '!=', 'custom')]}">
+                                             <div class="col-12">
+                                                 <label for="rating_request_message" class="form-label">Mensagem de Solicitação de Avaliação Personalizada</label>
+                                                 <field name="rating_request_message" placeholder="Ex: Poderia avaliar nosso atendimento? Sua opinião é muito importante para nós." class="form-control" style="z-index: 1; position: relative;"/>
+                                             </div>
+                                         </div>
+                                         
+                                         <div class="row mb-3" attrs="{'invisible': [('request_rating', '=', False)]}">
+                                             <div class="col-12">
+                                                 <table class="table table-borderless">
+                                                     <tr>
+                                                         <td style="width: 70%;">
+                                                             <label for="request_rating_reason" class="fw-bold">Solicitar ao cliente o motivo da avaliação</label>
+                                                             <div class="text-muted small">Se ativado, após o cliente dar uma nota, o agente perguntará o motivo da avaliação</div>
+                                                         </td>
+                                                         <td class="align-middle">
+                                                             <div class="form-check form-switch d-flex justify-content-center">
+                                                                 <field name="request_rating_reason" widget="boolean_toggle"/>
+                                                             </div>
+                                                         </td>
+                                                     </tr>
+                                                 </table>
+                                             </div>
+                                         </div>
+                                         
+                                         <div class="row mb-3" attrs="{'invisible': ['|', ('request_rating', '=', False), ('request_rating_reason', '=', False)]}">
+                                             <div class="col-12">
+                                                 <label for="rating_reason_message" class="form-label">Mensagem de Solicitação de Justificativa</label>
+                                                 <field name="rating_reason_message" placeholder="Ex: Poderia nos dizer o motivo da sua avaliação? Isso nos ajudará a melhorar nossos serviços." class="form-control" style="z-index: 1; position: relative;"/>
+                                             </div>
+                                         </div>
+                                         
+                                         <div class="row mb-3" attrs="{'invisible': [('request_rating', '=', False)]}">
+                                             <div class="col-12">
+                                                 <table class="table table-borderless">
+                                                     <tr>
+                                                         <td style="width: 70%;">
+                                                             <label for="request_improvement_suggestions" class="fw-bold">Solicitar sugestões de melhoria</label>
+                                                             <div class="text-muted small">Se ativado, após a avaliação, o agente solicitará sugestões de melhoria ao cliente</div>
+                                                         </td>
+                                                         <td class="align-middle">
+                                                             <div class="form-check form-switch d-flex justify-content-center">
+                                                                 <field name="request_improvement_suggestions" widget="boolean_toggle"/>
+                                                             </div>
+                                                         </td>
+                                                     </tr>
+                                                 </table>
+                                             </div>
+                                         </div>
+                                         
+                                         <div class="row mb-3" attrs="{'invisible': ['|', ('request_rating', '=', False), ('request_improvement_suggestions', '=', False)]}">
+                                             <div class="col-12">
+                                                 <label for="improvement_suggestions_message" class="form-label">Mensagem de Solicitação de Sugestões</label>
+                                                 <field name="improvement_suggestions_message" placeholder="Ex: Gostaria de deixar alguma sugestão para melhorarmos nossos serviços?" class="form-control"/>
+                                             </div>
+                                         </div>
+                                         
+                                         <div class="row mb-3">
+                                             <div class="col-12">
+                                                 <table class="table table-borderless">
+                                                     <tr>
+                                                         <td style="width: 70%;">
+                                                             <label for="use_farewell" class="fw-bold">Permitir ao agente informar o Site/Redes Sociais ao finalizar?</label>
+                                                             <div class="text-muted small">Se ativado, o agente poderá mencionar o site e redes sociais da empresa ao finalizar a conversa</div>
+                                                         </td>
+                                                         <td class="align-middle">
+                                                             <div class="form-check form-switch d-flex justify-content-center">
+                                                                 <field name="use_farewell" widget="boolean_toggle"/>
+                                                             </div>
+                                                         </td>
+                                                     </tr>
+                                                 </table>
+                                             </div>
+                                         </div>
+                                        
+                                        <div class="row" attrs="{'invisible': [('use_farewell', '=', False)]}">
+                                             <div class="col-12">
+                                                 <h6 class="mb-3">Redes Sociais a Mencionar</h6>
+                                                 <table class="table table-borderless">
+                                                     <tr>
+                                                         <td style="width: 70%;">
+                                                             <label for="website_mention" class="fw-normal"><i class="fa fa-globe me-1"></i>Mencionar Website ao finalizar conversa?</label>
+                                                         </td>
+                                                         <td class="align-middle">
+                                                             <div class="form-check form-switch d-flex justify-content-center">
+                                                                 <field name="website_mention" widget="boolean_toggle"/>
+                                                             </div>
+                                                         </td>
+                                                     </tr>
+                                                     <tr>
+                                                         <td style="width: 70%;">
+                                                             <label for="facebook_mention" class="fw-normal"><i class="fa fa-facebook me-1"></i>Mencionar Facebook ao finalizar conversa?</label>
+                                                         </td>
+                                                         <td class="align-middle">
+                                                             <div class="form-check form-switch d-flex justify-content-center">
+                                                                 <field name="facebook_mention" widget="boolean_toggle"/>
+                                                             </div>
+                                                         </td>
+                                                     </tr>
+                                                     <tr>
+                                                         <td style="width: 70%;">
+                                                             <label for="instagram_mention" class="fw-normal"><i class="fa fa-instagram me-1"></i>Mencionar Instagram ao finalizar conversa?</label>
+                                                         </td>
+                                                         <td class="align-middle">
+                                                             <div class="form-check form-switch d-flex justify-content-center">
+                                                                 <field name="instagram_mention" widget="boolean_toggle"/>
+                                                             </div>
+                                                         </td>
+                                                     </tr>
+                                                 </table>
+                                             </div>
+                                         </div>
+                                    </div>
+                                    
+
+                                    
+                                    <!-- Informações Adicionais -->
+                                    <div>
+                                        <h6 class="text-primary mb-3"><i class="fa fa-info-circle me-2"></i>Informações Adicionais</h6>
+                                        
+                                        <div class="row mb-3">
+                                             <div class="col-12">
+                                                 <table class="table table-borderless">
+                                                     <tr>
+                                                         <td style="width: 70%;">
+                                                             <label for="share_address" class="fw-bold">Permitir ao agente informar o endereço quando solicitado?</label>
+                                                             <div class="text-muted small">Se ativado, o agente poderá fornecer o endereço completo da empresa quando o cliente perguntar. Desative se preferir manter o endereço confidencial.</div>
+                                                         </td>
+                                                         <td class="align-middle">
+                                                             <div class="form-check form-switch d-flex justify-content-center">
+                                                                 <field name="share_address" widget="boolean_toggle"/>
+                                                             </div>
+                                                         </td>
+                                                     </tr>
+                                                 </table>
+                                             </div>
+                                         </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </page>
+                        <!-- 
+                        Aba de Teste do Agente - Integração Futura com Chatwoot
+                        Esta aba será conectada via API ao Chatwoot para simular mensagens de WhatsApp
+                        e testar o comportamento do agente com as configurações definidas.
+                        -->
+                        <page string="Teste do Agente" name="agent_test">
+                            <!-- Alerta informativo -->
+                            <div class="alert alert-info mb-4" role="alert" style="border-left: 4px solid #2196F3; background-color: #f8f9fa;">
+                                <div class="d-flex">
+                                    <i class="fa fa-robot fa-2x me-3 text-primary"></i>
+                                    <div>
+                                        <h4 class="alert-heading">Teste seu Agente de IA</h4>
+                                        <p>Nesta área você poderá testar como seu agente de IA irá interagir com os clientes com base nas configurações definidas.</p>
+                                        <p><strong>Importante:</strong> Para testar seu agente, primeiro clique no botão <span class="badge bg-primary">Sincronizar com Sistema de IA</span> no topo da página.</p>
+                                        <p class="mb-0"><span class="badge bg-warning">Em desenvolvimento</span> Esta funcionalidade permitirá simular conversas reais de WhatsApp digitando mensagens e pressionando Enter.</p>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="o_settings_container mb-4 p-3" style="background-color: #f8f9fa; border-radius: 8px;">
+                                <div class="d-flex align-items-center mb-3">
+                                    <i class="fa fa-comments fa-2x me-2" style="color: #2196F3;"></i>
+                                    <div>
+                                        <h3 class="m-0">Simulação de Conversa</h3>
+                                        <p class="text-muted mb-0">Teste em tempo real como seu agente de IA irá interagir com os clientes</p>
+                                    </div>
+                                </div>
+                                
+                                <div class="card shadow-sm mb-4">
+                                    <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                                        <h5 class="card-title m-0"><i class="fa fa-exchange me-2 text-primary"></i>Conversa Interativa</h5>
+                                        <span class="badge bg-warning text-dark">Em breve</span>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="chat-container border rounded p-3 mb-3" style="height: 400px; overflow-y: auto; background-color: #f8f9fa;">
+                                            <div id="chat-messages">
+                                                <!-- Mensagens serão adicionadas dinamicamente aqui -->
+                                                <div class="d-flex mb-3">
+                                                    <div class="rounded-circle bg-primary text-white d-flex align-items-center justify-content-center me-2" style="width: 40px; height: 40px;">
+                                                        <i class="fa fa-robot"></i>
+                                                    </div>
+                                                    <div class="chat-bubble p-3 rounded" style="background-color: #e9ecef; max-width: 80%;">
+                                                        <p class="mb-0">Olá! Como posso ajudar?</p>
+                                                    </div>
+                                                </div>
+                                                <!-- Mensagem informativa sobre funcionalidade em desenvolvimento -->
+                                                <div class="alert alert-light border mt-4 text-center">
+                                                    <i class="fa fa-info-circle me-2 text-primary"></i>
+                                                    <span>Funcionalidade em desenvolvimento. Em breve você poderá testar seu agente em tempo real!</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <!-- Campo de entrada e botões desativados com tooltip informativo -->
+                                        <div class="input-group mb-3" title="Funcionalidade em desenvolvimento">
+                                            <input type="text" class="form-control" id="user-message" placeholder="Digite sua mensagem..." disabled="disabled"/>
+                                            <button name="send_message" class="btn btn-outline-primary" type="button" id="send-message" disabled="disabled">
+                                                <i class="fa fa-paper-plane"></i>
+                                            </button>
+                                        </div>
+                                        
+                                        <div class="d-flex justify-content-center gap-2">
+                                            <button name="reset_chat" class="btn btn-secondary" type="button" id="reset-chat" disabled="disabled"
+                                                    title="Esta funcionalidade estará disponível em breve">
+                                                <i class="fa fa-refresh me-1"></i> Reiniciar Conversa
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div class="card-footer bg-light">
+                                        <small class="text-muted"><i class="fa fa-info-circle me-1"></i> Em breve, esta simulação permitirá testar como seu agente responderá com base nas configurações atuais, enviando mensagens diretamente para o Chatwoot como se fossem do WhatsApp.</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </page>
+                        <page string="Serviços de IA" name="services">
+                            <!-- Alerta informativo principal -->
+                            <div class="alert alert-info mb-4" role="alert" style="border-left: 4px solid #2196F3; background-color: #f8f9fa;">
+                                <div class="d-flex">
+                                    <i class="fa fa-info-circle fa-2x me-3 text-primary"></i>
+                                    <div>
+                                        <h4 class="alert-heading">Serviços de IA</h4>
+                                        <p class="mb-0">Visualize os serviços de IA atualmente contratados para sua empresa e conheça outros serviços disponíveis.</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Serviços Contratados -->
+                            <div class="o_settings_container mb-4 p-3" style="background-color: #f8f9fa; border-radius: 8px;">
+                                <div class="d-flex align-items-center mb-3">
+                                    <i class="fa fa-check-circle fa-2x me-2" style="color: #00C853;"></i>
+                                    <div>
+                                        <h3 class="m-0">Serviços Contratados</h3>
+                                        <p class="text-muted mb-0">Funcionalidades ativas no seu plano atual</p>
+                                    </div>
+                                </div>
+                                
+                                <!-- Serviços ativos -->
+                                <div class="card shadow-sm mb-3">
+                                    <div class="card-header bg-light">
+                                        <h5 class="card-title m-0"><i class="fa fa-cogs me-2 text-primary"></i>Funcionalidades Ativas</h5>
+                                    </div>
+                                    <div class="card-body p-0">
+                                        <div class="table-responsive">
+                                            <table class="table table-hover mb-0">
+                                                <thead>
+                                                    <tr>
+                                                        <th>Serviço</th>
+                                                        <th>Descrição</th>
+                                                        <th>Status</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    <!-- Vendas -->
+                                                    <tr attrs="{'invisible': [('enable_sales', '=', False)]}">
+                                                        <td class="align-middle">
+                                                            <div class="d-flex align-items-center">
+                                                                <i class="fa fa-shopping-cart me-2" style="color: #00C853;"></i>
+                                                                <span class="fw-bold">Vendas de Produtos e Serviços</span>
+                                                            </div>
+                                                        </td>
+                                                        <td class="align-middle">Permite que o agente de IA forneça informações sobre produtos, preços, promoções e realize vendas.</td>
+                                                        <td class="align-middle"><span class="badge bg-success">Ativo</span></td>
+                                                    </tr>
+                                                    
+                                                    <!-- Agendamentos -->
+                                                    <tr attrs="{'invisible': [('enable_scheduling', '=', False)]}">
+                                                        <td class="align-middle">
+                                                            <div class="d-flex align-items-center">
+                                                                <i class="fa fa-calendar me-2" style="color: #00C853;"></i>
+                                                                <span class="fw-bold">Agendamentos</span>
+                                                            </div>
+                                                        </td>
+                                                        <td class="align-middle">Permite que o agente de IA realize agendamentos de serviços, consultas ou reservas.</td>
+                                                        <td class="align-middle"><span class="badge bg-success">Ativo</span></td>
+                                                    </tr>
+                                                    
+                                                    <!-- Delivery -->
+                                                    <tr attrs="{'invisible': [('enable_delivery', '=', False)]}">
+                                                        <td class="align-middle">
+                                                            <div class="d-flex align-items-center">
+                                                                <i class="fa fa-truck me-2" style="color: #00C853;"></i>
+                                                                <span class="fw-bold">Delivery</span>
+                                                            </div>
+                                                        </td>
+                                                        <td class="align-middle">Permite que o agente de IA forneça informações sobre entregas, prazos e status de pedidos.</td>
+                                                        <td class="align-middle"><span class="badge bg-success">Ativo</span></td>
+                                                    </tr>
+                                                    
+                                                    <!-- Suporte -->
+                                                    <tr attrs="{'invisible': [('enable_support', '=', False)]}">
+                                                        <td class="align-middle">
+                                                            <div class="d-flex align-items-center">
+                                                                <i class="fa fa-life-ring me-2" style="color: #00C853;"></i>
+                                                                <span class="fw-bold">Suporte ao Cliente</span>
+                                                            </div>
+                                                        </td>
+                                                        <td class="align-middle">Permite que o agente de IA forneça suporte técnico, responda dúvidas e resolva problemas.</td>
+                                                        <td class="align-middle"><span class="badge bg-success">Ativo</span></td>
+                                                    </tr>
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Alerta serviços disponíveis -->
+                            <div class="alert alert-warning mb-4" role="alert" style="border-left: 4px solid #FFA000; background-color: #fff8e1;">
+                                <div class="d-flex">
+                                    <i class="fa fa-lightbulb-o fa-2x me-3 text-warning"></i>
+                                    <div>
+                                        <h4 class="alert-heading">Amplie suas Capacidades</h4>
+                                        <p class="mb-0">Conheça os serviços adicionais disponíveis para melhorar a experiência dos seus clientes.</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Serviços Disponíveis -->
+                            <div class="o_settings_container mb-4 p-3" style="background-color: #f8f9fa; border-radius: 8px;">
+                                <div class="d-flex align-items-center mb-3">
+                                    <i class="fa fa-plus-circle fa-2x me-2" style="color: #FFA000;"></i>
+                                    <div>
+                                        <h3 class="m-0">Serviços Disponíveis</h3>
+                                        <p class="text-muted mb-0">Funcionalidades que podem ser adicionadas ao seu plano</p>
+                                    </div>
+                                </div>
+                                
+                                <!-- Serviços não contratados -->
+                                <div class="card shadow-sm mb-3">
+                                    <div class="card-header bg-light">
+                                        <h5 class="card-title m-0"><i class="fa fa-puzzle-piece me-2 text-warning"></i>Funcionalidades Adicionais</h5>
+                                    </div>
+                                    <div class="card-body p-0">
+                                        <div class="table-responsive">
+                                            <table class="table table-hover mb-0">
+                                                <thead>
+                                                    <tr>
+                                                        <th>Serviço</th>
+                                                        <th>Descrição</th>
+                                                        <th>Status</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    <!-- Vendas (não contratado) -->
+                                                    <tr attrs="{'invisible': [('enable_sales', '=', True)]}">
+                                                        <td class="align-middle">
+                                                            <div class="d-flex align-items-center">
+                                                                <i class="fa fa-shopping-cart me-2" style="color: #FFA000;"></i>
+                                                                <span class="fw-bold">Vendas de Produtos e Serviços</span>
+                                                            </div>
+                                                        </td>
+                                                        <td class="align-middle">Permite que o agente de IA forneça informações sobre produtos, preços, promoções e realize vendas.</td>
+                                                        <td class="align-middle"><span class="badge bg-secondary">Não contratado</span></td>
+                                                    </tr>
+                                                    
+                                                    <!-- Agendamentos (não contratado) -->
+                                                    <tr attrs="{'invisible': [('enable_scheduling', '=', True)]}">
+                                                        <td class="align-middle">
+                                                            <div class="d-flex align-items-center">
+                                                                <i class="fa fa-calendar me-2" style="color: #FFA000;"></i>
+                                                                <span class="fw-bold">Agendamentos</span>
+                                                            </div>
+                                                        </td>
+                                                        <td class="align-middle">Permite que o agente de IA realize agendamentos de serviços, consultas ou reservas.</td>
+                                                        <td class="align-middle"><span class="badge bg-secondary">Não contratado</span></td>
+                                                    </tr>
+                                                    
+                                                    <!-- Delivery (não contratado) -->
+                                                    <tr attrs="{'invisible': [('enable_delivery', '=', True)]}">
+                                                        <td class="align-middle">
+                                                            <div class="d-flex align-items-center">
+                                                                <i class="fa fa-truck me-2" style="color: #FFA000;"></i>
+                                                                <span class="fw-bold">Delivery</span>
+                                                            </div>
+                                                        </td>
+                                                        <td class="align-middle">Permite que o agente de IA forneça informações sobre entregas, prazos e status de pedidos.</td>
+                                                        <td class="align-middle"><span class="badge bg-secondary">Não contratado</span></td>
+                                                    </tr>
+                                                    
+                                                    <!-- Suporte (não contratado) -->
+                                                    <tr attrs="{'invisible': [('enable_support', '=', True)]}">
+                                                        <td class="align-middle">
+                                                            <div class="d-flex align-items-center">
+                                                                <i class="fa fa-life-ring me-2" style="color: #FFA000;"></i>
+                                                                <span class="fw-bold">Suporte ao Cliente</span>
+                                                            </div>
+                                                        </td>
+                                                        <td class="align-middle">Permite que o agente de IA forneça suporte técnico, responda dúvidas e resolva problemas.</td>
+                                                        <td class="align-middle"><span class="badge bg-secondary">Não contratado</span></td>
+                                                    </tr>
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Contato -->
+                                <div class="card shadow-sm">
+                                    <div class="card-header bg-primary text-white">
+                                        <div class="d-flex align-items-center">
+                                            <i class="fa fa-envelope me-2"></i>
+                                            <h5 class="m-0">Entre em contato para contratar mais serviços</h5>
+                                        </div>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="row">
+                                            <div class="col-md-6">
+                                                <div class="d-flex align-items-center mb-2">
+                                                    <i class="fa fa-envelope-o me-2 text-primary"></i>
+                                                    <span>Email: <a href="mailto:contato@sprintia.com.br">contato@sprintia.com.br</a></span>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <div class="d-flex align-items-center mb-2">
+                                                    <i class="fa fa-globe me-2 text-primary"></i>
+                                                    <span>Website: <a href="https://www.sprintia.com.br" target="_blank">www.sprintia.com.br</a></span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </page>
+                        <page string="Status de Sincronização" name="sync_status_page" attrs="{'invisible': [('sync_status', '!=', 'error')]}">
+                            <!-- Alerta de erro -->
+                            <div class="alert alert-danger mb-4" role="alert" style="border-left: 4px solid #F44336; background-color: #ffebee;">
+                                <div class="d-flex">
+                                    <i class="fa fa-exclamation-triangle fa-2x me-3 text-danger"></i>
+                                    <div>
+                                        <h4 class="alert-heading">Erro de Sincronização</h4>
+                                        <p class="mb-0">Ocorreu um erro durante a sincronização com o sistema de IA. Verifique os detalhes abaixo e tente novamente.</p>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Detalhes do erro -->
+                            <div class="o_settings_container mt-4 mb-4 p-3" style="background-color: #f8f9fa; border-radius: 8px;">
+                                <div class="d-flex align-items-center mb-3">
+                                    <i class="fa fa-bug fa-2x me-2" style="color: #F44336;"></i>
+                                    <div>
+                                        <h3 class="m-0">Detalhes do Erro</h3>
+                                    </div>
+                                </div>
+                                
+                                <div class="card shadow-sm">
+                                    <div class="card-header bg-light">
+                                        <div class="d-flex align-items-center">
+                                            <i class="fa fa-info-circle me-2 text-danger"></i>
+                                            <h5 class="m-0">Mensagem de Erro</h5>
+                                        </div>
+                                    </div>
+                                    <div class="card-body p-3">
+                                        <pre class="bg-light p-3 rounded" style="max-height: 300px; overflow-y: auto;"><field name="error_message" readonly="1" nolabel="1"/></pre>
+                                    </div>
+                                    <div class="card-footer bg-light">
+                                        <div class="d-flex align-items-center">
+                                            <i class="fa fa-lightbulb-o me-2 text-warning"></i>
+                                            <small class="text-muted">Dica: Tente corrigir as informações e sincronizar novamente usando o botão no topo da página.</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Passos para resolver -->
+                            <div class="o_settings_container mt-4 mb-4 p-3" style="background-color: #f8f9fa; border-radius: 8px;">
+                                <div class="d-flex align-items-center mb-3">
+                                    <i class="fa fa-check-square-o fa-2x me-2" style="color: #00C853;"></i>
+                                    <div>
+                                        <h3 class="m-0">Passos para Resolver</h3>
+                                    </div>
+                                </div>
+                                
+                                <div class="card shadow-sm">
+                                    <div class="card-body p-3">
+                                        <ol class="mb-0">
+                                            <li class="mb-2">Verifique se todas as informações obrigatórias estão preenchidas.</li>
+                                            <li class="mb-2">Certifique-se de que os formatos de dados estão corretos (telefones, emails, etc).</li>
+                                            <li class="mb-2">Verifique sua conexão com a internet.</li>
+                                            <li class="mb-2">Clique no botão "Sincronizar com Sistema de IA" novamente.</li>
+                                            <li>Se o problema persistir, entre em contato com o suporte técnico.</li>
+                                        </ol>
+                                    </div>
+                                </div>
+                            </div>
+                        </page>
+                    </notebook>
+                </sheet>
+                <div class="oe_chatter">
+                    <field name="message_follower_ids"/>
+                    <field name="activity_ids"/>
+                    <field name="message_ids"/>
+                </div>
+            </form>
+        </field>
+    </record>
+
+    <!-- Visualização de árvore -->
+    <record id="view_company_service_tree" model="ir.ui.view">
+        <field name="name">company.service.tree</field>
+        <field name="model">company.service</field>
+        <field name="arch" type="xml">
+            <tree string="Empresa e Serviços">
+                <field name="name"/>
+                <field name="sync_status"/>
+                <field name="last_sync"/>
+            </tree>
+        </field>
+    </record>
+
+    <!-- Ação -->
+    <record id="action_company_service" model="ir.actions.act_window">
+        <field name="name">Empresa e Serviços</field>
+        <field name="res_model">company.service</field>
+        <field name="view_mode">tree,form</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Configure as informações da sua empresa e serviços de IA
+            </p>
+            <p>
+                Configure as informações da sua empresa, serviços contratados e
+                preferências de comunicação para integração com o sistema de IA.
+            </p>
+        </field>
+    </record>
+</odoo>

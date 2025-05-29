@@ -1,0 +1,283 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <!-- Form View -->
+        <record id="view_product_suggested_image_form" model="ir.ui.view">
+            <field name="name">product.suggested.image.form</field>
+            <field name="model">product.suggested.image</field>
+            <field name="arch" type="xml">
+                <form string="Imagem Sugerida">
+                    <header>
+                        <button name="action_approve" type="object" string="Aprovar" class="btn-success" 
+                                attrs="{'invisible': [('state', 'not in', ['pending'])]}"/>
+                        <button name="action_reject" type="object" string="Rejeitar" class="btn-danger" 
+                                attrs="{'invisible': [('state', 'not in', ['pending'])]}"/>
+                        <button name="action_reset" type="object" string="Resetar" class="btn-secondary" 
+                                attrs="{'invisible': [('state', 'in', ['pending'])]}"/>
+                        <field name="state" widget="statusbar" statusbar_visible="pending,approved,rejected"/>
+                    </header>
+                    <sheet>
+                        <div class="oe_button_box" name="button_box">
+                            <button name="action_view_product" type="object" class="oe_stat_button" icon="fa-cube">
+                                <div class="o_stat_info">
+                                    <span class="o_stat_text">Ver Produto</span>
+                                </div>
+                            </button>
+                            <button name="action_view_enrichment" type="object" class="oe_stat_button" icon="fa-magic" 
+                                    attrs="{'invisible': [('enrichment_id', '=', False)]}">
+                                <div class="o_stat_info">
+                                    <span class="o_stat_text">Ver Enriquecimento</span>
+                                </div>
+                            </button>
+                        </div>
+                        
+                        <!-- Alertas e Banners -->
+                        <div t-attf-class="alert alert-#{record.state == 'pending' ? 'info' : record.state == 'approved' ? 'success' : 'danger'} mb-4" 
+                             role="alert" style="border-left: 4px solid #2196F3; background-color: #f8f9fa;">
+                            <div class="d-flex">
+                                <i t-attf-class="fa fa-#{record.state == 'pending' ? 'info-circle' : record.state == 'approved' ? 'check-circle' : 'times-circle'} fa-2x me-3 text-primary"></i>
+                                <div>
+                                    <h4 class="alert-heading">
+                                        <t t-if="record.state == 'pending'">Imagem Pendente de Aprovação</t>
+                                        <t t-elif="record.state == 'approved'">Imagem Aprovada</t>
+                                        <t t-else="">Imagem Rejeitada</t>
+                                    </h4>
+                                    <p class="mb-0">
+                                        <t t-if="record.state == 'pending'">Esta imagem foi sugerida pela IA e está aguardando sua aprovação.</t>
+                                        <t t-elif="record.state == 'approved'">Esta imagem foi aprovada e adicionada ao produto.</t>
+                                        <t t-else="">Esta imagem foi rejeitada e não será utilizada.</t>
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="row mb-4">
+                            <div class="col-md-6">
+                                <div class="oe_title">
+                                    <h1>
+                                        <field name="name" placeholder="Nome da Imagem"/>
+                                    </h1>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <group>
+                                    <field name="product_id" readonly="1"/>
+                                    <field name="enrichment_id" readonly="1"/>
+                                    <field name="marketplace_id" readonly="1"/>
+                                    <field name="sequence"/>
+                                </group>
+                            </div>
+                        </div>
+                        
+                        <notebook>
+                            <page string="Imagem" name="image">
+                                <div class="row">
+                                    <div class="col-md-8">
+                                        <div class="card" style="border-radius: 4px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin-bottom: 16px; padding: 16px;">
+                                            <h3 style="margin-top: 0; color: #212529; font-size: 16px; font-weight: bold;">Visualização da Imagem</h3>
+                                            <field name="image" widget="image" options="{'size': [800, 800]}" readonly="1"/>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <div class="card" style="border-left: 4px solid #2196F3; border-radius: 4px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin-bottom: 16px; padding: 16px;">
+                                            <h3 style="margin-top: 0; color: #212529; font-size: 16px; font-weight: bold;">Informações da Imagem</h3>
+                                            <group>
+                                                <field name="image_type"/>
+                                                <field name="source"/>
+                                                <field name="source_url" widget="url" attrs="{'invisible': [('source_url', '=', False)]}"/>
+                                                <field name="width" readonly="1"/>
+                                                <field name="height" readonly="1"/>
+                                                <field name="file_size" readonly="1" widget="binary_size"/>
+                                                <field name="create_date" readonly="1"/>
+                                            </group>
+                                        </div>
+                                        
+                                        <div class="card" style="border-left: 4px solid #4CAF50; border-radius: 4px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin-bottom: 16px; padding: 16px;">
+                                            <h3 style="margin-top: 0; color: #212529; font-size: 16px; font-weight: bold;">Status</h3>
+                                            <group>
+                                                <field name="state" readonly="1"/>
+                                                <field name="approval_date" readonly="1" attrs="{'invisible': [('approval_date', '=', False)]}"/>
+                                                <field name="approved_by" readonly="1" attrs="{'invisible': [('approved_by', '=', False)]}"/>
+                                                <field name="rejection_date" readonly="1" attrs="{'invisible': [('rejection_date', '=', False)]}"/>
+                                                <field name="rejected_by" readonly="1" attrs="{'invisible': [('rejected_by', '=', False)]}"/>
+                                                <field name="rejection_reason" attrs="{'invisible': [('state', '!=', 'rejected')]}"/>
+                                            </group>
+                                        </div>
+                                    </div>
+                                </div>
+                            </page>
+                            
+                            <page string="Metadados" name="metadata">
+                                <div class="card" style="border-radius: 4px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin-bottom: 16px; padding: 16px;">
+                                    <h3 style="margin-top: 0; color: #212529; font-size: 16px; font-weight: bold;">Metadados da Imagem</h3>
+                                    <group>
+                                        <field name="alt_text" placeholder="Texto alternativo para acessibilidade e SEO"/>
+                                        <field name="description" placeholder="Descrição detalhada da imagem"/>
+                                        <field name="keywords" widget="many2many_tags" placeholder="Palavras-chave relacionadas à imagem"/>
+                                        <field name="metadata" widget="json_viewer" attrs="{'invisible': [('metadata', '=', False)]}"/>
+                                    </group>
+                                </div>
+                            </page>
+                            
+                            <page string="Histórico" name="history" attrs="{'invisible': [('history_ids', '=', [])]}">
+                                <div class="card" style="border-radius: 4px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin-bottom: 16px; padding: 16px;">
+                                    <h3 style="margin-top: 0; color: #212529; font-size: 16px; font-weight: bold;">Histórico de Alterações</h3>
+                                    <field name="history_ids">
+                                        <tree>
+                                            <field name="create_date" string="Data"/>
+                                            <field name="user_id"/>
+                                            <field name="action"/>
+                                            <field name="old_state"/>
+                                            <field name="new_state"/>
+                                            <field name="notes"/>
+                                        </tree>
+                                    </field>
+                                </div>
+                            </page>
+                        </notebook>
+                    </sheet>
+                    <div class="oe_chatter">
+                        <field name="message_follower_ids" widget="mail_followers"/>
+                        <field name="activity_ids" widget="mail_activity"/>
+                        <field name="message_ids" widget="mail_thread"/>
+                    </div>
+                </form>
+            </field>
+        </record>
+        
+        <!-- Tree View -->
+        <record id="view_product_suggested_image_tree" model="ir.ui.view">
+            <field name="name">product.suggested.image.tree</field>
+            <field name="model">product.suggested.image</field>
+            <field name="arch" type="xml">
+                <tree string="Imagens Sugeridas" decoration-muted="state == 'rejected'" decoration-success="state == 'approved'" decoration-info="state == 'pending'">
+                    <field name="name"/>
+                    <field name="product_id"/>
+                    <field name="marketplace_id"/>
+                    <field name="enrichment_id"/>
+                    <field name="image_type"/>
+                    <field name="source"/>
+                    <field name="state"/>
+                    <field name="create_date"/>
+                    <field name="approval_date"/>
+                </tree>
+            </field>
+        </record>
+        
+        <!-- Search View -->
+        <record id="view_product_suggested_image_search" model="ir.ui.view">
+            <field name="name">product.suggested.image.search</field>
+            <field name="model">product.suggested.image</field>
+            <field name="arch" type="xml">
+                <search string="Imagens Sugeridas">
+                    <field name="name"/>
+                    <field name="product_id"/>
+                    <field name="marketplace_id"/>
+                    <field name="enrichment_id"/>
+                    <field name="source"/>
+                    
+                    <filter string="Pendentes" name="pending" domain="[('state', '=', 'pending')]"/>
+                    <filter string="Aprovadas" name="approved" domain="[('state', '=', 'approved')]"/>
+                    <filter string="Rejeitadas" name="rejected" domain="[('state', '=', 'rejected')]"/>
+                    <separator/>
+                    <filter string="Geradas por IA" name="ai_generated" domain="[('source', '=', 'ai')]"/>
+                    <filter string="De Marketplaces" name="marketplace" domain="[('source', '=', 'marketplace')]"/>
+                    <filter string="De Web Scraping" name="web_scraping" domain="[('source', '=', 'web_scraping')]"/>
+                    
+                    <group expand="0" string="Agrupar Por">
+                        <filter string="Produto" name="group_by_product" context="{'group_by': 'product_id'}"/>
+                        <filter string="Marketplace" name="group_by_marketplace" context="{'group_by': 'marketplace_id'}"/>
+                        <filter string="Enriquecimento" name="group_by_enrichment" context="{'group_by': 'enrichment_id'}"/>
+                        <filter string="Estado" name="group_by_state" context="{'group_by': 'state'}"/>
+                        <filter string="Tipo de Imagem" name="group_by_type" context="{'group_by': 'image_type'}"/>
+                        <filter string="Fonte" name="group_by_source" context="{'group_by': 'source'}"/>
+                    </group>
+                </search>
+            </field>
+        </record>
+        
+        <!-- Kanban View -->
+        <record id="view_product_suggested_image_kanban" model="ir.ui.view">
+            <field name="name">product.suggested.image.kanban</field>
+            <field name="model">product.suggested.image</field>
+            <field name="arch" type="xml">
+                <kanban class="o_kanban_mobile" sample="1">
+                    <field name="id"/>
+                    <field name="name"/>
+                    <field name="product_id"/>
+                    <field name="marketplace_id"/>
+                    <field name="enrichment_id"/>
+                    <field name="image"/>
+                    <field name="image_type"/>
+                    <field name="source"/>
+                    <field name="state"/>
+                    <field name="create_date"/>
+                    
+                    <templates>
+                        <t t-name="kanban-box">
+                            <div t-attf-class="oe_kanban_card oe_kanban_global_click">
+                                <div class="o_kanban_image">
+                                    <img t-att-src="kanban_image('product.suggested.image', 'image', record.id.raw_value)" alt="Product Image"/>
+                                </div>
+                                <div class="oe_kanban_details">
+                                    <strong class="o_kanban_record_title">
+                                        <field name="name"/>
+                                    </strong>
+                                    <div class="o_kanban_record_subtitle">
+                                        <field name="product_id"/>
+                                    </div>
+                                    <div class="o_kanban_tags_section">
+                                        <span t-attf-class="badge badge-pill #{record.state.raw_value == 'pending' ? 'badge-info' : record.state.raw_value == 'approved' ? 'badge-success' : 'badge-danger'}">
+                                            <t t-if="record.state.raw_value == 'pending'">Pendente</t>
+                                            <t t-elif="record.state.raw_value == 'approved'">Aprovada</t>
+                                            <t t-else="">Rejeitada</t>
+                                        </span>
+                                        <span t-attf-class="badge badge-pill badge-primary ml-1">
+                                            <t t-if="record.source.raw_value == 'ai'">IA</t>
+                                            <t t-elif="record.source.raw_value == 'marketplace'">Marketplace</t>
+                                            <t t-elif="record.source.raw_value == 'web_scraping'">Web</t>
+                                            <t t-else=""><field name="source"/></t>
+                                        </span>
+                                    </div>
+                                    <div class="o_kanban_record_bottom">
+                                        <div class="oe_kanban_bottom_left">
+                                            <span class="text-muted">
+                                                <t t-if="record.image_type.raw_value == 'main'">Principal</t>
+                                                <t t-elif="record.image_type.raw_value == 'gallery'">Galeria</t>
+                                                <t t-elif="record.image_type.raw_value == 'variant'">Variante</t>
+                                                <t t-else=""><field name="image_type"/></t>
+                                            </span>
+                                        </div>
+                                        <div class="oe_kanban_bottom_right">
+                                            <span class="text-muted"><field name="create_date"/></span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </t>
+                    </templates>
+                </kanban>
+            </field>
+        </record>
+        
+        <!-- Action -->
+        <record id="action_product_suggested_image" model="ir.actions.act_window">
+            <field name="name">Imagens Sugeridas</field>
+            <field name="res_model">product.suggested.image</field>
+            <field name="view_mode">kanban,tree,form</field>
+            <field name="search_view_id" ref="view_product_suggested_image_search"/>
+            <field name="context">{'search_default_pending': 1}</field>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">
+                    Ainda não há imagens sugeridas!
+                </p>
+                <p>
+                    As imagens sugeridas são geradas automaticamente durante o processo de enriquecimento.
+                    Você pode aprovar ou rejeitar as sugestões para melhorar a apresentação dos seus produtos.
+                </p>
+            </field>
+        </record>
+        
+        <!-- Menu definido em menu_views.xml -->
+    </data>
+</odoo>

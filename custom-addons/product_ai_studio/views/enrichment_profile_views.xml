@@ -1,0 +1,260 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <!-- Form View -->
+        <record id="view_enrichment_profile_form" model="ir.ui.view">
+            <field name="name">product.enrichment.profile.form</field>
+            <field name="model">product.enrichment.profile</field>
+            <field name="arch" type="xml">
+                <form string="Perfil de Enriquecimento">
+                    <sheet>
+                        <div class="oe_button_box" name="button_box">
+                            <button name="toggle_active" type="object" class="oe_stat_button" icon="fa-archive">
+                                <field name="active" widget="boolean_button" options="{'terminology': 'archive'}"/>
+                            </button>
+                        </div>
+                        <div class="oe_title">
+                            <label for="name" class="oe_edit_only"/>
+                            <h1><field name="name" placeholder="Nome do Perfil"/></h1>
+                        </div>
+                        
+                        <!-- Alertas e Banners -->
+                        <div class="alert alert-info mb-4" role="alert" style="border-left: 4px solid #2196F3; background-color: #f8f9fa;">
+                            <div class="d-flex">
+                                <i class="fa fa-info-circle fa-2x me-3 text-primary"></i>
+                                <div>
+                                    <h4 class="alert-heading">Perfil de Enriquecimento</h4>
+                                    <p class="mb-0">Os perfis de enriquecimento determinam como a IA irá processar e enriquecer os produtos. Configure as opções abaixo de acordo com suas necessidades.</p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <notebook>
+                            <page string="Configurações Gerais" name="general_settings">
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="card" style="border-left: 4px solid #2196F3; border-radius: 4px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin-bottom: 16px; padding: 16px;">
+                                            <h3 style="margin-top: 0; color: #212529; font-size: 16px; font-weight: bold;">Configurações Básicas</h3>
+                                            <group>
+                                                <field name="sequence" string="Sequência"/>
+                                                <field name="description" placeholder="Descrição detalhada do perfil e seu propósito"/>
+                                                <field name="enrichment_type" widget="radio"/>
+                                            </group>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="card" style="border-left: 4px solid #4CAF50; border-radius: 4px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin-bottom: 16px; padding: 16px;">
+                                            <h3 style="margin-top: 0; color: #212529; font-size: 16px; font-weight: bold;">Configurações de IA</h3>
+                                            <group>
+                                                <field name="max_tokens"/>
+                                                <field name="temperature" widget="percentage"/>
+                                                <field name="marketplace_id"/>
+                                            </group>
+                                        </div>
+                                        
+                                        <div class="card" style="border-left: 4px solid #FFC107; border-radius: 4px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin-bottom: 16px; padding: 16px;">
+                                            <h3 style="margin-top: 0; color: #212529; font-size: 16px; font-weight: bold;">Opções Avançadas</h3>
+                                            <div class="o_horizontal_separator mb-3">Recursos Adicionais</div>
+                                            <div class="d-flex flex-column">
+                                                <div class="custom-control custom-switch mb-2">
+                                                    <field name="include_competitive_analysis" widget="boolean_toggle"/>
+                                                    <label for="include_competitive_analysis" class="ml-2">Incluir Análise Competitiva</label>
+                                                </div>
+                                                <div class="custom-control custom-switch mb-2">
+                                                    <field name="suggest_images" widget="boolean_toggle"/>
+                                                    <label for="suggest_images" class="ml-2">Sugerir Imagens</label>
+                                                </div>
+                                                <div class="custom-control custom-switch mb-2">
+                                                    <field name="auto_publish" widget="boolean_toggle"/>
+                                                    <label for="auto_publish" class="ml-2">Publicação Automática</label>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </page>
+                            
+                            <page string="Template de Prompt" name="prompt_template">
+                                <div class="card" style="border-radius: 4px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin-bottom: 16px; padding: 16px;">
+                                    <h3 style="margin-top: 0; color: #212529; font-size: 16px; font-weight: bold;">Template de Prompt</h3>
+                                    <p class="text-muted">Use {{variáveis}} para substituição dinâmica. Variáveis disponíveis: {{product_name}}, {{product_category}}, {{product_description}}, {{product_list_price}}, {{product_default_code}}, {{product_barcode}}</p>
+                                    <field name="prompt_template" widget="ace" options="{'mode': 'markdown'}" placeholder="Template de prompt para a IA"/>
+                                </div>
+                            </page>
+                            
+                            <page string="Categorias de Produto" name="product_categories">
+                                <div class="card" style="border-radius: 4px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin-bottom: 16px; padding: 16px;">
+                                    <h3 style="margin-top: 0; color: #212529; font-size: 16px; font-weight: bold;">Categorias Recomendadas</h3>
+                                    <p class="text-muted">Selecione as categorias de produto para as quais este perfil é recomendado.</p>
+                                    <field name="product_category_ids" widget="many2many_tags"/>
+                                </div>
+                            </page>
+                            
+                            <page string="Estatísticas" name="statistics">
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="card" style="border-left: 4px solid #2196F3; border-radius: 4px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin-bottom: 16px; padding: 16px;">
+                                            <h3 style="margin-top: 0; color: #212529; font-size: 16px; font-weight: bold;">Uso</h3>
+                                            <group>
+                                                <field name="usage_count" readonly="1"/>
+                                                <field name="last_used" readonly="1"/>
+                                            </group>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="card" style="border-left: 4px solid #4CAF50; border-radius: 4px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin-bottom: 16px; padding: 16px;">
+                                            <h3 style="margin-top: 0; color: #212529; font-size: 16px; font-weight: bold;">Performance</h3>
+                                            <group>
+                                                <field name="avg_processing_time" readonly="1" widget="float_time"/>
+                                                <field name="success_rate" readonly="1" widget="percentage"/>
+                                            </group>
+                                        </div>
+                                    </div>
+                                </div>
+                            </page>
+                        </notebook>
+                    </sheet>
+                </form>
+            </field>
+        </record>
+        
+        <!-- Tree View -->
+        <record id="view_enrichment_profile_tree" model="ir.ui.view">
+            <field name="name">product.enrichment.profile.tree</field>
+            <field name="model">product.enrichment.profile</field>
+            <field name="arch" type="xml">
+                <tree string="Perfis de Enriquecimento" decoration-muted="active == False">
+                    <field name="sequence" widget="handle"/>
+                    <field name="name"/>
+                    <field name="enrichment_type"/>
+                    <field name="marketplace_id"/>
+                    <field name="max_tokens"/>
+                    <field name="usage_count"/>
+                    <field name="success_rate" widget="percentage"/>
+                    <field name="active" invisible="1"/>
+                </tree>
+            </field>
+        </record>
+        
+        <!-- Search View -->
+        <record id="view_enrichment_profile_search" model="ir.ui.view">
+            <field name="name">product.enrichment.profile.search</field>
+            <field name="model">product.enrichment.profile</field>
+            <field name="arch" type="xml">
+                <search string="Perfis de Enriquecimento">
+                    <field name="name"/>
+                    <field name="enrichment_type"/>
+                    <field name="marketplace_id"/>
+                    <field name="product_category_ids"/>
+                    
+                    <filter string="Arquivados" name="inactive" domain="[('active', '=', False)]"/>
+                    <separator/>
+                    <filter string="Básico" name="basic" domain="[('enrichment_type', '=', 'basic')]"/>
+                    <filter string="Avançado" name="advanced" domain="[('enrichment_type', '=', 'advanced')]"/>
+                    <filter string="Premium" name="premium" domain="[('enrichment_type', '=', 'premium')]"/>
+                    <separator/>
+                    <filter string="Com Análise Competitiva" name="with_competitive" domain="[('include_competitive_analysis', '=', True)]"/>
+                    <filter string="Com Sugestão de Imagens" name="with_images" domain="[('suggest_images', '=', True)]"/>
+                    
+                    <group expand="0" string="Agrupar Por">
+                        <filter string="Tipo de Enriquecimento" name="group_by_type" context="{'group_by': 'enrichment_type'}"/>
+                        <filter string="Marketplace" name="group_by_marketplace" context="{'group_by': 'marketplace_id'}"/>
+                    </group>
+                </search>
+            </field>
+        </record>
+        
+        <!-- Kanban View -->
+        <record id="view_enrichment_profile_kanban" model="ir.ui.view">
+            <field name="name">product.enrichment.profile.kanban</field>
+            <field name="model">product.enrichment.profile</field>
+            <field name="arch" type="xml">
+                <kanban class="o_kanban_mobile" sample="1">
+                    <field name="name"/>
+                    <field name="enrichment_type"/>
+                    <field name="marketplace_id"/>
+                    <field name="usage_count"/>
+                    <field name="success_rate"/>
+                    <field name="include_competitive_analysis"/>
+                    <field name="suggest_images"/>
+                    <field name="auto_publish"/>
+                    
+                    <templates>
+                        <t t-name="kanban-box">
+                            <div t-attf-class="oe_kanban_card oe_kanban_global_click">
+                                <div class="o_kanban_record_top">
+                                    <div class="o_kanban_record_headings">
+                                        <strong class="o_kanban_record_title">
+                                            <field name="name"/>
+                                        </strong>
+                                        <small class="o_kanban_record_subtitle">
+                                            <t t-if="record.marketplace_id.raw_value">
+                                                <field name="marketplace_id"/>
+                                            </t>
+                                            <t t-else="">
+                                                Perfil Genérico
+                                            </t>
+                                        </small>
+                                    </div>
+                                </div>
+                                <div class="o_kanban_record_body">
+                                    <div class="row">
+                                        <div class="col-6">
+                                            <span t-attf-class="badge badge-pill #{record.enrichment_type.raw_value == 'basic' ? 'badge-info' : record.enrichment_type.raw_value == 'advanced' ? 'badge-primary' : 'badge-success'}">
+                                                <t t-if="record.enrichment_type.raw_value == 'basic'">Básico</t>
+                                                <t t-elif="record.enrichment_type.raw_value == 'advanced'">Avançado</t>
+                                                <t t-else="">Premium</t>
+                                            </span>
+                                        </div>
+                                        <div class="col-6 text-right">
+                                            <span class="text-muted">Uso: </span>
+                                            <span><field name="usage_count"/></span>
+                                        </div>
+                                    </div>
+                                    <div class="mt-2">
+                                        <span t-if="record.include_competitive_analysis.raw_value" class="badge badge-pill badge-primary mr-1">
+                                            <i class="fa fa-chart-bar"/> Análise
+                                        </span>
+                                        <span t-if="record.suggest_images.raw_value" class="badge badge-pill badge-primary mr-1">
+                                            <i class="fa fa-image"/> Imagens
+                                        </span>
+                                        <span t-if="record.auto_publish.raw_value" class="badge badge-pill badge-primary">
+                                            <i class="fa fa-upload"/> Auto-publicação
+                                        </span>
+                                    </div>
+                                </div>
+                                <div class="o_kanban_record_bottom">
+                                    <div class="oe_kanban_bottom_left">
+                                        <span class="text-muted">Sucesso: </span>
+                                        <span t-attf-class="badge badge-pill #{record.success_rate.raw_value >= 90 ? 'badge-success' : record.success_rate.raw_value >= 70 ? 'badge-warning' : 'badge-danger'}">
+                                            <t t-esc="Math.round(record.success_rate.raw_value)"/>%
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                        </t>
+                    </templates>
+                </kanban>
+            </field>
+        </record>
+        
+        <!-- Action -->
+        <record id="action_enrichment_profile" model="ir.actions.act_window">
+            <field name="name">Perfis de Enriquecimento</field>
+            <field name="res_model">product.enrichment.profile</field>
+            <field name="view_mode">kanban,tree,form</field>
+            <field name="search_view_id" ref="view_enrichment_profile_search"/>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">
+                    Crie seu primeiro perfil de enriquecimento!
+                </p>
+                <p>
+                    Os perfis de enriquecimento determinam como a IA irá processar e enriquecer os produtos.
+                    Crie diferentes perfis para diferentes tipos de produtos ou marketplaces.
+                </p>
+            </field>
+        </record>
+        
+        <!-- Menu definido em menu_views.xml -->
+    </data>
+</odoo>

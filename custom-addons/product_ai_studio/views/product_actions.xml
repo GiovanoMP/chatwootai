@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <!-- Ação para enriquecer um único produto -->
+        <record id="action_enrich_single_product" model="ir.actions.server">
+            <field name="name">Enriquecer com IA</field>
+            <field name="model_id" ref="product.model_product_template"/>
+            <field name="binding_model_id" ref="product.model_product_template"/>
+            <field name="binding_view_types">form</field>
+            <field name="state">code</field>
+            <field name="code">
+                if records:
+                    action = {
+                        'name': 'Enriquecer Produto',
+                        'type': 'ir.actions.act_window',
+                        'res_model': 'product.enrichment',
+                        'view_mode': 'form',
+                        'target': 'current',
+                        'context': {
+                            'default_product_id': records.id,
+                            'default_name': records.name,
+                            'default_original_name': records.name,
+                            'default_original_description': records.description_sale or '',
+                            'form_view_ref': 'product_ai_studio.view_product_enrichment_form',
+                        },
+                    }
+            </field>
+        </record>
+        
+        <!-- Ação para enriquecer múltiplos produtos -->
+        <record id="action_enrich_multiple_products" model="ir.actions.server">
+            <field name="name">Enriquecer Produtos com IA</field>
+            <field name="model_id" ref="product.model_product_template"/>
+            <field name="binding_model_id" ref="product.model_product_template"/>
+            <field name="binding_view_types">list</field>
+            <field name="state">code</field>
+            <field name="code">
+                if records:
+                    action = env.ref('product_ai_studio.action_enrich_products_wizard').read()[0]
+                    action['context'] = {'default_product_ids': records.ids}
+                    return action
+            </field>
+        </record>
+        
+        <!-- Ação para enriquecer um único produto a partir do product_ai_mass_management -->
+        <record id="action_enrich_from_mass_management" model="ir.actions.server">
+            <field name="name">Enriquecer com IA</field>
+            <field name="model_id" ref="product.model_product_template"/>
+            <field name="binding_model_id" ref="product.model_product_template"/>
+            <field name="binding_view_types">form,list</field>
+            <field name="groups_id" eval="[(4, ref('product_ai_studio.group_product_ai_studio_user'))]"/>
+            <field name="state">code</field>
+            <field name="code">
+                if records:
+                    if len(records) == 1:
+                        action = {
+                            'name': 'Enriquecer Produto',
+                            'type': 'ir.actions.act_window',
+                            'res_model': 'product.enrichment',
+                            'view_mode': 'form',
+                            'target': 'current',
+                            'context': {
+                                'default_product_id': records.id,
+                                'default_name': records.name,
+                                'default_original_name': records.name,
+                                'default_original_description': records.description_sale or '',
+                                'form_view_ref': 'product_ai_studio.view_product_enrichment_form',
+                            },
+                        }
+                    else:
+                        action = env.ref('product_ai_studio.action_enrich_products_wizard').read()[0]
+                        action['context'] = {'default_product_ids': records.ids}
+                    return action
+            </field>
+        </record>
+    </data>
+</odoo>

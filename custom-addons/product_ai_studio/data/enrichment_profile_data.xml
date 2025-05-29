@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="1">
+        <!-- Perfil Básico Simplificado -->
+        <record id="enrichment_profile_basic" model="product.enrichment.profile">
+            <field name="name">Enriquecimento Básico</field>
+            <field name="description">Enriquecimento básico para produtos em geral. Gera descrições simples.</field>
+            <field name="enrichment_type">basic</field>
+            <field name="sequence">10</field>
+            <field name="max_tokens">1024</field>
+            <field name="temperature">0.7</field>
+            <field name="include_competitive_analysis" eval="False"/>
+            <field name="suggest_images" eval="False"/>
+            <field name="auto_publish" eval="False"/>
+            <field name="prompt_template">Crie uma descrição otimizada para o produto {{product_name}} da categoria {{product_category}}. 
+            
+Informações do produto:
+- Código: {{product_default_code}}
+- Preço: {{product_list_price}}
+- Descrição original: {{product_description}}
+
+A descrição deve ter entre 200-300 palavras, destacar os principais benefícios e características do produto, e ser otimizada para SEO.</field>
+            <field name="active" eval="True"/>
+        </record>
+        
+        <!-- Perfil Geral para E-commerce -->
+        <record id="enrichment_profile_ecommerce" model="product.enrichment.profile">
+            <field name="name">E-commerce - Geral</field>
+            <field name="description">Enriquecimento otimizado para e-commerce em geral.</field>
+            <field name="enrichment_type">advanced</field>
+            <field name="sequence">20</field>
+            <field name="max_tokens">2048</field>
+            <field name="temperature">0.8</field>
+            <field name="include_competitive_analysis" eval="True"/>
+            <field name="suggest_images" eval="True"/>
+            <field name="auto_publish" eval="False"/>
+            <field name="prompt_template">Crie uma descrição otimizada para e-commerce para o produto {{product_name}} da categoria {{product_category}}.
+
+Informações do produto:
+- Código: {{product_default_code}}
+- Preço: {{product_list_price}}
+- Descrição original: {{product_description}}
+
+A descrição deve:
+1. Ter um título chamativo com até 60 caracteres
+2. Incluir uma descrição detalhada com 500-800 palavras
+3. Destacar os diferenciais do produto
+4. Incluir especificações técnicas em formato de lista
+5. Ter uma seção de perguntas frequentes
+6. Ser otimizada para SEO
+7. Incluir uma análise competitiva sutil</field>
+            <field name="active" eval="True"/>
+        </record>
+    </data>
+</odoo>

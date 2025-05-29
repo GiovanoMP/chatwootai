@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="res_config_settings_view_form" model="ir.ui.view">
+        <field name="name">res.config.settings.view.form.inherit.product.ai.studio</field>
+        <field name="model">res.config.settings</field>
+        <field name="priority" eval="60"/>
+        <field name="inherit_id" ref="base.res_config_settings_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//div[hasclass('settings')]" position="inside">
+                <div class="app_settings_block" data-string="Estúdio de Produtos com IA" string="Estúdio de Produtos com IA" data-key="product_ai_studio">
+                    <h2>Configurações de Integração MCP</h2>
+                    <div class="row mt16 o_settings_container" id="product_ai_studio_mcp_settings">
+                        <div class="col-12 col-lg-6 o_setting_box">
+                            <div class="o_setting_left_pane"/>
+                            <div class="o_setting_right_pane">
+                                <span class="o_form_label">MCP-Qdrant</span>
+                                <div class="text-muted">
+                                    Configurações para integração com o servidor MCP-Qdrant
+                                </div>
+                                <div class="mt16">
+                                    <label for="mcp_qdrant_url" string="URL do MCP-Qdrant"/>
+                                    <field name="mcp_qdrant_url" placeholder="http://mcp-qdrant:8000"/>
+                                </div>
+                                <div class="mt8">
+                                    <label for="mcp_qdrant_token" string="Token do MCP-Qdrant"/>
+                                    <field name="mcp_qdrant_token" password="True"/>
+                                </div>
+                                <div class="mt8">
+                                    <label for="mcp_qdrant_account_id" string="ID da Conta"/>
+                                    <field name="mcp_qdrant_account_id" placeholder="account_1"/>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-12 col-lg-6 o_setting_box">
+                            <div class="o_setting_left_pane"/>
+                            <div class="o_setting_right_pane">
+                                <span class="o_form_label">MCP-Odoo</span>
+                                <div class="text-muted">
+                                    Configurações para integração com o servidor MCP-Odoo
+                                </div>
+                                <div class="mt16">
+                                    <label for="mcp_odoo_url" string="URL do MCP-Odoo"/>
+                                    <field name="mcp_odoo_url" placeholder="http://mcp-odoo:8000"/>
+                                </div>
+                                <div class="mt8">
+                                    <label for="mcp_odoo_token" string="Token do MCP-Odoo"/>
+                                    <field name="mcp_odoo_token" password="True"/>
+                                </div>
+                                <div class="mt8">
+                                    <label for="mcp_odoo_account_id" string="ID da Conta"/>
+                                    <field name="mcp_odoo_account_id" placeholder="account_1"/>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <h2>Configurações Gerais</h2>
+                    <div class="row mt16 o_settings_container" id="product_ai_studio_general_settings">
+                        <div class="col-12 col-lg-6 o_setting_box">
+                            <div class="o_setting_left_pane">
+                                <field name="enable_auto_vectorization"/>
+                            </div>
+                            <div class="o_setting_right_pane">
+                                <label for="enable_auto_vectorization"/>
+                                <div class="text-muted">
+                                    Habilita a vetorização automática de produtos enriquecidos
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-12 col-lg-6 o_setting_box">
+                            <div class="o_setting_left_pane"/>
+                            <div class="o_setting_right_pane">
+                                <span class="o_form_label">Processamento</span>
+                                <div class="text-muted">
+                                    Configurações para processamento de enriquecimentos
+                                </div>
+                                <div class="mt16">
+                                    <label for="max_concurrent_enrichments" string="Máximo de Enriquecimentos Concorrentes"/>
+                                    <field name="max_concurrent_enrichments"/>
+                                </div>
+                                <div class="mt8">
+                                    <label for="default_enrichment_profile_id" string="Perfil de Enriquecimento Padrão"/>
+                                    <field name="default_enrichment_profile_id"/>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </xpath>
+        </field>
+    </record>
+    
+    <record id="product_ai_studio_config_settings_action" model="ir.actions.act_window">
+        <field name="name">Configurações</field>
+        <field name="type">ir.actions.act_window</field>
+        <field name="res_model">res.config.settings</field>
+        <field name="view_mode">form</field>
+        <field name="target">inline</field>
+        <field name="context">{'module' : 'product_ai_studio'}</field>
+    </record>
+    
+    <menuitem id="product_ai_studio_config_settings_menu" 
+              name="Configurações do Sistema" 
+              parent="menu_product_ai_studio_config" 
+              action="product_ai_studio_config_settings_action" 
+              sequence="10"/>
+</odoo>

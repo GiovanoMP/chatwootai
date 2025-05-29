@@ -1,0 +1,270 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <!-- Configuração do Qdrant -->
+        <record id="view_qdrant_config_form" model="ir.ui.view">
+            <field name="name">product.qdrant.config.form</field>
+            <field name="model">product.qdrant.config</field>
+            <field name="arch" type="xml">
+                <form string="Configuração do Qdrant">
+                    <sheet>
+                        <div class="oe_title">
+                            <h1><field name="name" placeholder="Nome da Configuração"/></h1>
+                        </div>
+                        
+                        <!-- Alertas e Banners -->
+                        <div class="alert alert-info mb-4" role="alert" style="border-left: 4px solid #2196F3; background-color: #f8f9fa;">
+                            <div class="d-flex">
+                                <i class="fa fa-info-circle fa-2x me-3 text-primary"></i>
+                                <div>
+                                    <h4 class="alert-heading">Integração com MCP-Qdrant</h4>
+                                    <p class="mb-0">Configure a conexão com o servidor MCP-Qdrant para armazenamento e busca vetorial de produtos.</p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="card" style="border-left: 4px solid #2196F3; border-radius: 4px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin-bottom: 16px; padding: 16px;">
+                                    <h3 style="margin-top: 0; color: #212529; font-size: 16px; font-weight: bold;">Configurações de Conexão</h3>
+                                    <group>
+                                        <field name="active" widget="boolean_toggle"/>
+                                        <field name="is_default" widget="boolean_toggle"/>
+                                        <field name="host" placeholder="localhost ou endereço IP"/>
+                                        <field name="port" placeholder="8000"/>
+                                        <field name="use_ssl" widget="boolean_toggle"/>
+                                        <field name="api_key" password="True" attrs="{'required': [('use_auth', '=', True)]}"/>
+                                        <field name="use_auth" widget="boolean_toggle"/>
+                                        <field name="timeout" widget="float_time"/>
+                                    </group>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="card" style="border-left: 4px solid #4CAF50; border-radius: 4px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin-bottom: 16px; padding: 16px;">
+                                    <h3 style="margin-top: 0; color: #212529; font-size: 16px; font-weight: bold;">Configurações de Coleção</h3>
+                                    <group>
+                                        <field name="collection_name" placeholder="Nome da coleção no Qdrant"/>
+                                        <field name="vector_size" placeholder="1536 para OpenAI"/>
+                                        <field name="distance_metric" widget="radio"/>
+                                        <field name="auto_create_collection" widget="boolean_toggle"/>
+                                        <field name="auto_vectorize" widget="boolean_toggle"/>
+                                    </group>
+                                </div>
+                                
+                                <div class="card" style="border-left: 4px solid #FFC107; border-radius: 4px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin-bottom: 16px; padding: 16px;">
+                                    <h3 style="margin-top: 0; color: #212529; font-size: 16px; font-weight: bold;">Status</h3>
+                                    <div class="text-center mb-3">
+                                        <button name="test_connection" type="object" string="Testar Conexão" class="btn btn-primary"/>
+                                        <button name="get_collection_info" type="object" string="Informações da Coleção" class="btn btn-secondary ml-2"/>
+                                    </div>
+                                    <group>
+                                        <field name="connection_status" readonly="1"/>
+                                        <field name="last_connection_test" readonly="1"/>
+                                        <field name="collection_count" readonly="1"/>
+                                        <field name="collection_status" readonly="1"/>
+                                    </group>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <notebook>
+                            <page string="Configurações Avançadas" name="advanced_settings">
+                                <div class="card" style="border-radius: 4px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin-bottom: 16px; padding: 16px;">
+                                    <h3 style="margin-top: 0; color: #212529; font-size: 16px; font-weight: bold;">Configurações Avançadas do MCP-Qdrant</h3>
+                                    <group>
+                                        <field name="mcp_transport" widget="radio"/>
+                                        <field name="mcp_url" placeholder="http://localhost:8000/sse" attrs="{'invisible': [('mcp_transport', '!=', 'sse')]}"/>
+                                        <field name="mcp_stdio_path" placeholder="/path/to/mcp-qdrant" attrs="{'invisible': [('mcp_transport', '!=', 'stdio')]}"/>
+                                        <field name="batch_size"/>
+                                        <field name="search_limit"/>
+                                        <field name="payload_fields" widget="many2many_tags" placeholder="Campos a serem armazenados no payload"/>
+                                    </group>
+                                </div>
+                            </page>
+                            
+                            <page string="Logs" name="logs">
+                                <div class="card" style="border-radius: 4px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin-bottom: 16px; padding: 16px;">
+                                    <h3 style="margin-top: 0; color: #212529; font-size: 16px; font-weight: bold;">Logs de Operação</h3>
+                                    <field name="log_ids">
+                                        <tree>
+                                            <field name="create_date" string="Data"/>
+                                            <field name="operation"/>
+                                            <field name="status"/>
+                                            <field name="message"/>
+                                            <field name="details"/>
+                                        </tree>
+                                    </field>
+                                </div>
+                            </page>
+                        </notebook>
+                    </sheet>
+                </form>
+            </field>
+        </record>
+        
+        <!-- Tree View -->
+        <record id="view_qdrant_config_tree" model="ir.ui.view">
+            <field name="name">product.qdrant.config.tree</field>
+            <field name="model">product.qdrant.config</field>
+            <field name="arch" type="xml">
+                <tree string="Configurações do Qdrant" decoration-muted="active == False" decoration-success="connection_status == 'connected'" decoration-danger="connection_status == 'error'">
+                    <field name="name"/>
+                    <field name="host"/>
+                    <field name="port"/>
+                    <field name="collection_name"/>
+                    <field name="is_default"/>
+                    <field name="connection_status"/>
+                    <field name="collection_count"/>
+                    <field name="last_connection_test"/>
+                    <field name="active" invisible="1"/>
+                </tree>
+            </field>
+        </record>
+        
+        <!-- Action -->
+        <record id="action_qdrant_config" model="ir.actions.act_window">
+            <field name="name">Configuração do Qdrant</field>
+            <field name="res_model">product.qdrant.config</field>
+            <field name="view_mode">tree,form</field>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">
+                    Configure sua primeira conexão com o Qdrant!
+                </p>
+                <p>
+                    O Qdrant é utilizado para armazenamento e busca vetorial de produtos.
+                    Configure a conexão com o servidor MCP-Qdrant para habilitar a funcionalidade de vetorização.
+                </p>
+            </field>
+        </record>
+        
+        <!-- Configuração de Provedores de IA -->
+        <record id="view_ai_provider_config_form" model="ir.ui.view">
+            <field name="name">product.ai.provider.form</field>
+            <field name="model">product.ai.provider</field>
+            <field name="arch" type="xml">
+                <form string="Provedor de IA">
+                    <sheet>
+                        <div class="oe_title">
+                            <h1><field name="name" placeholder="Nome do Provedor"/></h1>
+                        </div>
+                        
+                        <!-- Alertas e Banners -->
+                        <div class="alert alert-info mb-4" role="alert" style="border-left: 4px solid #2196F3; background-color: #f8f9fa;">
+                            <div class="d-flex">
+                                <i class="fa fa-info-circle fa-2x me-3 text-primary"></i>
+                                <div>
+                                    <h4 class="alert-heading">Configuração de Provedor de IA</h4>
+                                    <p class="mb-0">Configure as credenciais e opções para o provedor de IA utilizado no enriquecimento de produtos.</p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="card" style="border-left: 4px solid #2196F3; border-radius: 4px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin-bottom: 16px; padding: 16px;">
+                                    <h3 style="margin-top: 0; color: #212529; font-size: 16px; font-weight: bold;">Configurações Básicas</h3>
+                                    <group>
+                                        <field name="active" widget="boolean_toggle"/>
+                                        <field name="is_default" widget="boolean_toggle"/>
+                                        <field name="provider_type" widget="radio"/>
+                                        <field name="api_base_url" placeholder="https://api.openai.com/v1"/>
+                                        <field name="api_key" password="True"/>
+                                        <field name="organization_id" attrs="{'invisible': [('provider_type', '!=', 'openai')]}"/>
+                                    </group>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="card" style="border-left: 4px solid #4CAF50; border-radius: 4px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin-bottom: 16px; padding: 16px;">
+                                    <h3 style="margin-top: 0; color: #212529; font-size: 16px; font-weight: bold;">Modelos</h3>
+                                    <group>
+                                        <field name="completion_model" placeholder="gpt-4o"/>
+                                        <field name="embedding_model" placeholder="text-embedding-3-large"/>
+                                        <field name="image_model" placeholder="dall-e-3"/>
+                                    </group>
+                                </div>
+                                
+                                <div class="card" style="border-left: 4px solid #FFC107; border-radius: 4px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin-bottom: 16px; padding: 16px;">
+                                    <h3 style="margin-top: 0; color: #212529; font-size: 16px; font-weight: bold;">Status</h3>
+                                    <div class="text-center mb-3">
+                                        <button name="test_connection" type="object" string="Testar Conexão" class="btn btn-primary"/>
+                                    </div>
+                                    <group>
+                                        <field name="connection_status" readonly="1"/>
+                                        <field name="last_connection_test" readonly="1"/>
+                                        <field name="usage_count" readonly="1"/>
+                                        <field name="last_usage" readonly="1"/>
+                                    </group>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <notebook>
+                            <page string="Configurações Avançadas" name="advanced_settings">
+                                <div class="card" style="border-radius: 4px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin-bottom: 16px; padding: 16px;">
+                                    <h3 style="margin-top: 0; color: #212529; font-size: 16px; font-weight: bold;">Configurações Avançadas</h3>
+                                    <group>
+                                        <field name="timeout" widget="float_time"/>
+                                        <field name="max_retries"/>
+                                        <field name="retry_delay" widget="float_time"/>
+                                        <field name="proxy" placeholder="http://proxy.example.com:8080"/>
+                                        <field name="use_proxy" widget="boolean_toggle"/>
+                                    </group>
+                                </div>
+                            </page>
+                            
+                            <page string="Logs" name="logs">
+                                <div class="card" style="border-radius: 4px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin-bottom: 16px; padding: 16px;">
+                                    <h3 style="margin-top: 0; color: #212529; font-size: 16px; font-weight: bold;">Logs de Operação</h3>
+                                    <field name="log_ids">
+                                        <tree>
+                                            <field name="create_date" string="Data"/>
+                                            <field name="operation"/>
+                                            <field name="status"/>
+                                            <field name="message"/>
+                                            <field name="details"/>
+                                        </tree>
+                                    </field>
+                                </div>
+                            </page>
+                        </notebook>
+                    </sheet>
+                </form>
+            </field>
+        </record>
+        
+        <!-- Tree View -->
+        <record id="view_ai_provider_config_tree" model="ir.ui.view">
+            <field name="name">product.ai.provider.tree</field>
+            <field name="model">product.ai.provider</field>
+            <field name="arch" type="xml">
+                <tree string="Provedores de IA" decoration-muted="active == False" decoration-success="connection_status == 'connected'" decoration-danger="connection_status == 'error'">
+                    <field name="name"/>
+                    <field name="provider_type"/>
+                    <field name="completion_model"/>
+                    <field name="embedding_model"/>
+                    <field name="is_default"/>
+                    <field name="connection_status"/>
+                    <field name="usage_count"/>
+                    <field name="last_usage"/>
+                    <field name="active" invisible="1"/>
+                </tree>
+            </field>
+        </record>
+        
+        <!-- Action -->
+        <record id="action_ai_provider_config" model="ir.actions.act_window">
+            <field name="name">Provedores de IA</field>
+            <field name="res_model">product.ai.provider</field>
+            <field name="view_mode">tree,form</field>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">
+                    Configure seu primeiro provedor de IA!
+                </p>
+                <p>
+                    Os provedores de IA são utilizados para enriquecimento de produtos e geração de conteúdo.
+                    Configure as credenciais e opções para o provedor de IA de sua preferência.
+                </p>
+            </field>
+        </record>
+    </data>
+</odoo>

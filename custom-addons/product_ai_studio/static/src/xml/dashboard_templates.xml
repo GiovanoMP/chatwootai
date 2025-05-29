@@ -1,0 +1,184 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+    <t t-name="ProductAIStudioDashboard">
+        <div class="o_product_ai_studio o_product_ai_studio_dashboard">
+            <div class="dashboard-header">
+                <h1>Estúdio de Produtos com IA</h1>
+                <p class="dashboard-subtitle">Enriqueça seus produtos com inteligência artificial</p>
+            </div>
+            
+            <div class="dashboard-actions">
+                <button class="btn btn-primary o_product_ai_studio_dashboard_action" name="product_ai_studio.action_enrich_products_wizard">
+                    <i class="fa fa-magic"></i> Novo Enriquecimento
+                </button>
+                <button class="btn btn-secondary o_product_ai_studio_dashboard_action" name="product_ai_studio.action_enrichment_profile">
+                    <i class="fa fa-cog"></i> Perfis de Enriquecimento
+                </button>
+                <button class="btn btn-secondary o_product_ai_studio_dashboard_action" name="product_ai_studio.action_marketplace_connector">
+                    <i class="fa fa-shopping-cart"></i> Marketplaces
+                </button>
+            </div>
+            
+            <div class="o_product_ai_studio_dashboard_content">
+                <!-- Conteúdo dinâmico renderizado pelo JS -->
+            </div>
+        </div>
+    </t>
+    
+    <t t-name="ProductAIStudioDashboardContent">
+        <div class="dashboard-stats">
+            <div class="card border-left-primary stat-card">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="stat-icon text-primary">
+                            <i class="fa fa-cube"></i>
+                        </div>
+                        <div>
+                            <div class="stat-value"><t t-esc="data.total_enrichments || 0"/></div>
+                            <div class="stat-label">Total de Enriquecimentos</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="card border-left-success stat-card">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="stat-icon text-success">
+                            <i class="fa fa-check-circle"></i>
+                        </div>
+                        <div>
+                            <div class="stat-value"><t t-esc="data.completed_enrichments || 0"/></div>
+                            <div class="stat-label">Enriquecimentos Concluídos</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="card border-left-warning stat-card">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="stat-icon text-warning">
+                            <i class="fa fa-spinner"></i>
+                        </div>
+                        <div>
+                            <div class="stat-value"><t t-esc="data.processing_enrichments || 0"/></div>
+                            <div class="stat-label">Em Processamento</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="card border-left-danger stat-card">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="stat-icon text-danger">
+                            <i class="fa fa-exclamation-circle"></i>
+                        </div>
+                        <div>
+                            <div class="stat-value"><t t-esc="data.error_enrichments || 0"/></div>
+                            <div class="stat-label">Com Erro</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="row mt-4">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="m-0">Enriquecimentos Recentes</h3>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-hover mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>Produto</th>
+                                        <th>Perfil</th>
+                                        <th>Status</th>
+                                        <th>Data</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <t t-if="data.recent_enrichments &amp;&amp; data.recent_enrichments.length">
+                                        <t t-foreach="data.recent_enrichments" t-as="enrichment">
+                                            <tr class="o_product_ai_studio_dashboard_item" t-att-data-id="enrichment.id" name="product_ai_studio.action_product_enrichment">
+                                                <td><t t-esc="enrichment.product_name"/></td>
+                                                <td><t t-esc="enrichment.profile_name"/></td>
+                                                <td>
+                                                    <span t-attf-class="o_enrichment_status #{enrichment.state}">
+                                                        <i t-attf-class="fa fa-#{enrichment.state == 'draft' ? 'file-o' : enrichment.state == 'processing' ? 'spinner fa-spin' : enrichment.state == 'done' ? 'check' : enrichment.state == 'error' ? 'exclamation-triangle' : 'times'}"></i>
+                                                        <t t-if="enrichment.state == 'draft'">Rascunho</t>
+                                                        <t t-elif="enrichment.state == 'processing'">Processando</t>
+                                                        <t t-elif="enrichment.state == 'done'">Concluído</t>
+                                                        <t t-elif="enrichment.state == 'error'">Erro</t>
+                                                        <t t-else="">Cancelado</t>
+                                                    </span>
+                                                </td>
+                                                <td><t t-esc="enrichment.date"/></td>
+                                            </tr>
+                                        </t>
+                                    </t>
+                                    <t t-else="">
+                                        <tr>
+                                            <td colspan="4" class="text-center">Nenhum enriquecimento recente</td>
+                                        </tr>
+                                    </t>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="m-0">Marketplaces</h3>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-hover mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>Marketplace</th>
+                                        <th>Produtos</th>
+                                        <th>Publicados</th>
+                                        <th>Taxa de Sucesso</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <t t-if="data.marketplaces &amp;&amp; data.marketplaces.length">
+                                        <t t-foreach="data.marketplaces" t-as="marketplace">
+                                            <tr class="o_product_ai_studio_dashboard_item" t-att-data-id="marketplace.id" name="product_ai_studio.action_marketplace_connector">
+                                                <td><t t-esc="marketplace.name"/></td>
+                                                <td><t t-esc="marketplace.product_count"/></td>
+                                                <td><t t-esc="marketplace.published_count"/></td>
+                                                <td>
+                                                    <div class="progress" style="height: 10px;">
+                                                        <div t-attf-class="progress-bar bg-#{marketplace.success_rate >= 90 ? 'success' : marketplace.success_rate >= 70 ? 'warning' : 'danger'}" 
+                                                             role="progressbar" t-att-style="'width: ' + marketplace.success_rate + '%'" 
+                                                             t-att-aria-valuenow="marketplace.success_rate" aria-valuemin="0" aria-valuemax="100">
+                                                        </div>
+                                                    </div>
+                                                    <small class="text-muted"><t t-esc="marketplace.success_rate"/>%</small>
+                                                </td>
+                                            </tr>
+                                        </t>
+                                    </t>
+                                    <t t-else="">
+                                        <tr>
+                                            <td colspan="4" class="text-center">Nenhum marketplace configurado</td>
+                                        </tr>
+                                    </t>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </t>
+</templates>

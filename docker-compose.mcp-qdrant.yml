@@ -1,0 +1,33 @@
+version: '3.8'
+
+services:
+  mcp-qdrant:
+    build:
+      context: ./mcp-qdrant
+      dockerfile: Dockerfile
+    container_name: mcp-qdrant
+    restart: unless-stopped
+    environment:
+      - QDRANT_URL=http://chatwoot-qdrant:6333
+      - QDRANT_API_KEY=
+      - MULTI_TENANT=true
+      - DEFAULT_TENANT=account_1
+      - MAX_RESULTS=20
+      - ALLOWED_COLLECTIONS=products,business_rules,support_procedures,interactions
+      - PORT=8000
+    ports:
+      - "8002:8000"
+    networks:
+      - chatwoot-network
+    volumes:
+      - ./mcp-qdrant/src:/app/src
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+networks:
+  chatwoot-network:
+    external: true

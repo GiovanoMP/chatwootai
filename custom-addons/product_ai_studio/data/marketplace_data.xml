@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="1">
+        <!-- Mercado Livre -->
+        <record id="marketplace_mercadolivre" model="product.marketplace">
+            <field name="name">Mercado Livre</field>
+            <field name="code">mercadolivre</field>
+            <field name="marketplace_type">mercadolivre</field>
+            <field name="description">Maior marketplace da América Latina</field>
+            <field name="website">https://www.mercadolivre.com.br</field>
+            <field name="api_base_url">https://api.mercadolibre.com</field>
+            <field name="api_version">v1</field>
+            <field name="active" eval="True"/>
+        </record>
+        
+        <!-- Amazon -->
+        <record id="marketplace_amazon" model="product.marketplace">
+            <field name="name">Amazon</field>
+            <field name="code">amazon</field>
+            <field name="marketplace_type">amazon</field>
+            <field name="description">Maior marketplace global</field>
+            <field name="website">https://www.amazon.com.br</field>
+            <field name="api_base_url">https://sellercentral.amazon.com.br</field>
+            <field name="api_version">v1</field>
+            <field name="active" eval="True"/>
+        </record>
+        
+        <!-- Shopee -->
+        <record id="marketplace_shopee" model="product.marketplace">
+            <field name="name">Shopee</field>
+            <field name="code">shopee</field>
+            <field name="marketplace_type">shopee</field>
+            <field name="description">Marketplace com foco em produtos asiáticos</field>
+            <field name="website">https://shopee.com.br</field>
+            <field name="api_base_url">https://partner.shopeemobile.com</field>
+            <field name="api_version">v2</field>
+            <field name="active" eval="True"/>
+        </record>
+        
+        <!-- Magalu -->
+        <record id="marketplace_magalu" model="product.marketplace">
+            <field name="name">Magalu</field>
+            <field name="code">magalu</field>
+            <field name="marketplace_type">magalu</field>
+            <field name="description">Marketplace do Magazine Luiza</field>
+            <field name="website">https://www.magazineluiza.com.br</field>
+            <field name="api_base_url">https://marketplace-api.magazineluiza.com.br</field>
+            <field name="api_version">v1</field>
+            <field name="active" eval="True"/>
+        </record>
+    </data>
+</odoo>

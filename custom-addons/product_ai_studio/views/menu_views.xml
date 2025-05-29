@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <!-- Menu Principal -->
+        <menuitem id="menu_product_ai_studio_root"
+                  name="Estúdio de Produtos com IA (Simplificado)"
+                  web_icon="product_ai_studio,static/description/icon.png"
+                  sequence="50"/>
+        
+        <!-- Submenus Essenciais -->
+        <menuitem id="menu_product_enrichment"
+                  name="Enriquecimentos"
+                  parent="menu_product_ai_studio_root"
+                  action="action_product_enrichment"
+                  sequence="1"/>
+                  
+        <menuitem id="menu_enrichment_profile"
+                  name="Perfis de Enriquecimento"
+                  parent="menu_product_ai_studio_root"
+                  action="action_enrichment_profile"
+                  sequence="2"/>
+                  
+        <menuitem id="menu_marketplace_connector"
+                  name="Conectores de Marketplace"
+                  parent="menu_product_ai_studio_root"
+                  action="action_marketplace_connector"
+                  sequence="3"/>
+                  
+        <!-- Menu de Configuração -->
+        <menuitem id="menu_product_ai_studio_config"
+                  name="Configurações"
+                  parent="menu_product_ai_studio_root"
+                  sequence="99"/>
+    </data>
+</odoo>

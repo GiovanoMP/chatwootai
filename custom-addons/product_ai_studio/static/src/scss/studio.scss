@@ -1,0 +1,354 @@
+// Estilo para o Estúdio de Produtos com IA
+// Seguindo as diretrizes de design do ChatwootAI
+
+// Variáveis de cores
+$primary-color: #2196F3;
+$success-color: #4CAF50;
+$warning-color: #FFC107;
+$danger-color: #F44336;
+$info-color: #00BCD4;
+$light-gray: #f8f9fa;
+$dark-gray: #212529;
+$border-color: #e0e0e0;
+
+// Estilos gerais
+.o_product_ai_studio {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    
+    h1, h2, h3, h4, h5, h6 {
+        font-weight: 600;
+        color: $dark-gray;
+    }
+    
+    .card {
+        border-radius: 8px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        margin-bottom: 20px;
+        transition: all 0.2s ease-in-out;
+        
+        &:hover {
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+        }
+        
+        .card-header {
+            background-color: white;
+            border-bottom: 1px solid $border-color;
+            padding: 16px 20px;
+            font-weight: 600;
+        }
+        
+        .card-body {
+            padding: 20px;
+        }
+    }
+    
+    .border-left-primary {
+        border-left: 4px solid $primary-color;
+    }
+    
+    .border-left-success {
+        border-left: 4px solid $success-color;
+    }
+    
+    .border-left-warning {
+        border-left: 4px solid $warning-color;
+    }
+    
+    .border-left-danger {
+        border-left: 4px solid $danger-color;
+    }
+    
+    .border-left-info {
+        border-left: 4px solid $info-color;
+    }
+}
+
+// Dashboard
+.o_product_ai_studio_dashboard {
+    padding: 20px;
+    
+    .dashboard-header {
+        margin-bottom: 24px;
+        
+        h1 {
+            font-size: 24px;
+            margin-bottom: 8px;
+        }
+        
+        .dashboard-subtitle {
+            color: #6c757d;
+            font-size: 16px;
+        }
+    }
+    
+    .dashboard-stats {
+        display: flex;
+        flex-wrap: wrap;
+        margin: 0 -10px;
+        
+        .stat-card {
+            flex: 1 1 250px;
+            margin: 0 10px 20px;
+            min-width: 250px;
+            
+            .stat-value {
+                font-size: 28px;
+                font-weight: 700;
+                margin-bottom: 4px;
+            }
+            
+            .stat-label {
+                color: #6c757d;
+                font-size: 14px;
+            }
+            
+            .stat-icon {
+                font-size: 24px;
+                margin-right: 16px;
+            }
+        }
+    }
+    
+    .dashboard-actions {
+        margin-bottom: 24px;
+        
+        .btn {
+            margin-right: 8px;
+            margin-bottom: 8px;
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-weight: 500;
+            
+            i {
+                margin-right: 8px;
+            }
+        }
+    }
+}
+
+// Preview Editor
+.o_preview_editor {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    
+    .preview-header {
+        padding: 16px;
+        border-bottom: 1px solid $border-color;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        
+        .preview-title {
+            font-size: 18px;
+            font-weight: 600;
+        }
+        
+        .preview-actions {
+            display: flex;
+            gap: 8px;
+        }
+    }
+    
+    .preview-tabs {
+        padding: 0 16px;
+        border-bottom: 1px solid $border-color;
+        
+        .nav-link {
+            padding: 12px 16px;
+            font-weight: 500;
+            color: #6c757d;
+            border: none;
+            border-bottom: 2px solid transparent;
+            
+            &.active {
+                color: $primary-color;
+                border-bottom-color: $primary-color;
+            }
+        }
+    }
+    
+    .preview-content {
+        display: flex;
+        flex: 1;
+        overflow: hidden;
+        
+        .editor-pane {
+            flex: 1;
+            padding: 16px;
+            border-right: 1px solid $border-color;
+            overflow-y: auto;
+            
+            textarea {
+                width: 100%;
+                height: 100%;
+                min-height: 300px;
+                padding: 12px;
+                border: 1px solid $border-color;
+                border-radius: 6px;
+                font-family: 'Roboto Mono', monospace;
+                resize: none;
+            }
+        }
+        
+        .preview-pane {
+            flex: 1;
+            padding: 16px;
+            overflow-y: auto;
+            background-color: $light-gray;
+            
+            .preview-container {
+                background-color: white;
+                border: 1px solid $border-color;
+                border-radius: 6px;
+                padding: 16px;
+                min-height: 300px;
+            }
+        }
+    }
+}
+
+// Marketplace Styles
+.marketplace-preview {
+    font-family: 'Inter', sans-serif;
+    
+    &.mercadolivre {
+        .product-title {
+            color: #333;
+            font-size: 22px;
+            font-weight: 600;
+            margin-bottom: 16px;
+        }
+        
+        .product-price {
+            color: #00a650;
+            font-size: 28px;
+            font-weight: 700;
+            margin-bottom: 16px;
+        }
+        
+        .product-description {
+            color: #333;
+            font-size: 16px;
+            line-height: 1.5;
+        }
+    }
+    
+    &.amazon {
+        .product-title {
+            color: #0F1111;
+            font-size: 24px;
+            font-weight: 500;
+            margin-bottom: 16px;
+        }
+        
+        .product-price {
+            color: #B12704;
+            font-size: 28px;
+            font-weight: 700;
+            margin-bottom: 16px;
+        }
+        
+        .product-description {
+            color: #333;
+            font-size: 16px;
+            line-height: 1.5;
+        }
+    }
+    
+    &.shopee {
+        .product-title {
+            color: #222;
+            font-size: 20px;
+            font-weight: 500;
+            margin-bottom: 16px;
+        }
+        
+        .product-price {
+            color: #ee4d2d;
+            font-size: 28px;
+            font-weight: 700;
+            margin-bottom: 16px;
+        }
+        
+        .product-description {
+            color: #333;
+            font-size: 16px;
+            line-height: 1.5;
+        }
+    }
+}
+
+// Componentes específicos
+.o_enrichment_status {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 12px;
+    border-radius: 16px;
+    font-size: 14px;
+    font-weight: 500;
+    
+    &.draft {
+        background-color: rgba($info-color, 0.1);
+        color: $info-color;
+    }
+    
+    &.processing {
+        background-color: rgba($warning-color, 0.1);
+        color: $warning-color;
+    }
+    
+    &.done {
+        background-color: rgba($success-color, 0.1);
+        color: $success-color;
+    }
+    
+    &.error {
+        background-color: rgba($danger-color, 0.1);
+        color: $danger-color;
+    }
+    
+    &.canceled {
+        background-color: rgba($dark-gray, 0.1);
+        color: $dark-gray;
+    }
+    
+    i {
+        margin-right: 6px;
+    }
+}
+
+// Animações
+@keyframes pulse {
+    0% {
+        transform: scale(1);
+    }
+    50% {
+        transform: scale(1.05);
+    }
+    100% {
+        transform: scale(1);
+    }
+}
+
+.processing-animation {
+    animation: pulse 1.5s infinite ease-in-out;
+}
+
+// Responsividade
+@media (max-width: 768px) {
+    .o_preview_editor .preview-content {
+        flex-direction: column;
+        
+        .editor-pane, .preview-pane {
+            flex: none;
+            width: 100%;
+            border-right: none;
+            border-bottom: 1px solid $border-color;
+        }
+    }
+    
+    .o_product_ai_studio_dashboard .dashboard-stats .stat-card {
+        flex: 1 1 100%;
+    }
+}

@@ -1,0 +1,392 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <!-- Form View -->
+        <record id="view_marketplace_description_form" model="ir.ui.view">
+            <field name="name">product.marketplace.description.form</field>
+            <field name="model">product.marketplace.description</field>
+            <field name="arch" type="xml">
+                <form string="Descrição de Marketplace">
+                    <header>
+                        <button name="action_validate" type="object" string="Validar" class="btn-primary" attrs="{'invisible': [('state', 'in', ['validated', 'published'])]}"/>
+                        <button name="action_publish" type="object" string="Publicar" class="btn-success" attrs="{'invisible': [('state', '!=', 'validated')]}"/>
+                        <button name="action_unpublish" type="object" string="Despublicar" class="btn-warning" attrs="{'invisible': [('state', '!=', 'published')]}"/>
+                        <button name="action_reset" type="object" string="Resetar" class="btn-secondary" attrs="{'invisible': [('state', '=', 'draft')]}"/>
+                        <field name="state" widget="statusbar" statusbar_visible="draft,validated,published"/>
+                    </header>
+                    <sheet>
+                        <div class="oe_button_box" name="button_box">
+                            <button name="toggle_active" type="object" class="oe_stat_button" icon="fa-archive">
+                                <field name="active" widget="boolean_button" options="{'terminology': 'archive'}"/>
+                            </button>
+                            <button name="action_view_marketplace" type="object" class="oe_stat_button" icon="fa-shopping-cart">
+                                <div class="o_stat_info">
+                                    <span class="o_stat_text">Marketplace</span>
+                                </div>
+                            </button>
+                            <button name="action_view_product" type="object" class="oe_stat_button" icon="fa-cube">
+                                <div class="o_stat_info">
+                                    <span class="o_stat_text">Produto</span>
+                                </div>
+                            </button>
+                        </div>
+                        
+                        <!-- Alertas e Banners -->
+                        <div t-attf-class="alert alert-#{record.state == 'draft' ? 'info' : record.state == 'validated' ? 'warning' : record.state == 'published' ? 'success' : 'danger'} mb-4" role="alert" style="border-left: 4px solid #2196F3; background-color: #f8f9fa;">
+                            <div class="d-flex">
+                                <i t-attf-class="fa fa-#{record.state == 'draft' ? 'info-circle' : record.state == 'validated' ? 'check-circle' : record.state == 'published' ? 'upload' : 'exclamation-circle'} fa-2x me-3 text-primary"></i>
+                                <div>
+                                    <h4 class="alert-heading">
+                                        <t t-if="record.state == 'draft'">Rascunho</t>
+                                        <t t-elif="record.state == 'validated'">Validado</t>
+                                        <t t-elif="record.state == 'published'">Publicado</t>
+                                        <t t-else="">Erro</t>
+                                    </h4>
+                                    <p class="mb-0">
+                                        <t t-if="record.state == 'draft'">Esta descrição está em rascunho. Edite os campos conforme necessário e clique em Validar quando estiver pronto.</t>
+                                        <t t-elif="record.state == 'validated'">Esta descrição foi validada e está pronta para publicação.</t>
+                                        <t t-elif="record.state == 'published'">Esta descrição está publicada no marketplace.</t>
+                                        <t t-else="">Ocorreu um erro com esta descrição. Verifique os detalhes abaixo.</t>
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="row mb-4">
+                            <div class="col-md-6">
+                                <div class="oe_title">
+                                    <h1>
+                                        <field name="title" placeholder="Título do Produto no Marketplace" attrs="{'readonly': [('state', 'in', ['published'])]}"/>
+                                    </h1>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <group>
+                                    <field name="product_id" readonly="1"/>
+                                    <field name="marketplace_id" readonly="1"/>
+                                    <field name="enrichment_profile_id" readonly="1"/>
+                                </group>
+                            </div>
+                        </div>
+                        
+                        <notebook>
+                            <page string="Conteúdo" name="content">
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="card" style="border-left: 4px solid #2196F3; border-radius: 4px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin-bottom: 16px; padding: 16px;">
+                                            <h3 style="margin-top: 0; color: #212529; font-size: 16px; font-weight: bold;">Descrição</h3>
+                                            <field name="description" widget="html" options="{'style-inline': true}" attrs="{'readonly': [('state', 'in', ['published'])]}"/>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="card" style="border-left: 4px solid #4CAF50; border-radius: 4px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin-bottom: 16px; padding: 16px;">
+                                            <h3 style="margin-top: 0; color: #212529; font-size: 16px; font-weight: bold;">Visualização</h3>
+                                            <div class="marketplace-preview" style="border: 1px solid #e0e0e0; border-radius: 4px; padding: 16px; background-color: white;">
+                                                <h2 style="font-size: 18px; margin-bottom: 12px;"><field name="title" readonly="1"/></h2>
+                                                <div style="font-size: 14px;">
+                                                    <field name="description" widget="html" readonly="1"/>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="card" style="border-left: 4px solid #FFC107; border-radius: 4px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin-bottom: 16px; padding: 16px;">
+                                            <h3 style="margin-top: 0; color: #212529; font-size: 16px; font-weight: bold;">Atributos</h3>
+                                            <field name="attribute_ids" attrs="{'readonly': [('state', 'in', ['published'])]}">
+                                                <tree editable="bottom">
+                                                    <field name="name"/>
+                                                    <field name="value"/>
+                                                    <field name="is_required"/>
+                                                    <field name="is_variant"/>
+                                                </tree>
+                                            </field>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="card" style="border-left: 4px solid #9C27B0; border-radius: 4px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin-bottom: 16px; padding: 16px;">
+                                            <h3 style="margin-top: 0; color: #212529; font-size: 16px; font-weight: bold;">Palavras-chave</h3>
+                                            <field name="keywords" widget="many2many_tags" placeholder="Adicione palavras-chave relevantes" attrs="{'readonly': [('state', 'in', ['published'])]}"/>
+                                        </div>
+                                    </div>
+                                </div>
+                            </page>
+                            
+                            <page string="Imagens" name="images">
+                                <div class="card" style="border-radius: 4px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin-bottom: 16px; padding: 16px;">
+                                    <h3 style="margin-top: 0; color: #212529; font-size: 16px; font-weight: bold;">Imagens do Produto</h3>
+                                    <p class="text-muted">Arraste as imagens para reordenar. A primeira imagem será a imagem principal do produto.</p>
+                                    <field name="image_ids" widget="many2many_kanban" attrs="{'readonly': [('state', 'in', ['published'])]}">
+                                        <kanban>
+                                            <field name="id"/>
+                                            <field name="name"/>
+                                            <field name="image_1920"/>
+                                            <field name="sequence"/>
+                                            <templates>
+                                                <t t-name="kanban-box">
+                                                    <div class="oe_kanban_global_click">
+                                                        <div class="oe_kanban_image">
+                                                            <img t-att-src="kanban_image('product.image', 'image_1920', record.id.raw_value)" alt="Product Image"/>
+                                                        </div>
+                                                        <div class="oe_kanban_details">
+                                                            <strong><field name="name"/></strong>
+                                                            <ul>
+                                                                <li>Sequência: <field name="sequence"/></li>
+                                                            </ul>
+                                                        </div>
+                                                    </div>
+                                                </t>
+                                            </templates>
+                                        </kanban>
+                                    </field>
+                                </div>
+                            </page>
+                            
+                            <page string="Preços e Estoque" name="pricing_stock">
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="card" style="border-left: 4px solid #2196F3; border-radius: 4px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin-bottom: 16px; padding: 16px;">
+                                            <h3 style="margin-top: 0; color: #212529; font-size: 16px; font-weight: bold;">Preços</h3>
+                                            <group>
+                                                <field name="price" widget="monetary" options="{'currency_field': 'currency_id'}" attrs="{'readonly': [('state', 'in', ['published'])]}"/>
+                                                <field name="list_price" widget="monetary" options="{'currency_field': 'currency_id'}" readonly="1"/>
+                                                <field name="currency_id" invisible="1"/>
+                                                <field name="price_margin" widget="percentage" attrs="{'readonly': [('state', 'in', ['published'])]}"/>
+                                                <field name="promotional_price" widget="monetary" options="{'currency_field': 'currency_id'}" attrs="{'readonly': [('state', 'in', ['published'])]}"/>
+                                                <field name="has_promotion" attrs="{'readonly': [('state', 'in', ['published'])]}"/>
+                                                <field name="promotion_start_date" attrs="{'invisible': [('has_promotion', '=', False)], 'readonly': [('state', 'in', ['published'])], 'required': [('has_promotion', '=', True)]}"/>
+                                                <field name="promotion_end_date" attrs="{'invisible': [('has_promotion', '=', False)], 'readonly': [('state', 'in', ['published'])], 'required': [('has_promotion', '=', True)]}"/>
+                                            </group>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="card" style="border-left: 4px solid #4CAF50; border-radius: 4px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin-bottom: 16px; padding: 16px;">
+                                            <h3 style="margin-top: 0; color: #212529; font-size: 16px; font-weight: bold;">Estoque</h3>
+                                            <group>
+                                                <field name="qty_available" readonly="1"/>
+                                                <field name="marketplace_quantity" attrs="{'readonly': [('state', 'in', ['published'])]}"/>
+                                                <field name="min_quantity" attrs="{'readonly': [('state', 'in', ['published'])]}"/>
+                                                <field name="sync_stock" attrs="{'readonly': [('state', 'in', ['published'])]}"/>
+                                                <field name="stock_update_frequency" attrs="{'invisible': [('sync_stock', '=', False)], 'readonly': [('state', 'in', ['published'])]}"/>
+                                                <field name="last_stock_update" readonly="1"/>
+                                            </group>
+                                        </div>
+                                    </div>
+                                </div>
+                            </page>
+                            
+                            <page string="Publicação" name="publication">
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="card" style="border-left: 4px solid #2196F3; border-radius: 4px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin-bottom: 16px; padding: 16px;">
+                                            <h3 style="margin-top: 0; color: #212529; font-size: 16px; font-weight: bold;">Informações de Publicação</h3>
+                                            <group>
+                                                <field name="marketplace_id" readonly="1"/>
+                                                <field name="marketplace_category_id" attrs="{'readonly': [('state', 'in', ['published'])]}"/>
+                                                <field name="marketplace_product_id" readonly="1"/>
+                                                <field name="marketplace_url" widget="url" readonly="1"/>
+                                                <field name="publication_date" readonly="1"/>
+                                                <field name="last_update_date" readonly="1"/>
+                                            </group>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="card" style="border-left: 4px solid #F44336; border-radius: 4px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin-bottom: 16px; padding: 16px;">
+                                            <h3 style="margin-top: 0; color: #212529; font-size: 16px; font-weight: bold;">Validação</h3>
+                                            <field name="validation_errors" readonly="1" attrs="{'invisible': [('validation_errors', '=', False)]}"/>
+                                            <field name="validation_warnings" readonly="1" attrs="{'invisible': [('validation_warnings', '=', False)]}"/>
+                                            <field name="validation_date" readonly="1"/>
+                                            <field name="validated_by" readonly="1"/>
+                                        </div>
+                                    </div>
+                                </div>
+                            </page>
+                            
+                            <page string="Histórico" name="history">
+                                <div class="card" style="border-radius: 4px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin-bottom: 16px; padding: 16px;">
+                                    <h3 style="margin-top: 0; color: #212529; font-size: 16px; font-weight: bold;">Histórico de Alterações</h3>
+                                    <field name="history_ids">
+                                        <tree>
+                                            <field name="create_date" string="Data"/>
+                                            <field name="user_id"/>
+                                            <field name="action"/>
+                                            <field name="old_state"/>
+                                            <field name="new_state"/>
+                                            <field name="notes"/>
+                                        </tree>
+                                    </field>
+                                </div>
+                            </page>
+                        </notebook>
+                    </sheet>
+                    <div class="oe_chatter">
+                        <field name="message_follower_ids" widget="mail_followers"/>
+                        <field name="activity_ids" widget="mail_activity"/>
+                        <field name="message_ids" widget="mail_thread"/>
+                    </div>
+                </form>
+            </field>
+        </record>
+        
+        <!-- Tree View -->
+        <record id="view_marketplace_description_tree" model="ir.ui.view">
+            <field name="name">product.marketplace.description.tree</field>
+            <field name="model">product.marketplace.description</field>
+            <field name="arch" type="xml">
+                <tree string="Descrições de Marketplace" decoration-muted="active == False" decoration-danger="validation_errors != False" decoration-success="state == 'published'" decoration-warning="state == 'validated' and validation_errors == False">
+                    <field name="title"/>
+                    <field name="product_id"/>
+                    <field name="marketplace_id"/>
+                    <field name="state"/>
+                    <field name="price" widget="monetary" options="{'currency_field': 'currency_id'}"/>
+                    <field name="currency_id" invisible="1"/>
+                    <field name="marketplace_quantity"/>
+                    <field name="validation_errors" invisible="1"/>
+                    <field name="validation_date"/>
+                    <field name="publication_date"/>
+                    <field name="active" invisible="1"/>
+                </tree>
+            </field>
+        </record>
+        
+        <!-- Search View -->
+        <record id="view_marketplace_description_search" model="ir.ui.view">
+            <field name="name">product.marketplace.description.search</field>
+            <field name="model">product.marketplace.description</field>
+            <field name="arch" type="xml">
+                <search string="Descrições de Marketplace">
+                    <field name="title"/>
+                    <field name="product_id"/>
+                    <field name="marketplace_id"/>
+                    <field name="marketplace_category_id"/>
+                    <field name="keywords"/>
+                    
+                    <filter string="Arquivados" name="inactive" domain="[('active', '=', False)]"/>
+                    <separator/>
+                    <filter string="Rascunho" name="draft" domain="[('state', '=', 'draft')]"/>
+                    <filter string="Validado" name="validated" domain="[('state', '=', 'validated')]"/>
+                    <filter string="Publicado" name="published" domain="[('state', '=', 'published')]"/>
+                    <filter string="Com Erros" name="with_errors" domain="[('validation_errors', '!=', False)]"/>
+                    <separator/>
+                    <filter string="Com Promoção" name="with_promotion" domain="[('has_promotion', '=', True)]"/>
+                    <filter string="Sincronização de Estoque" name="stock_sync" domain="[('sync_stock', '=', True)]"/>
+                    
+                    <group expand="0" string="Agrupar Por">
+                        <filter string="Produto" name="group_by_product" context="{'group_by': 'product_id'}"/>
+                        <filter string="Marketplace" name="group_by_marketplace" context="{'group_by': 'marketplace_id'}"/>
+                        <filter string="Categoria" name="group_by_category" context="{'group_by': 'marketplace_category_id'}"/>
+                        <filter string="Estado" name="group_by_state" context="{'group_by': 'state'}"/>
+                    </group>
+                </search>
+            </field>
+        </record>
+        
+        <!-- Kanban View -->
+        <record id="view_marketplace_description_kanban" model="ir.ui.view">
+            <field name="name">product.marketplace.description.kanban</field>
+            <field name="model">product.marketplace.description</field>
+            <field name="arch" type="xml">
+                <kanban class="o_kanban_mobile" sample="1">
+                    <field name="title"/>
+                    <field name="product_id"/>
+                    <field name="marketplace_id"/>
+                    <field name="state"/>
+                    <field name="price"/>
+                    <field name="currency_id"/>
+                    <field name="marketplace_quantity"/>
+                    <field name="validation_errors"/>
+                    <field name="validation_warnings"/>
+                    <field name="publication_date"/>
+                    <field name="has_promotion"/>
+                    
+                    <templates>
+                        <t t-name="kanban-box">
+                            <div t-attf-class="oe_kanban_card oe_kanban_global_click">
+                                <div class="o_kanban_record_top">
+                                    <div class="o_kanban_record_headings">
+                                        <strong class="o_kanban_record_title">
+                                            <field name="title"/>
+                                        </strong>
+                                        <small class="o_kanban_record_subtitle">
+                                            <field name="product_id"/>
+                                        </small>
+                                    </div>
+                                </div>
+                                <div class="o_kanban_record_body">
+                                    <div class="row">
+                                        <div class="col-6">
+                                            <span t-attf-class="badge badge-pill #{record.state.raw_value == 'draft' ? 'badge-info' : record.state.raw_value == 'validated' ? 'badge-warning' : record.state.raw_value == 'published' ? 'badge-success' : 'badge-danger'}">
+                                                <t t-if="record.state.raw_value == 'draft'">Rascunho</t>
+                                                <t t-elif="record.state.raw_value == 'validated'">Validado</t>
+                                                <t t-elif="record.state.raw_value == 'published'">Publicado</t>
+                                                <t t-else="">Erro</t>
+                                            </span>
+                                        </div>
+                                        <div class="col-6 text-right">
+                                            <span class="text-muted">Marketplace: </span>
+                                            <span><field name="marketplace_id"/></span>
+                                        </div>
+                                    </div>
+                                    <div class="row mt-2">
+                                        <div class="col-6">
+                                            <span class="text-muted">Preço: </span>
+                                            <span><field name="price" widget="monetary" options="{'currency_field': 'currency_id'}"/></span>
+                                        </div>
+                                        <div class="col-6 text-right">
+                                            <span class="text-muted">Estoque: </span>
+                                            <span><field name="marketplace_quantity"/></span>
+                                        </div>
+                                    </div>
+                                    <div class="mt-2">
+                                        <span t-if="record.has_promotion.raw_value" class="badge badge-pill badge-primary mr-1">
+                                            <i class="fa fa-tag"/> Promoção
+                                        </span>
+                                    </div>
+                                    <div class="mt-2" t-if="record.validation_errors.raw_value">
+                                        <div class="alert alert-danger p-2" role="alert">
+                                            <small><field name="validation_errors"/></small>
+                                        </div>
+                                    </div>
+                                    <div class="mt-2" t-if="record.validation_warnings.raw_value &amp;&amp; !record.validation_errors.raw_value">
+                                        <div class="alert alert-warning p-2" role="alert">
+                                            <small><field name="validation_warnings"/></small>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="o_kanban_record_bottom">
+                                    <div class="oe_kanban_bottom_left">
+                                        <t t-if="record.state.raw_value == 'published'">
+                                            <span class="text-muted">Publicado em: </span>
+                                            <span><field name="publication_date"/></span>
+                                        </t>
+                                    </div>
+                                </div>
+                            </div>
+                        </t>
+                    </templates>
+                </kanban>
+            </field>
+        </record>
+        
+        <!-- Action -->
+        <record id="action_marketplace_description" model="ir.actions.act_window">
+            <field name="name">Descrições de Marketplace</field>
+            <field name="res_model">product.marketplace.description</field>
+            <field name="view_mode">kanban,tree,form</field>
+            <field name="search_view_id" ref="view_marketplace_description_search"/>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">
+                    Crie sua primeira descrição de marketplace!
+                </p>
+                <p>
+                    As descrições de marketplace permitem personalizar como seus produtos aparecem em diferentes plataformas de vendas.
+                    Crie descrições otimizadas para cada marketplace para aumentar suas vendas.
+                </p>
+            </field>
+        </record>
+        
+        <!-- Menu definido em menu_views.xml -->
+    </data>
+</odoo>

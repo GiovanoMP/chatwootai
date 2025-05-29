@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Ação para ajuste de preços -->
+    <record id="action_adjust_ai_prices" model="ir.actions.act_window">
+        <field name="name">Ajustar Preços para IA</field>
+        <field name="res_model">product.ai.price.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+        <field name="binding_model_id" ref="product.model_product_template"/>
+        <field name="binding_view_types">list</field>
+    </record>
+
+    <!-- Vista de Lista para Gerenciamento em Massa de Produtos no Sistema de IA (estilo módulo de estoque) -->
+    <record id="product_ai_mass_management_view_tree" model="ir.ui.view">
+        <field name="name">product.ai.mass.management.tree</field>
+        <field name="model">product.template</field>
+        <field name="arch" type="xml">
+            <tree string="Gerenciamento em Massa de Produtos no Sistema de IA" multi_edit="1" sample="1">
+                <!-- Informações do Produto -->
+                <field name="default_code" string="Código" optional="show"/>
+                <field name="name" string="Nome do Produto" decoration-bf="1"/>
+
+                <!-- Status com Badges -->
+                <field name="semantic_sync_status" widget="badge"
+                       decoration-success="semantic_sync_status == 'synced'"
+                       decoration-danger="semantic_sync_status == 'not_synced'"
+                       decoration-warning="semantic_sync_status == 'needs_update'"
+                       decoration-info="semantic_sync_status == 'syncing'"
+                       string="Status de Sincronização"/>
+
+                <field name="ai_description_quality" widget="badge"
+                       decoration-success="ai_description_quality == 'verified'"
+                       decoration-warning="ai_description_quality == 'generated'"
+                       decoration-muted="ai_description_quality == 'none'"
+                       string="Descrição"/>
+
+                <field name="ai_price_status" widget="badge"
+                       decoration-success="ai_price_status == 'custom'"
+                       decoration-warning="ai_price_status == 'default'"
+                       decoration-danger="ai_price_status == 'none'"
+                       string="Preço IA"/>
+
+                <field name="ai_popularity" widget="badge"
+                       decoration-success="ai_popularity == 'high'"
+                       decoration-warning="ai_popularity == 'medium'"
+                       decoration-danger="ai_popularity == 'low'"
+                       decoration-info="ai_popularity == 'new'"
+                       string="Popularidade"/>
+
+                <!-- Preços -->
+                <field name="list_price" string="Preço Padrão" optional="show"/>
+                <field name="ai_price" string="Preço no Sistema de IA" optional="show"/>
+
+                <!-- Informações Adicionais -->
+                <field name="type" string="Tipo de Produto" optional="hide"/>
+                <field name="uom_id" string="Unidade" optional="hide"/>
+                <field name="active" widget="boolean_toggle" optional="show"/>
+
+                <!-- Botões de Ação -->
+                <button name="action_view_product"
+                        string="Ver/Editar"
+                        type="object"
+                        icon="fa-pencil"/>
+            </tree>
+        </field>
+    </record>
+
+    <!-- Vista de Busca para Gerenciamento em Massa -->
+    <record id="product_ai_mass_management_search_view" model="ir.ui.view">
+        <field name="name">product.ai.mass.management.search</field>
+        <field name="model">product.template</field>
+        <field name="arch" type="xml">
+            <search string="Buscar Produtos">
+                <field name="name" string="Nome do Produto"/>
+                <field name="default_code" string="Código"/>
+                <field name="categ_id" string="Categoria"/>
+
+                <!-- Filtros de Status -->
+                <filter string="Não Sincronizados" name="not_synced" domain="[('semantic_sync_status', '=', 'not_synced')]"/>
+                <filter string="Sincronizados" name="synced" domain="[('semantic_sync_status', '=', 'synced')]"/>
+                <filter string="Precisam Atualização" name="needs_update" domain="[('semantic_sync_status', '=', 'needs_update')]"/>
+
+                <separator/>
+                <filter string="Descrição Verificada" name="verified" domain="[('ai_description_quality', '=', 'verified')]"/>
+                <filter string="Descrição Não Verificada" name="generated" domain="[('ai_description_quality', '=', 'generated')]"/>
+                <filter string="Sem Descrição" name="no_description" domain="[('ai_description_quality', '=', 'none')]"/>
+
+                <separator/>
+                <filter string="Com Preço IA Personalizado" name="custom_price" domain="[('ai_price_status', '=', 'custom')]"/>
+                <filter string="Sem Preço IA" name="no_ai_price" domain="[('ai_price_status', '=', 'none')]"/>
+
+                <separator/>
+                <filter string="Alta Popularidade" name="high_popularity" domain="[('ai_popularity', '=', 'high')]"/>
+                <filter string="Novos no Sistema" name="new_in_system" domain="[('ai_popularity', '=', 'new')]"/>
+
+                <separator/>
+                <filter string="Ativos" name="active" domain="[('active', '=', True)]"/>
+                <filter string="Arquivados" name="inactive" domain="[('active', '=', False)]"/>
+                <filter string="Podem ser Vendidos" name="sale_ok" domain="[('sale_ok', '=', True)]"/>
+                <filter string="Podem ser Comprados" name="purchase_ok" domain="[('purchase_ok', '=', True)]"/>
+
+                <!-- Agrupamentos -->
+                <group expand="0" string="Agrupar Por">
+                    <filter string="Status de Sincronização" name="groupby_sync_status" context="{'group_by': 'semantic_sync_status'}"/>
+                    <filter string="Qualidade da Descrição" name="groupby_description_quality" context="{'group_by': 'ai_description_quality'}"/>
+                    <filter string="Status de Preço" name="groupby_price_status" context="{'group_by': 'ai_price_status'}"/>
+                    <filter string="Popularidade" name="groupby_popularity" context="{'group_by': 'ai_popularity'}"/>
+                    <filter string="Categoria" name="groupby_category" context="{'group_by': 'categ_id'}"/>
+                    <filter string="Tipo de Produto" name="groupby_type" context="{'group_by': 'type'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+</odoo>

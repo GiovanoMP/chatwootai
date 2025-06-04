@@ -1,0 +1,186 @@
+version: '3.8'
+
+services:
+  # MongoDB - Banco de dados principal
+  mongodb:
+    image: mongo:6.0-focal
+    container_name: ai-mongodb
+    restart: unless-stopped
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=admin
+      - MONGO_INITDB_ROOT_PASSWORD=admin_password
+      - MONGO_INITDB_DATABASE=config_service
+    volumes:
+      - mongodb_data:/data/db
+      - ./mongodb-init:/docker-entrypoint-initdb.d
+    ports:
+      - "27017:27017"
+    networks:
+      - ai_network
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # MongoDB Express - Interface de administração para MongoDB
+  mongo-express:
+    image: mongo-express:latest
+    container_name: ai-mongo-express
+    restart: unless-stopped
+    environment:
+      - ME_CONFIG_MONGODB_ADMINUSERNAME=admin
+      - ME_CONFIG_MONGODB_ADMINPASSWORD=admin_password
+      - ME_CONFIG_MONGODB_URL=mongodb://admin:admin_password@mongodb:27017/admin
+      - ME_CONFIG_BASICAUTH_USERNAME=admin
+      - ME_CONFIG_BASICAUTH_PASSWORD=admin_password
+    ports:
+      - "8082:8081"
+    networks:
+      - ai_network
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    healthcheck:
+      test: wget --quiet --tries=1 --spider --auth-no-challenge --http-user=admin --http-password=admin_password http://localhost:8081 || exit 1
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+  # Redis - Cache e armazenamento de contexto
+  redis:
+    image: redis:6.2-alpine
+    container_name: ai-redis
+    restart: unless-stopped
+    command: redis-server --requirepass redis_password
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - ai_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "redis_password", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Qdrant - Banco de dados vetorial
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: ai-qdrant
+    restart: unless-stopped
+    volumes:
+      - qdrant_data:/qdrant/storage
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    networks:
+      - ai_network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:6333/healthz || exit 1"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # MCP-MongoDB - Conector para MongoDB
+  mcp-mongodb:
+    build:
+      context: ./mcp-mongodb
+      dockerfile: Dockerfile
+    container_name: mcp-mongodb
+    restart: unless-stopped
+    environment:
+      - MONGODB_URI=mongodb://config_user:config_password@mongodb:27017/config_service
+      - MULTI_TENANT=true
+      - DEFAULT_TENANT=account_1
+      - ALLOWED_COLLECTIONS=company_services,tenants,configurations
+    ports:
+      - "8001:8000"
+    networks:
+      - ai_network
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+  # MCP-Qdrant - Conector oficial para Qdrant
+  mcp-qdrant:
+    build:
+      context: ./mcp-server-qdrant
+      dockerfile: Dockerfile
+    container_name: mcp-qdrant
+    restart: unless-stopped
+    environment:
+      - QDRANT_URL=http://qdrant:6333
+      - COLLECTION_NAME=ai_stack_vectors
+      - EMBEDDING_MODEL=sentence-transformers/all-MiniLM-L6-v2
+      - FASTMCP_PORT=8000
+      - FASTMCP_HOST=0.0.0.0
+    ports:
+      - "8002:8000"
+    networks:
+      - ai_network
+    depends_on:
+      - qdrant
+    # healthcheck:
+      # test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      # interval: 30s
+      # timeout: 10s
+      # retries: 3
+      # start_period: 20s
+
+  # MCP-Crew - Orquestrador de Crews e MCPs (temporariamente comentado)
+  # mcp-crew:
+  #   build:
+  #     context: ./mcp-crew
+  #     dockerfile: Dockerfile
+  #   container_name: mcp-crew
+  #   restart: unless-stopped
+  #   environment:
+  #     - MONGODB_URI=mongodb://config_user:config_password@mongodb:27017/config_service
+  #     - REDIS_URI=redis://redis:6379/0
+  #     - REDIS_PASSWORD=redis_password
+  #     - MCP_MONGODB_URL=http://mcp-mongodb:8000
+  #     - MCP_QDRANT_URL=http://mcp-qdrant:8000
+  #     - DEFAULT_TENANT=account_1
+  #     - MULTI_TENANT=true
+  #   ports:
+  #     - "5000:5000"
+  #   networks:
+  #     - ai_network
+  #   depends_on:
+  #     mongodb:
+  #       condition: service_healthy
+  #     redis:
+  #       condition: service_healthy
+  #     mcp-mongodb:
+  #       condition: service_healthy
+  #     mcp-qdrant:
+  #       condition: service_healthy
+  #   # healthcheck:
+  #     # test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+  #     # interval: 30s
+  #     # timeout: 10s
+  #     # retries: 3
+  #     # start_period: 40s
+
+volumes:
+  mongodb_data:
+  redis_data:
+  qdrant_data:
+
+networks:
+  ai_network:
+    name: ai_network
+    driver: bridge
+  chatwoot-mongo-network:
+    external: true  # Esta rede já existe e é gerenciada externamente

@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="1">
+
+        <record id="mcp_type_odoo" model="tenant_mcp.type">
+            <field name="name">Odoo ERP</field>
+            <field name="code">odoo_erp</field>
+            <field name="description">Integração com funcionalidades internas do Odoo.</field>
+            <field name="sequence">1</field>
+            <field name="icon">fa-cogs</field>
+        </record>
+
+        <record id="mcp_type_qdrant" model="tenant_mcp.type">
+            <field name="name">Qdrant Vector DB</field>
+            <field name="code">qdrant</field>
+            <field name="description">Banco de dados vetorial para buscas semânticas e armazenamento de embeddings.</field>
+            <field name="sequence">5</field>
+            <field name="icon">fa-database</field>
+        </record>
+
+        <record id="mcp_type_mongodb" model="tenant_mcp.type">
+            <field name="name">MongoDB Document Store</field>
+            <field name="code">mongodb</field>
+            <field name="description">Banco de dados NoSQL orientado a documentos.</field>
+            <field name="sequence">10</field>
+            <field name="icon">fa-leaf</field>
+        </record>
+
+        <record id="mcp_type_chatwoot" model="tenant_mcp.type">
+            <field name="name">Chatwoot Customer Engagement</field>
+            <field name="code">chatwoot</field>
+            <field name="description">Plataforma de atendimento e engajamento com o cliente.</field>
+            <field name="sequence">15</field>
+            <field name="icon">fa-comments</field>
+        </record>
+
+        <record id="mcp_type_mercado_livre" model="tenant_mcp.type">
+            <field name="name">Mercado Livre</field>
+            <field name="code">mercado_livre</field>
+            <field name="description">Integração com o marketplace Mercado Livre.</field>
+            <field name="sequence">20</field>
+            <field name="icon">fa-shopping-cart</field>
+        </record>
+
+        <record id="mcp_type_facebook" model="tenant_mcp.type">
+            <field name="name">Facebook / Instagram</field>
+            <field name="code">facebook_instagram</field>
+            <field name="description">Integração com as plataformas da Meta (Facebook e Instagram).</field>
+            <field name="sequence">25</field>
+            <field name="icon">fa-facebook-square</field>
+        </record>
+
+    </data>
+</odoo>

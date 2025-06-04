@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+
+        <!-- Tree View -->
+        <record id="view_tenant_mcp_type_tree" model="ir.ui.view">
+            <field name="name">tenant_mcp.type.tree</field>
+            <field name="model">tenant_mcp.type</field>
+            <field name="arch" type="xml">
+                <tree string="Tipos de MCP" editable="bottom">
+                    <field name="sequence" widget="handle"/>
+                    <field name="name"/>
+                    <field name="code"/>
+                    <field name="icon"/>
+                    <field name="description" optional="hide"/>
+                </tree>
+            </field>
+        </record>
+
+        <!-- Form View (pode não ser estritamente necessário se editável na tree, mas bom ter) -->
+        <record id="view_tenant_mcp_type_form" model="ir.ui.view">
+            <field name="name">tenant_mcp.type.form</field>
+            <field name="model">tenant_mcp.type</field>
+            <field name="arch" type="xml">
+                <form string="Tipo de MCP">
+                    <sheet>
+                        <group>
+                            <group>
+                                <field name="name"/>
+                                <field name="code"/>
+                            </group>
+                            <group>
+                                <field name="sequence"/>
+                                <field name="icon" placeholder="fa-example"/>
+                            </group>
+                        </group>
+                        <group>
+                            <field name="description" nolabel="1" placeholder="Descrição detalhada do tipo de MCP..."/>
+                        </group>
+                    </sheet>
+                </form>
+            </field>
+        </record>
+
+        <!-- Search View -->
+        <record id="view_tenant_mcp_type_search" model="ir.ui.view">
+            <field name="name">tenant_mcp.type.search</field>
+            <field name="model">tenant_mcp.type</field>
+            <field name="arch" type="xml">
+                <search string="Procurar Tipo de MCP">
+                    <field name="name"/>
+                    <field name="code"/>
+                    <field name="description"/>
+                </search>
+            </field>
+        </record>
+
+        <!-- Action Window -->
+        <record id="action_tenant_mcp_type" model="ir.actions.act_window">
+            <field name="name">Tipos de MCP</field>
+            <field name="res_model">tenant_mcp.type</field>
+            <field name="view_mode">tree,form</field>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">
+                    Nenhum tipo de MCP definido ainda (além dos dados iniciais).
+                </p><p>
+                    Crie e gerencie os diferentes tipos de MCPs que podem ser integrados.
+                </p>
+            </field>
+        </record>
+
+    </data>
+</odoo>

@@ -234,7 +234,7 @@ O ChatwootAI utiliza o CrewAI como framework central para orquestração de agen
 3. **Fluxos de Trabalho de Atendimento**:
    - Análise inicial de intenção e sentimento
    - Roteamento para o agente especializado mais adequado
-   - Consulta a conhecimento relevante via MCP-Qdrant
+   - Consulta a conhecimento relevante via MCP-Qdrant e Regras de Negócio via MCP MongoDB
    - Verificação de dados em tempo real via MCP-Odoo
    - Geração de resposta contextualizada
    - Aprendizado contínuo a partir de feedback
@@ -506,7 +506,7 @@ O Chatwoot Connector atua como ponte entre o sistema de atendimento Chatwoot e o
 
 O conector pode ser estendido para incluir:
 - Consultas ao Qdrant para busca semântica em base de conhecimento
-- Configurações via MongoDB para comportamento das crews
+- Configurações via MongoDB para comportamento das crews e conhecimento sobre dados gerais da empresa
 - Operações no Odoo via MCP-Odoo
 
 ### 4. Módulo Odoo de Integração com MCP-Crew

@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+
+        <!-- Tree View for tenant_mcp.ia.service.catalog -->
+        <record id="view_tenant_mcp_ia_service_catalog_tree" model="ir.ui.view">
+            <field name="name">tenant_mcp.ia.service.catalog.tree</field>
+            <field name="model">tenant_mcp.ia.service.catalog</field>
+            <field name="arch" type="xml">
+                <tree string="Catálogo de Serviços de IA" editable="bottom">
+                    <field name="display_name" string="Serviço/Módulo"/>
+                    <field name="is_ia_service_available" widget="boolean_toggle" string="Disponível?"/>
+                    <field name="ia_service_name" string="Nome do Serviço de IA" optional="show" attrs="{'readonly': [('is_ia_service_available', '=', False)]}"/>
+                    <field name="original_module_name" string="Módulo Odoo Original" optional="hide"/>
+                    <field name="category_id" string="Categoria do Módulo" optional="show"/>
+                    <field name="state" string="Status do Módulo" optional="show"/>
+                    <field name="ia_service_description" string="Descrição do Serviço" optional="hide" attrs="{'readonly': [('is_ia_service_available', '=', False)]}"/>
+                    <field name="technical_notes" string="Notas Técnicas" optional="hide"/>
+                </tree>
+            </field>
+        </record>
+
+        <!-- Form View for tenant_mcp.ia.service.catalog -->
+        <record id="view_tenant_mcp_ia_service_catalog_form" model="ir.ui.view">
+            <field name="name">tenant_mcp.ia.service.catalog.form</field>
+            <field name="model">tenant_mcp.ia.service.catalog</field>
+            <field name="arch" type="xml">
+                <form string="Serviço de IA do Catálogo">
+                    <sheet>
+                        <group name="module_details_header">
+                             <field name="display_name" invisible="1"/> <!-- Usado para o título do formulário, mas pode ser escondido se ia_service_name for o principal -->
+                             <field name="is_ia_service_available" widget="boolean_toggle"/>
+                        </group>
+                        <group>
+                            <group string="Detalhes do Módulo Odoo Original">
+                                <field name="module_id" readonly="1" options="{'no_open': True}"/>
+                                <field name="original_module_name" readonly="1"/>
+                                <field name="category_id" readonly="1"/>
+                                <field name="state" readonly="1"/>
+                                <field name="author" readonly="1"/>
+                                <field name="summary" readonly="1" nolabel="0"/>
+                            </group>
+                            <group string="Configuração do Serviço de IA" name="ia_service_config_group" 
+                                   attrs="{'invisible': [('is_ia_service_available', '=', False)]}">
+                                <field name="ia_service_name"/>
+                                <field name="ia_service_description" placeholder="Descreva o que este serviço de IA faz, como ele se integra com o MCP-CREW, etc."/>
+                                <field name="api_endpoint_details" placeholder="Ex: /api/v1/mcp_service/{module_technical_name}/..."/>
+                            </group>
+                        </group>
+                        <group string="Notas Técnicas Internas (para este serviço de IA)">
+                             <field name="technical_notes" nolabel="1" placeholder="Detalhes sobre a implementação, dependências, configuração específica, etc."/>
+                        </group>
+                    </sheet>
+                </form>
+            </field>
+        </record>
+
+        <!-- Search View for tenant_mcp.ia.service.catalog -->
+        <record id="view_tenant_mcp_ia_service_catalog_search" model="ir.ui.view">
+            <field name="name">tenant_mcp.ia.service.catalog.search</field>
+            <field name="model">tenant_mcp.ia.service.catalog</field>
+            <field name="arch" type="xml">
+                <search string="Procurar no Catálogo de Serviços de IA">
+                    <field name="display_name" string="Serviço/Módulo"/>
+                    <field name="ia_service_name" string="Nome do Serviço de IA"/>
+                    <field name="original_module_name" string="Nome Original do Módulo"/>
+                    <field name="category_id"/>
+                    <field name="author"/>
+                    <filter string="Serviços de IA Disponíveis" name="is_ia_service_available" domain="[('is_ia_service_available','=',True)]"/>
+                    <filter string="Serviços de IA Não Disponíveis" name="is_ia_service_not_available" domain="[('is_ia_service_available','=',False)]"/>
+                    <filter string="Módulos Instalados" name="state_installed" domain="[('state','=','installed')]"/>
+                    <group expand="0" string="Agrupar por...">
+                        <filter string="Serviço Disponível" name="groupby_is_ia_service_available" context="{'group_by':'is_ia_service_available'}"/>
+                        <filter string="Categoria do Módulo" name="groupby_category_id" context="{'group_by':'category_id'}"/>
+                        <filter string="Status de Instalação" name="groupby_state" context="{'group_by':'state'}"/>
+                    </group>
+                </search>
+            </field>
+        </record>
+
+        <!-- Action Window for tenant_mcp.ia.service.catalog -->
+        <record id="action_tenant_mcp_ia_service_catalog" model="ir.actions.act_window">
+            <field name="name">Catálogo de Serviços de IA (Módulos MCP)</field>
+            <field name="res_model">tenant_mcp.ia.service.catalog</field>
+            <field name="view_mode">tree,form</field>
+            <field name="context">{'search_default_state_installed': 1, 'search_default_is_ia_service_available': 1}</field>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">
+                    Nenhum serviço de IA configurado no catálogo.
+                </p><p>
+                    Clique em "Sincronizar Módulos com Catálogo de IA" na lista (menu Ação) para popular esta lista com todos os módulos da sua instância Odoo. 
+                    Depois, você poderá marcar quais módulos oferecem serviços de IA, nomeá-los e descrevê-los para uso pelo MCP-CREW.
+                </p>
+            </field>
+        </record>
+
+        <!-- Server Action to Synchronize Modules -->
+        <record id="action_server_synchronize_ia_service_catalog" model="ir.actions.server">
+            <field name="name">Sincronizar Módulos com Catálogo de IA</field>
+            <field name="model_id" ref="model_tenant_mcp_ia_service_catalog"/>
+            <field name="binding_model_id" ref="model_tenant_mcp_ia_service_catalog"/>
+            <field name="state">code</field>
+            <field name="code">
+model.synchronize_modules()
+            </field>
+        </record>
+
+    </data>
+</odoo>

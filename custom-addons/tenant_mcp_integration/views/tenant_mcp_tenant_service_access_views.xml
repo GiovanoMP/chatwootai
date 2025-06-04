@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+
+        <!-- Tree View for tenant_mcp.tenant.service.access -->
+        <record id="view_tenant_mcp_tenant_service_access_tree" model="ir.ui.view">
+            <field name="name">tenant_mcp.tenant.service.access.tree</field>
+            <field name="model">tenant_mcp.tenant.service.access</field>
+            <field name="arch" type="xml">
+                <tree string="Acesso de Tenants a Serviços de IA" editable="bottom">
+                    <field name="tenant_id" widget="many2one_avatar_user" options="{'no_open': True}"/>
+                    <field name="ia_service_catalog_id" options="{'no_open': True}" string="Serviço de IA"/>
+                    <field name="ia_service_name" optional="show"/>
+                    <field name="is_enabled_for_tenant" widget="boolean_toggle" string="Acesso Habilitado?"/>
+                    <field name="notes" optional="hide"/>
+                </tree>
+            </field>
+        </record>
+
+        <!-- Form View for tenant_mcp.tenant.service.access -->
+        <record id="view_tenant_mcp_tenant_service_access_form" model="ir.ui.view">
+            <field name="name">tenant_mcp.tenant.service.access.form</field>
+            <field name="model">tenant_mcp.tenant.service.access</field>
+            <field name="arch" type="xml">
+                <form string="Configuração de Acesso a Serviço de IA">
+                    <sheet>
+                        <group>
+                            <group>
+                                <field name="tenant_id" options="{'no_create': True, 'no_create_edit': True}"/>
+                                <field name="ia_service_catalog_id" options="{'no_create': True, 'no_create_edit': True}" 
+                                       domain="[('is_ia_service_available', '=', True)]"
+                                       context="{'default_is_ia_service_available':True}"/>
+                            </group>
+                            <group>
+                                <field name="is_enabled_for_tenant" widget="boolean_toggle"/>
+                            </group>
+                        </group>
+                        <group string="Detalhes do Serviço (Apenas Leitura)">
+                            <field name="ia_service_name" readonly="1"/>
+                            <field name="ia_service_description" readonly="1"/>
+                        </group>
+                        <group string="Notas Específicas da Permissão">
+                            <field name="notes" nolabel="1"/>
+                        </group>
+                    </sheet>
+                </form>
+            </field>
+        </record>
+
+        <!-- Search View for tenant_mcp.tenant.service.access -->
+        <record id="view_tenant_mcp_tenant_service_access_search" model="ir.ui.view">
+            <field name="name">tenant_mcp.tenant.service.access.search</field>
+            <field name="model">tenant_mcp.tenant.service.access</field>
+            <field name="arch" type="xml">
+                <search string="Procurar Acessos a Serviços de IA">
+                    <field name="tenant_id"/>
+                    <field name="ia_service_catalog_id" string="Serviço de IA"/>
+                    <field name="ia_service_name"/>
+                    <filter string="Acesso Habilitado" name="is_enabled_for_tenant" domain="[('is_enabled_for_tenant','=',True)]"/>
+                    <filter string="Acesso Desabilitado" name="is_disabled_for_tenant" domain="[('is_enabled_for_tenant','=',False)]"/>
+                    <group expand="0" string="Agrupar por...">
+                        <filter string="Tenant" name="groupby_tenant_id" context="{'group_by':'tenant_id'}"/>
+                        <filter string="Serviço de IA" name="groupby_ia_service_catalog_id" context="{'group_by':'ia_service_catalog_id'}"/>
+                        <filter string="Habilitado" name="groupby_is_enabled_for_tenant" context="{'group_by':'is_enabled_for_tenant'}"/>
+                    </group>
+                </search>
+            </field>
+        </record>
+
+        <!-- Action Window for tenant_mcp.tenant.service.access (geral, pode ser adicionado a um menu de configuração se necessário) -->
+        <record id="action_tenant_mcp_tenant_service_access" model="ir.actions.act_window">
+            <field name="name">Acessos dos Tenants aos Serviços de IA</field>
+            <field name="res_model">tenant_mcp.tenant.service.access</field>
+            <field name="view_mode">tree,form</field>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">
+                    Nenhuma configuração de acesso de tenant a serviço de IA encontrada.
+                </p><p>
+                    Você pode criar novas configurações aqui para definir quais tenants têm acesso a quais serviços de IA disponíveis no catálogo.
+                </p>
+            </field>
+        </record>
+
+    </data>
+</odoo>

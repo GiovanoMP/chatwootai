@@ -9,7 +9,7 @@ python-dotenv==1.0.0
 # Suporte para processamento paralelo
 asyncio==3.4.3
 aiohttp==3.9.1
-concurrent-futures-extra==1.0.6
+# concurrent-futures-extra removido - não disponível no PyPI
 
 # Serialização e processamento de dados
 numpy==1.26.2
@@ -22,7 +22,7 @@ crewai==0.121.1
 
 # Segurança
 pyjwt==2.8.0
-cryptography==41.0.5
+cryptography>=43.0.1
 
 # Utilitários
 tqdm==4.66.1

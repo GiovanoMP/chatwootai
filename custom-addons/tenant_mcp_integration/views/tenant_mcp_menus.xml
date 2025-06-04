@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+
+        <!-- Menu Principal -->
+        <menuitem 
+            id="menu_tenant_mcp_root"
+            name="Gestão de Tenants e MCP CREW"
+            sequence="10"
+            web_icon="tenant_mcp_integration,static/description/icon.png" />
+            <!-- O ícone será adicionado depois em static/description/icon.png -->
+
+        <!-- Menu para Tenants -->
+        <menuitem 
+            id="menu_tenant_mcp_tenant_config"
+            name="Tenants"
+            parent="menu_tenant_mcp_root"
+            action="action_tenant_mcp_tenant"
+            sequence="10"/>
+
+        <!-- Menu de Configuração (Pai) -->
+        <menuitem 
+            id="menu_tenant_mcp_configuration_root"
+            name="Configuração"
+            parent="menu_tenant_mcp_root"
+            sequence="100"
+            groups="base.group_system"/>
+
+        <!-- Menu para Tipos de MCP -->
+        <menuitem 
+            id="menu_tenant_mcp_type_config"
+            name="Tipos de MCP"
+            parent="menu_tenant_mcp_configuration_root"
+            action="action_tenant_mcp_type"
+            sequence="10"/>
+
+        <!-- Menu para Catálogo de Serviços de IA -->
+        <menuitem 
+            id="menu_tenant_mcp_ia_service_catalog_config"
+            name="Catálogo de Serviços de IA (Módulos MCP)"
+            parent="menu_tenant_mcp_configuration_root"
+            action="action_tenant_mcp_ia_service_catalog"
+            sequence="20"/>
+
+    </data>
+</odoo>

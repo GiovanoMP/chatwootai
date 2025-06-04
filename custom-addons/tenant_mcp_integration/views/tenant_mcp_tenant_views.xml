@@ -1,0 +1,144 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+
+        <!-- Tree View -->
+        <record id="view_tenant_mcp_tenant_tree" model="ir.ui.view">
+            <field name="name">tenant_mcp.tenant.tree</field>
+            <field name="model">tenant_mcp.tenant</field>
+            <field name="arch" type="xml">
+                <tree string="Tenants MCP">
+                    <field name="name"/>
+                    <field name="account_id"/>
+                    <field name="mcp_crew_url"/>
+                    <field name="active" widget="boolean_toggle"/>
+                </tree>
+            </field>
+        </record>
+
+        <!-- Form View -->
+        <record id="view_tenant_mcp_tenant_form" model="ir.ui.view">
+            <field name="name">tenant_mcp.tenant.form</field>
+            <field name="model">tenant_mcp.tenant</field>
+            <field name="arch" type="xml">
+                <form string="Tenant MCP">
+                    <sheet>
+                        <div class="oe_button_box" name="button_box">
+                            <!-- Botões de ação podem ser adicionados aqui -->
+                        </div>
+                        <group>
+                            <group>
+                                <field name="name"/>
+                                <field name="account_id"/>
+                            </group>
+                            <group>
+                                <field name="active" widget="boolean_toggle"/>
+                            </group>
+                        </group>
+                        <notebook>
+                            <page string="API Odoo (Acesso MCP-CREW)" name="odoo_api_config">
+                                <group>
+                                    <field name="odoo_base_url"/>
+                                    <field name="odoo_api_key" readonly="1" force_save="1"/>
+                                    <button name="generate_odoo_api_key" string="Gerar/Regerar API Key Odoo" type="object" class="oe_highlight" groups="base.group_system"/>
+                                </group>
+                                <div class="oe_grey">
+                                    Esta chave de API é usada pelo MCP-CREW para autenticar e acessar os recursos deste tenant no Odoo de forma segura.
+                                </div>
+                            </page>
+                            <page string="Conexão MCP-CREW (Acesso Odoo)" name="mcp_crew_connection">
+                                <group>
+                                    <field name="mcp_crew_url" placeholder="https://seu-mcp-crew.com"/>
+                                    <field name="mcp_crew_api_key" password="True"/>
+                                </group>
+                                <button name="test_mcp_crew_connection" string="Testar Conexão com MCP-CREW" type="object" class="oe_highlight"/>
+                                <div class="oe_grey">
+                                    Configure a URL base do seu serviço MCP-CREW e a API Key que o Odoo usará para se autenticar no MCP-CREW.
+                                </div>
+                            </page>
+                            <page string="MCPs Configurados" name="mcp_configurations">
+                                <field name="mcp_configuration_ids">
+                                    <tree editable="bottom">
+                                        <field name="mcp_type_id"/>
+                                        <field name="instance_identifier"/>
+                                        <field name="name" readonly="1" force_save="1"/>
+                                        <field name="is_active" widget="boolean_toggle"/>
+                                        <field name="notes"/>
+                                    </tree>
+                                </field>
+                                 <div class="oe_grey">
+                                    Selecione e ative os MCPs (Model Context Protocols) que este tenant utilizará. O Account ID do tenant será usado pelo MCP-CREW para identificar os recursos corretos em cada MCP.
+                                </div>
+                            </page>
+                            <page string="Outros MCPs (Futuro)" name="other_mcps_placeholder">
+                                <group>
+                                    <p>Esta aba será utilizada para configurar integrações com outros MCPs específicos, como Marketplaces (Mercado Livre, Amazon) ou Redes Sociais (Facebook, Instagram), conforme forem desenvolvidos.</p>
+                                </group>
+                            </page>
+                            <page string="Acesso a Serviços de IA" name="page_ia_service_access">
+                                <field name="tenant_service_access_ids">
+                                    <tree editable="bottom">
+                                        <field name="ia_service_catalog_id" string="Serviço de IA" options="{'no_create': True, 'no_create_edit': True}" domain="[('is_ia_service_available', '=', True)]" context="{'default_is_ia_service_available':True}"/>
+                                        <field name="ia_service_name" readonly="1"/>
+                                        <field name="is_enabled_for_tenant" widget="boolean_toggle" string="Acesso Habilitado?"/>
+                                        <field name="notes"/>
+                                    </tree>
+                                    <form>
+                                        <group>
+                                            <group>
+                                                <field name="ia_service_catalog_id" options="{'no_create': True, 'no_create_edit': True}" domain="[('is_ia_service_available', '=', True)]" context="{'default_is_ia_service_available':True}"/>
+                                                <field name="is_enabled_for_tenant" widget="boolean_toggle"/>
+                                            </group>
+                                            <group>
+                                                <field name="ia_service_name" readonly="1"/>
+                                                <field name="ia_service_description" readonly="1"/>
+                                            </group>
+                                        </group>
+                                        <group string="Notas Específicas da Permissão">
+                                            <field name="notes" nolabel="1"/>
+                                        </group>
+                                    </form>
+                                </field>
+                            </page>
+                        </notebook>
+                    </sheet>
+                    <div class="oe_chatter">
+                        <field name="message_follower_ids" widget="mail_followers"/>
+                        <field name="activity_ids" widget="mail_activity"/>
+                        <field name="message_ids" widget="mail_thread"/>
+                    </div>
+                </form>
+            </field>
+        </record>
+
+        <!-- Search View -->
+        <record id="view_tenant_mcp_tenant_search" model="ir.ui.view">
+            <field name="name">tenant_mcp.tenant.search</field>
+            <field name="model">tenant_mcp.tenant</field>
+            <field name="arch" type="xml">
+                <search string="Procurar Tenant MCP">
+                    <field name="name"/>
+                    <field name="account_id"/>
+                    <field name="mcp_crew_url"/>
+                    <filter string="Ativos" name="active" domain="[('active','=',True)]"/>
+                    <filter string="Inativos" name="inactive" domain="[('active','=',False)]"/>
+                </search>
+            </field>
+        </record>
+
+        <!-- Action Window -->
+        <record id="action_tenant_mcp_tenant" model="ir.actions.act_window">
+            <field name="name">Tenants MCP</field>
+            <field name="res_model">tenant_mcp.tenant</field>
+            <field name="view_mode">tree,form</field>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">
+                    Nenhum tenant MCP configurado ainda.
+                </p><p>
+                    Crie tenants para gerenciar as conexões e configurações de integração com o MCP-CREW.
+                </p>
+            </field>
+        </record>
+
+    </data>
+</odoo>

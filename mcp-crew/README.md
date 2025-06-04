@@ -156,6 +156,107 @@ ml_mcp = MCPConnector(
 mcp.register_mcp("mercado_livre", ml_mcp)
 ```
 
+## Arquitetura Docker
+
+O MCP-Crew foi projetado para ser executado em ambiente Docker, facilitando a implantação e a integração com outros serviços. A arquitetura Docker do MCP-Crew consiste em:
+
+### Componentes Docker
+
+- **Contêiner MCP-Crew**: Executa o servidor principal que gerencia as crews e os conectores MCP
+- **Contêiner MCP-MongoDB**: Fornece acesso a dados armazenados no MongoDB com suporte a multi-tenancy
+- **Rede AI_Network**: Conecta todos os MCPs em uma única rede Docker para comunicação eficiente
+
+### Estrutura do Docker Compose
+
+O arquivo `docker-compose.ai-stack.yml` na raiz do projeto orquestra todos os componentes da stack de IA:
+
+```yaml
+version: '3.8'
+
+services:
+  # MCP-Crew - Gerenciador de Crews e Conectores MCP
+  mcp-crew:
+    build:
+      context: ./mcp-crew
+      dockerfile: Dockerfile
+    container_name: mcp-crew
+    environment:
+      - MONGODB_URI=mongodb://config_user:config_password@chatwoot-mongodb:27017/config_service
+      - REDIS_URI=redis://redis:6379/0
+      - MCP_MONGODB_URL=http://mcp-mongodb:8000
+      - DEFAULT_TENANT=account_1
+      - MULTI_TENANT=true
+    ports:
+      - "5000:5000"
+    networks:
+      - ai_network
+
+  # MCP-MongoDB - Conector para MongoDB
+  mcp-mongodb:
+    build:
+      context: ./mcp-mongodb
+      dockerfile: Dockerfile
+    container_name: mcp-mongodb
+    environment:
+      - MONGODB_URI=mongodb://config_user:config_password@chatwoot-mongodb:27017/config_service
+      - MULTI_TENANT=true
+      - DEFAULT_TENANT=account_1
+      - ALLOWED_COLLECTIONS=company_services,tenants,configurations
+    ports:
+      - "8001:8000"
+    networks:
+      - ai_network
+      - chatwoot-mongo-network
+
+networks:
+  ai_network:
+    name: ai_network
+    driver: bridge
+  chatwoot-mongo-network:
+    external: true
+```
+
+### Como Funciona
+
+1. **Inicialização**: Ao iniciar o stack com `./start-ai-stack.sh`, todos os contêineres são construídos e iniciados
+2. **Registro de MCPs**: O MCP-Crew automaticamente registra os MCPs disponíveis na rede
+3. **Comunicação**: Os serviços se comunicam através da rede `ai_network` usando os nomes dos contêineres
+4. **Multi-tenancy**: Todos os serviços suportam multi-tenancy via `account_id`
+
+### Adicionando Novos MCPs
+
+Para adicionar um novo MCP à stack:
+
+1. **Criar o Diretório do MCP**: Crie um diretório para o novo MCP (ex: `mcp-odoo`)
+2. **Implementar o Conector**: Crie um conector que implemente a interface `MCPConnector`
+3. **Criar o Dockerfile**: Defina como o MCP será construído em Docker
+4. **Adicionar ao Docker Compose**: Adicione uma nova seção de serviço ao `docker-compose.ai-stack.yml`
+5. **Registrar no MCP-Crew**: Atualize o `start.py` para registrar o novo MCP
+
+Exemplo de adição do MCP-Odoo:
+
+```yaml
+# Adicionar ao docker-compose.ai-stack.yml
+services:
+  # ... serviços existentes ...
+
+  # MCP-Odoo - Conector para Odoo
+  mcp-odoo:
+    build:
+      context: ./mcp-odoo
+      dockerfile: Dockerfile
+    container_name: mcp-odoo
+    environment:
+      - ODOO_URL=http://odoo-server:8069
+      - ODOO_DB=odoo_db
+      - MULTI_TENANT=true
+      - DEFAULT_TENANT=account_1
+    ports:
+      - "8002:8002"
+    networks:
+      - ai_network
+```
+
 ## Próximos Passos
 
 - Implementação de crews adicionais (Instagram, Facebook, etc.)

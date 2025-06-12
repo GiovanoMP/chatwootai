@@ -1,0 +1,35 @@
+version: '3.8'
+
+services:
+  mcp-redis:
+    build:
+      context: ../../mcp-redis-official
+      dockerfile: Dockerfile
+    container_name: mcp-redis
+    restart: unless-stopped
+    environment:
+      - REDIS_HOST=ai-redis
+      - REDIS_PORT=6379
+      - REDIS_PWD=redis_password
+      - MCP_HOST=0.0.0.0
+      - MCP_PORT=8000
+      - MCP_TRANSPORT=sse
+      - MCP_SERVICE_NAME=mcp-redis
+    ports:
+      - 8002:8000
+      - 8080:8080
+    networks:
+      - ai-stack
+    # O serviço depende do Redis, mas como está em outro docker-compose,
+    # não podemos usar depends_on diretamente.
+    # Certifique-se de que o Redis está em execução antes de iniciar este serviço.
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+
+networks:
+  ai-stack:
+    external: true

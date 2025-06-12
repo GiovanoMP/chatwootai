@@ -1,0 +1,42 @@
+version: '3.8'
+
+services:
+  mcp-chatwoot:
+    build: ./mcp-chatwoot
+    container_name: mcp-chatwoot
+    environment:
+      - MCP_TRANSPORT=sse
+      - MCP_PORT=8000
+      - MCP_HOST=0.0.0.0
+      - CHATWOOT_BASE_URL=http://chatwoot:3000
+      - CHATWOOT_ACCESS_TOKEN=${CHATWOOT_ACCESS_TOKEN}
+      - CHATWOOT_HMAC_KEY=${CHATWOOT_HMAC_KEY}
+      - CHATWOOT_INBOX_IDENTIFIER=${CHATWOOT_INBOX_IDENTIFIER}
+      - MONGODB_URI=mongodb://mongodb:27017
+      - MONGODB_DB=chatwoot_mcp
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - MCP_CREW_URL=http://mcp-crew:8000
+      - MCP_CREW_TOKEN=${MCP_CREW_TOKEN}
+    ports:
+      - "8004:8000"
+    networks:
+      - ai-stack
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      mcp-crew:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+networks:
+  ai-stack:
+    external: true

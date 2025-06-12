@@ -1,0 +1,29 @@
+version: '3'
+
+services:
+  uptime-kuma:
+    image: louislam/uptime-kuma:latest
+    container_name: ai-uptime-kuma
+    restart: unless-stopped
+    volumes:
+      - uptime_kuma_data:/app/data
+    ports:
+      - "3001:3001"
+    networks:
+      - ai-stack
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3001/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+volumes:
+  uptime_kuma_data:
+    name: ai_stack_uptime_kuma_data
+
+networks:
+  ai-stack:
+    external: true

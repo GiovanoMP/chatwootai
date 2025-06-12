@@ -1,0 +1,43 @@
+version: '3.8'
+
+services:
+  redis:
+    image: redis:6.2-alpine
+    container_name: ai-redis
+    restart: unless-stopped
+    command: redis-server --requirepass redis_password
+    ports:
+      - 6379:6379
+    volumes:
+      - redis_data:/data
+    networks:
+      - ai-stack
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "redis_password", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: ai-redis-commander
+    restart: unless-stopped
+    environment:
+      - REDIS_HOSTS=local:redis:6379:0:redis_password
+      - HTTP_USER=admin
+      - HTTP_PASSWORD=admin_password
+    ports:
+      - 8083:8081
+    networks:
+      - ai-stack
+    depends_on:
+      - redis
+
+volumes:
+  redis_data:
+    name: ai_stack_redis_data
+
+networks:
+  ai-stack:
+    external: true

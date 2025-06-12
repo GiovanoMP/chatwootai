@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  mcp-mongodb:
+    build:
+      context: ../../mcp-mongodb
+      dockerfile: Dockerfile
+    container_name: mcp-mongodb
+    restart: unless-stopped
+    environment:
+      - MONGODB_URI=mongodb://config_user:config_password@ai-mongodb:27017/config_service
+      - MULTI_TENANT=true
+      - DEFAULT_TENANT=account_1
+      - ALLOWED_COLLECTIONS=company_services,tenants,configurations
+      - MCP_TRANSPORT=streamable-http
+      - MCP_PORT=8000
+      - MCP_HOST=0.0.0.0
+      - MCP_SERVICE_NAME=mcp-mongodb
+    ports:
+      - 8001:8000
+    networks:
+      - ai-stack
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+
+networks:
+  ai-stack:
+    external: true

@@ -1,0 +1,907 @@
+Guia Definitivo: Integração CrewAI com MCP (Model Context Protocol)
+📋 Visão Geral
+Este guia fornece instruções passo a passo para integrar seus servidores MCP (MongoDB e Redis) com agentes CrewAI usando a solução oficial crewai-tools.
+🛠️ Instalação
+1. Instalar CrewAI com Suporte MCP
+# Instalação básica do CrewAI
+pip install crewai
+
+# Instalação do crewai-tools com suporte MCP
+pip install crewai-tools[mcp]
+
+# OU usando uv (recomendado)
+uv add crewai-tools --extra mcp
+
+2. Verificar Instalação
+# Teste básico para verificar se a instalação funcionou
+try:
+    from crewai_tools import MCPServerAdapter
+    from crewai import Agent, Task, Crew
+    print("✅ Instalação bem-sucedida!")
+except ImportError as e:
+    print(f"❌ Erro na instalação: {e}")
+
+🏗️ Estrutura Base da Solução
+1. Imports Necessários
+import os
+from crewai_tools import MCPServerAdapter
+from crewai import Agent, Task, Crew
+from mcp import StdioServerParameters  # Para MCP STDIO
+
+2. Configuração de Conexão MCP
+Para MCP Redis (SSE - Server-Sent Events)
+# Configuração para MCP Redis via SSE
+redis_server_params = {
+    "url": "http://localhost:3001/sse"  # Substitua pela URL do seu MCP Redis
+}
+
+Para MCP MongoDB (HTTP ou STDIO)
+# Se seu MCP MongoDB usa HTTP
+mongodb_server_params = {
+    "url": "http://localhost:3002"  # Substitua pela URL do seu MCP MongoDB
+}
+
+# Se seu MCP MongoDB usa STDIO
+mongodb_stdio_params = StdioServerParameters(
+    command="seu-comando-mongodb",  # Comando para iniciar o MCP MongoDB
+    args=["--port", "3002"],        # Argumentos do comando
+    env={**os.environ}              # Variáveis de ambiente
+)
+
+🔧 Implementação Prática
+Método 1: Context Manager (Recomendado)
+from crewai_tools import MCPServerAdapter
+from crewai import Agent, Task, Crew
+
+def create_crew_with_mcp():
+    # Configuração dos servidores MCP
+    redis_params = {"url": "http://localhost:3001/sse"}
+    mongodb_params = {"url": "http://localhost:3002"}
+    
+    # Usar context manager para gestão automática de conexões
+    with MCPServerAdapter(redis_params) as redis_tools:
+        with MCPServerAdapter(mongodb_params) as mongodb_tools:
+            
+            # Combinar ferramentas de ambos os MCPs
+            all_tools = redis_tools + mongodb_tools
+            
+            # Criar agente com todas as ferramentas MCP
+            data_agent = Agent(
+                role="Analista de Dados",
+                goal="Analisar e manipular dados do Redis e MongoDB",
+                backstory="Especialista em análise de dados com acesso a múltiplas fontes",
+                tools=all_tools,
+                verbose=True
+            )
+            
+            # Criar tarefa
+            analysis_task = Task(
+                description="Recuperar dados do Redis, consultar MongoDB e gerar relatório",
+                agent=data_agent,
+                expected_output="Relatório detalhado dos dados analisados"
+            )
+            
+            # Criar e executar crew
+            crew = Crew(
+                agents=[data_agent],
+                tasks=[analysis_task],
+                verbose=True
+            )
+            
+            return crew.kickoff()
+
+# Executar
+result = create_crew_with_mcp()
+print(result)
+
+Método 2: Controle Manual de Conexões
+from crewai_tools import MCPServerAdapter
+from crewai import Agent, Task, Crew
+
+def create_crew_manual_mcp():
+    # Inicializar adaptadores MCP
+    redis_adapter = None
+    mongodb_adapter = None
+    
+    try:
+        # Conectar aos servidores MCP
+        redis_adapter = MCPServerAdapter({"url": "http://localhost:3001/sse"})
+        mongodb_adapter = MCPServerAdapter({"url": "http://localhost:3002"})
+        
+        # Obter ferramentas
+        redis_tools = redis_adapter.tools
+        mongodb_tools = mongodb_adapter.tools
+        all_tools = redis_tools + mongodb_tools
+        
+        # Criar agente
+        agent = Agent(
+            role="Database Manager",
+            goal="Gerenciar dados em Redis e MongoDB",
+            backstory="Administrador experiente de bancos de dados",
+            tools=all_tools
+        )
+        
+        # Criar tarefa
+        task = Task(
+            description="Executar operações de CRUD nos bancos de dados",
+            agent=agent,
+            expected_output="Confirmação das operações realizadas"
+        )
+        
+        # Executar crew
+        crew = Crew(agents=[agent], tasks=[task])
+        result = crew.kickoff()
+        
+        return result
+        
+    finally:
+        # IMPORTANTE: Sempre fechar conexões manualmente
+        if redis_adapter:
+            redis_adapter.stop()
+        if mongodb_adapter:
+            mongodb_adapter.stop()
+
+# Executar
+result = create_crew_manual_mcp()
+print(result)
+
+🎯 Configurações Específicas por Protocolo
+1. Para MCP Redis (SSE)
+# Configuração SSE para Redis
+redis_config = {
+    "url": "http://localhost:3001/sse",
+    "timeout": 30,  # Timeout em segundos
+    "headers": {    # Headers personalizados se necessário
+        "Authorization": "Bearer seu-token"
+    }
+}
+
+with MCPServerAdapter(redis_config) as tools:
+    # Usar ferramentas Redis
+    pass
+
+2. Para MCP MongoDB (STDIO)
+from mcp import StdioServerParameters
+
+# Configuração STDIO para MongoDB
+mongodb_stdio = StdioServerParameters(
+    command="python",
+    args=["-m", "seu_mcp_mongodb"],
+    env={
+        "MONGODB_URI": "mongodb://localhost:27017",
+        "DATABASE_NAME": "seu_database",
+        **os.environ
+    }
+)
+
+with MCPServerAdapter(mongodb_stdio) as tools:
+    # Usar ferramentas MongoDB
+    pass
+
+🔍 Diagnóstico e Debug
+1. Verificar Conexão com MCPs
+def test_mcp_connection():
+    try:
+        # Testar Redis MCP
+        redis_params = {"url": "http://localhost:3001/sse"}
+        with MCPServerAdapter(redis_params) as redis_tools:
+            print(f"✅ Redis MCP: {len(redis_tools)} ferramentas disponíveis")
+            for tool in redis_tools:
+                print(f"  - {tool.name}: {tool.description}")
+    
+    except Exception as e:
+        print(f"❌ Erro Redis MCP: {e}")
+    
+    try:
+        # Testar MongoDB MCP
+        mongodb_params = {"url": "http://localhost:3002"}
+        with MCPServerAdapter(mongodb_params) as mongodb_tools:
+            print(f"✅ MongoDB MCP: {len(mongodb_tools)} ferramentas disponíveis")
+            for tool in mongodb_tools:
+                print(f"  - {tool.name}: {tool.description}")
+                
+    except Exception as e:
+        print(f"❌ Erro MongoDB MCP: {e}")
+
+# Executar diagnóstico
+test_mcp_connection()
+
+2. Debug de Ferramentas
+def debug_mcp_tools():
+    with MCPServerAdapter({"url": "http://localhost:3001/sse"}) as tools:
+        for tool in tools:
+            print(f"Nome: {tool.name}")
+            print(f"Descrição: {tool.description}")
+            print(f"Argumentos: {getattr(tool, 'args_schema', 'N/A')}")
+            print("-" * 50)
+
+debug_mcp_tools()
+
+🛡️ Tratamento de Erros
+Implementação Robusta com Try-Catch
+def robust_mcp_crew():
+    adapters = []
+    
+    try:
+        # Lista de configurações MCP
+        mcp_configs = [
+            {"name": "redis", "config": {"url": "http://localhost:3001/sse"}},
+            {"name": "mongodb", "config": {"url": "http://localhost:3002"}},
+        ]
+        
+        all_tools = []
+        
+        # Conectar a cada MCP com tratamento de erro individual
+        for mcp_config in mcp_configs:
+            try:
+                adapter = MCPServerAdapter(mcp_config["config"])
+                adapters.append(adapter)
+                tools = adapter.tools
+                all_tools.extend(tools)
+                print(f"✅ {mcp_config['name']}: {len(tools)} ferramentas carregadas")
+                
+            except Exception as e:
+                print(f"⚠️ Erro ao conectar {mcp_config['name']}: {e}")
+                continue
+        
+        if not all_tools:
+            raise Exception("Nenhuma ferramenta MCP disponível")
+        
+        # Criar e executar crew com ferramentas disponíveis
+        agent = Agent(
+            role="Data Processor",
+            goal="Processar dados com ferramentas disponíveis",
+            backstory="Adaptável a diferentes fontes de dados",
+            tools=all_tools
+        )
+        
+        task = Task(
+            description="Executar operações com ferramentas disponíveis",
+            agent=agent,
+            expected_output="Resultado das operações"
+        )
+        
+        crew = Crew(agents=[agent], tasks=[task])
+        return crew.kickoff()
+        
+    except Exception as e:
+        print(f"❌ Erro crítico: {e}")
+        return None
+        
+    finally:
+        # Limpar todas as conexões
+        for adapter in adapters:
+            try:
+                adapter.stop()
+            except:
+                pass
+
+# Executar versão robusta
+result = robust_mcp_crew()
+
+📚 Exemplo Completo Multi-Tenant
+Implementação com Suporte Multi-Tenant
+class MCPCrewManager:
+    def __init__(self, tenant_id):
+        self.tenant_id = tenant_id
+        self.adapters = []
+    
+    def get_mcp_configs(self):
+        """Retorna configurações MCP específicas do tenant"""
+        return [
+            {
+                "name": "redis",
+                "config": {
+                    "url": f"http://localhost:3001/sse?tenant={self.tenant_id}"
+                }
+            },
+            {
+                "name": "mongodb", 
+                "config": {
+                    "url": f"http://localhost:3002?tenant={self.tenant_id}"
+                }
+            }
+        ]
+    
+    def create_crew(self, agent_config, task_description):
+        try:
+            all_tools = []
+            
+            # Conectar aos MCPs
+            for mcp_config in self.get_mcp_configs():
+                try:
+                    adapter = MCPServerAdapter(mcp_config["config"])
+                    self.adapters.append(adapter)
+                    tools = adapter.tools
+                    all_tools.extend(tools)
+                    
+                except Exception as e:
+                    print(f"Erro MCP {mcp_config['name']}: {e}")
+            
+            # Criar agente com contexto do tenant
+            agent = Agent(
+                role=agent_config.get("role", "Data Agent"),
+                goal=f"[Tenant {self.tenant_id}] {agent_config.get('goal', 'Process data')}",
+                backstory=agent_config.get("backstory", "Tenant-specific agent"),
+                tools=all_tools
+            )
+            
+            # Criar tarefa
+            task = Task(
+                description=f"[Tenant {self.tenant_id}] {task_description}",
+                agent=agent,
+                expected_output="Tenant-specific results"
+            )
+            
+            # Executar crew
+            crew = Crew(agents=[agent], tasks=[task])
+            return crew.kickoff()
+            
+        finally:
+            self.cleanup()
+    
+    def cleanup(self):
+        """Limpar todas as conexões"""
+        for adapter in self.adapters:
+            try:
+                adapter.stop()
+            except:
+                pass
+        self.adapters.clear()
+
+# Uso multi-tenant
+def run_tenant_crew(tenant_id):
+    manager = MCPCrewManager(tenant_id)
+    
+    agent_config = {
+        "role": "Analista de Dados",
+        "goal": "Analisar dados específicos do tenant",
+        "backstory": "Especialista em análise de dados corporativos"
+    }
+    
+    task_description = "Recuperar métricas e gerar relatório analítico"
+    
+    return manager.create_crew(agent_config, task_description)
+
+# Executar para tenant específico
+result = run_tenant_crew("account_1")
+print(result)
+
+⚡ Otimizações e Melhores Práticas
+1. Pool de Conexões
+class MCPConnectionPool:
+    def __init__(self):
+        self.connections = {}
+    
+    def get_connection(self, name, config):
+        if name not in self.connections:
+            self.connections[name] = MCPServerAdapter(config)
+        return self.connections[name]
+    
+    def close_all(self):
+        for adapter in self.connections.values():
+            adapter.stop()
+        self.connections.clear()
+
+# Uso do pool
+pool = MCPConnectionPool()
+redis_adapter = pool.get_connection("redis", {"url": "http://localhost:3001/sse"})
+mongodb_adapter = pool.get_connection("mongodb", {"url": "http://localhost:3002"})
+
+2. Cache de Ferramentas
+import functools
+import time
+
+@functools.lru_cache(maxsize=128)
+def get_cached_tools(mcp_url, cache_time=300):
+    """Cache ferramentas MCP por 5 minutos"""
+    with MCPServerAdapter({"url": mcp_url}) as tools:
+        return [(tool.name, tool.description) for tool in tools]
+
+# Uso do cache
+tools_info = get_cached_tools("http://localhost:3001/sse")
+
+🐛 Troubleshooting
+Problemas Comuns e Soluções
+Erro de Conexão MCP
+
+ # Verificar se o servidor MCP está rodando
+import requests
+try:
+    response = requests.get("http://localhost:3001/health", timeout=5)
+    print(f"MCP Status: {response.status_code}")
+except:
+    print("❌ MCP não está acessível")
+
+
+Timeout de Conexão
+
+ # Aumentar timeout
+config = {
+    "url": "http://localhost:3001/sse",
+    "timeout": 60  # 60 segundos
+}
+
+
+Ferramentas Não Carregadas
+
+ # Debug de ferramentas
+with MCPServerAdapter(config) as tools:
+    if not tools:
+        print("❌ Nenhuma ferramenta encontrada")
+    else:
+        print(f"✅ {len(tools)} ferramentas carregadas")
+
+
+🚀 Próximos Passos
+Testar Configuração Básica: Execute o exemplo simples primeiro
+Adaptar URLs: Substitua as URLs pelos endereços reais dos seus MCPs
+Implementar Multi-Tenant: Use os exemplos multi-tenant se necessário
+Monitorar Performance: Implemente logs e métricas
+Escalar Gradualmente: Adicione mais MCPs conforme necessário
+📝 Checklist de Implementação
+[ ] Instalar crewai-tools[mcp]
+[ ] Verificar conexão com MCP Redis (SSE)
+[ ] Verificar conexão com MCP MongoDB
+[ ] Testar carregamento de ferramentas
+[ ] Implementar exemplo básico
+[ ] Adicionar tratamento de erros
+[ ] Implementar suporte multi-tenant
+[ ] Adicionar logs e monitoramento
+[ ] Testar em ambiente de produção
+
+Importante: Este guia assume que seus servidores MCP estão funcionando corretamente. Certifique-se de que eles estão acessíveis nas URLs especificadas antes de executar os exemplos.
+Guia Definitivo: Integração CrewAI com MCP (Model Context Protocol)
+📋 Visão Geral
+Este guia fornece instruções passo a passo para integrar seus servidores MCP (MongoDB e Redis) com agentes CrewAI usando a solução oficial crewai-tools.
+🛠️ Instalação
+1. Instalar CrewAI com Suporte MCP
+# Instalação básica do CrewAI
+pip install crewai
+
+# Instalação do crewai-tools com suporte MCP
+pip install crewai-tools[mcp]
+
+# OU usando uv (recomendado)
+uv add crewai-tools --extra mcp
+
+2. Verificar Instalação
+# Teste básico para verificar se a instalação funcionou
+try:
+    from crewai_tools import MCPServerAdapter
+    from crewai import Agent, Task, Crew
+    print("✅ Instalação bem-sucedida!")
+except ImportError as e:
+    print(f"❌ Erro na instalação: {e}")
+
+🏗️ Estrutura Base da Solução
+1. Imports Necessários
+import os
+from crewai_tools import MCPServerAdapter
+from crewai import Agent, Task, Crew
+from mcp import StdioServerParameters  # Para MCP STDIO
+
+2. Configuração de Conexão MCP
+Para MCP Redis (SSE - Server-Sent Events)
+# Configuração para MCP Redis via SSE
+redis_server_params = {
+    "url": "http://localhost:3001/sse"  # Substitua pela URL do seu MCP Redis
+}
+
+Para MCP MongoDB (HTTP ou STDIO)
+# Se seu MCP MongoDB usa HTTP
+mongodb_server_params = {
+    "url": "http://localhost:3002"  # Substitua pela URL do seu MCP MongoDB
+}
+
+# Se seu MCP MongoDB usa STDIO
+mongodb_stdio_params = StdioServerParameters(
+    command="seu-comando-mongodb",  # Comando para iniciar o MCP MongoDB
+    args=["--port", "3002"],        # Argumentos do comando
+    env={**os.environ}              # Variáveis de ambiente
+)
+
+🔧 Implementação Prática
+Método 1: Context Manager (Recomendado)
+from crewai_tools import MCPServerAdapter
+from crewai import Agent, Task, Crew
+
+def create_crew_with_mcp():
+    # Configuração dos servidores MCP
+    redis_params = {"url": "http://localhost:3001/sse"}
+    mongodb_params = {"url": "http://localhost:3002"}
+    
+    # Usar context manager para gestão automática de conexões
+    with MCPServerAdapter(redis_params) as redis_tools:
+        with MCPServerAdapter(mongodb_params) as mongodb_tools:
+            
+            # Combinar ferramentas de ambos os MCPs
+            all_tools = redis_tools + mongodb_tools
+            
+            # Criar agente com todas as ferramentas MCP
+            data_agent = Agent(
+                role="Analista de Dados",
+                goal="Analisar e manipular dados do Redis e MongoDB",
+                backstory="Especialista em análise de dados com acesso a múltiplas fontes",
+                tools=all_tools,
+                verbose=True
+            )
+            
+            # Criar tarefa
+            analysis_task = Task(
+                description="Recuperar dados do Redis, consultar MongoDB e gerar relatório",
+                agent=data_agent,
+                expected_output="Relatório detalhado dos dados analisados"
+            )
+            
+            # Criar e executar crew
+            crew = Crew(
+                agents=[data_agent],
+                tasks=[analysis_task],
+                verbose=True
+            )
+            
+            return crew.kickoff()
+
+# Executar
+result = create_crew_with_mcp()
+print(result)
+
+Método 2: Controle Manual de Conexões
+from crewai_tools import MCPServerAdapter
+from crewai import Agent, Task, Crew
+
+def create_crew_manual_mcp():
+    # Inicializar adaptadores MCP
+    redis_adapter = None
+    mongodb_adapter = None
+    
+    try:
+        # Conectar aos servidores MCP
+        redis_adapter = MCPServerAdapter({"url": "http://localhost:3001/sse"})
+        mongodb_adapter = MCPServerAdapter({"url": "http://localhost:3002"})
+        
+        # Obter ferramentas
+        redis_tools = redis_adapter.tools
+        mongodb_tools = mongodb_adapter.tools
+        all_tools = redis_tools + mongodb_tools
+        
+        # Criar agente
+        agent = Agent(
+            role="Database Manager",
+            goal="Gerenciar dados em Redis e MongoDB",
+            backstory="Administrador experiente de bancos de dados",
+            tools=all_tools
+        )
+        
+        # Criar tarefa
+        task = Task(
+            description="Executar operações de CRUD nos bancos de dados",
+            agent=agent,
+            expected_output="Confirmação das operações realizadas"
+        )
+        
+        # Executar crew
+        crew = Crew(agents=[agent], tasks=[task])
+        result = crew.kickoff()
+        
+        return result
+        
+    finally:
+        # IMPORTANTE: Sempre fechar conexões manualmente
+        if redis_adapter:
+            redis_adapter.stop()
+        if mongodb_adapter:
+            mongodb_adapter.stop()
+
+# Executar
+result = create_crew_manual_mcp()
+print(result)
+
+🎯 Configurações Específicas por Protocolo
+1. Para MCP Redis (SSE)
+# Configuração SSE para Redis
+redis_config = {
+    "url": "http://localhost:3001/sse",
+    "timeout": 30,  # Timeout em segundos
+    "headers": {    # Headers personalizados se necessário
+        "Authorization": "Bearer seu-token"
+    }
+}
+
+with MCPServerAdapter(redis_config) as tools:
+    # Usar ferramentas Redis
+    pass
+
+2. Para MCP MongoDB (STDIO)
+from mcp import StdioServerParameters
+
+# Configuração STDIO para MongoDB
+mongodb_stdio = StdioServerParameters(
+    command="python",
+    args=["-m", "seu_mcp_mongodb"],
+    env={
+        "MONGODB_URI": "mongodb://localhost:27017",
+        "DATABASE_NAME": "seu_database",
+        **os.environ
+    }
+)
+
+with MCPServerAdapter(mongodb_stdio) as tools:
+    # Usar ferramentas MongoDB
+    pass
+
+🔍 Diagnóstico e Debug
+1. Verificar Conexão com MCPs
+def test_mcp_connection():
+    try:
+        # Testar Redis MCP
+        redis_params = {"url": "http://localhost:3001/sse"}
+        with MCPServerAdapter(redis_params) as redis_tools:
+            print(f"✅ Redis MCP: {len(redis_tools)} ferramentas disponíveis")
+            for tool in redis_tools:
+                print(f"  - {tool.name}: {tool.description}")
+    
+    except Exception as e:
+        print(f"❌ Erro Redis MCP: {e}")
+    
+    try:
+        # Testar MongoDB MCP
+        mongodb_params = {"url": "http://localhost:3002"}
+        with MCPServerAdapter(mongodb_params) as mongodb_tools:
+            print(f"✅ MongoDB MCP: {len(mongodb_tools)} ferramentas disponíveis")
+            for tool in mongodb_tools:
+                print(f"  - {tool.name}: {tool.description}")
+                
+    except Exception as e:
+        print(f"❌ Erro MongoDB MCP: {e}")
+
+# Executar diagnóstico
+test_mcp_connection()
+
+2. Debug de Ferramentas
+def debug_mcp_tools():
+    with MCPServerAdapter({"url": "http://localhost:3001/sse"}) as tools:
+        for tool in tools:
+            print(f"Nome: {tool.name}")
+            print(f"Descrição: {tool.description}")
+            print(f"Argumentos: {getattr(tool, 'args_schema', 'N/A')}")
+            print("-" * 50)
+
+debug_mcp_tools()
+
+🛡️ Tratamento de Erros
+Implementação Robusta com Try-Catch
+def robust_mcp_crew():
+    adapters = []
+    
+    try:
+        # Lista de configurações MCP
+        mcp_configs = [
+            {"name": "redis", "config": {"url": "http://localhost:3001/sse"}},
+            {"name": "mongodb", "config": {"url": "http://localhost:3002"}},
+        ]
+        
+        all_tools = []
+        
+        # Conectar a cada MCP com tratamento de erro individual
+        for mcp_config in mcp_configs:
+            try:
+                adapter = MCPServerAdapter(mcp_config["config"])
+                adapters.append(adapter)
+                tools = adapter.tools
+                all_tools.extend(tools)
+                print(f"✅ {mcp_config['name']}: {len(tools)} ferramentas carregadas")
+                
+            except Exception as e:
+                print(f"⚠️ Erro ao conectar {mcp_config['name']}: {e}")
+                continue
+        
+        if not all_tools:
+            raise Exception("Nenhuma ferramenta MCP disponível")
+        
+        # Criar e executar crew com ferramentas disponíveis
+        agent = Agent(
+            role="Data Processor",
+            goal="Processar dados com ferramentas disponíveis",
+            backstory="Adaptável a diferentes fontes de dados",
+            tools=all_tools
+        )
+        
+        task = Task(
+            description="Executar operações com ferramentas disponíveis",
+            agent=agent,
+            expected_output="Resultado das operações"
+        )
+        
+        crew = Crew(agents=[agent], tasks=[task])
+        return crew.kickoff()
+        
+    except Exception as e:
+        print(f"❌ Erro crítico: {e}")
+        return None
+        
+    finally:
+        # Limpar todas as conexões
+        for adapter in adapters:
+            try:
+                adapter.stop()
+            except:
+                pass
+
+# Executar versão robusta
+result = robust_mcp_crew()
+
+📚 Exemplo Completo Multi-Tenant
+Implementação com Suporte Multi-Tenant
+class MCPCrewManager:
+    def __init__(self, tenant_id):
+        self.tenant_id = tenant_id
+        self.adapters = []
+    
+    def get_mcp_configs(self):
+        """Retorna configurações MCP específicas do tenant"""
+        return [
+            {
+                "name": "redis",
+                "config": {
+                    "url": f"http://localhost:3001/sse?tenant={self.tenant_id}"
+                }
+            },
+            {
+                "name": "mongodb", 
+                "config": {
+                    "url": f"http://localhost:3002?tenant={self.tenant_id}"
+                }
+            }
+        ]
+    
+    def create_crew(self, agent_config, task_description):
+        try:
+            all_tools = []
+            
+            # Conectar aos MCPs
+            for mcp_config in self.get_mcp_configs():
+                try:
+                    adapter = MCPServerAdapter(mcp_config["config"])
+                    self.adapters.append(adapter)
+                    tools = adapter.tools
+                    all_tools.extend(tools)
+                    
+                except Exception as e:
+                    print(f"Erro MCP {mcp_config['name']}: {e}")
+            
+            # Criar agente com contexto do tenant
+            agent = Agent(
+                role=agent_config.get("role", "Data Agent"),
+                goal=f"[Tenant {self.tenant_id}] {agent_config.get('goal', 'Process data')}",
+                backstory=agent_config.get("backstory", "Tenant-specific agent"),
+                tools=all_tools
+            )
+            
+            # Criar tarefa
+            task = Task(
+                description=f"[Tenant {self.tenant_id}] {task_description}",
+                agent=agent,
+                expected_output="Tenant-specific results"
+            )
+            
+            # Executar crew
+            crew = Crew(agents=[agent], tasks=[task])
+            return crew.kickoff()
+            
+        finally:
+            self.cleanup()
+    
+    def cleanup(self):
+        """Limpar todas as conexões"""
+        for adapter in self.adapters:
+            try:
+                adapter.stop()
+            except:
+                pass
+        self.adapters.clear()
+
+# Uso multi-tenant
+def run_tenant_crew(tenant_id):
+    manager = MCPCrewManager(tenant_id)
+    
+    agent_config = {
+        "role": "Analista de Dados",
+        "goal": "Analisar dados específicos do tenant",
+        "backstory": "Especialista em análise de dados corporativos"
+    }
+    
+    task_description = "Recuperar métricas e gerar relatório analítico"
+    
+    return manager.create_crew(agent_config, task_description)
+
+# Executar para tenant específico
+result = run_tenant_crew("account_1")
+print(result)
+
+⚡ Otimizações e Melhores Práticas
+1. Pool de Conexões
+class MCPConnectionPool:
+    def __init__(self):
+        self.connections = {}
+    
+    def get_connection(self, name, config):
+        if name not in self.connections:
+            self.connections[name] = MCPServerAdapter(config)
+        return self.connections[name]
+    
+    def close_all(self):
+        for adapter in self.connections.values():
+            adapter.stop()
+        self.connections.clear()
+
+# Uso do pool
+pool = MCPConnectionPool()
+redis_adapter = pool.get_connection("redis", {"url": "http://localhost:3001/sse"})
+mongodb_adapter = pool.get_connection("mongodb", {"url": "http://localhost:3002"})
+
+2. Cache de Ferramentas
+import functools
+import time
+
+@functools.lru_cache(maxsize=128)
+def get_cached_tools(mcp_url, cache_time=300):
+    """Cache ferramentas MCP por 5 minutos"""
+    with MCPServerAdapter({"url": mcp_url}) as tools:
+        return [(tool.name, tool.description) for tool in tools]
+
+# Uso do cache
+tools_info = get_cached_tools("http://localhost:3001/sse")
+
+🐛 Troubleshooting
+Problemas Comuns e Soluções
+Erro de Conexão MCP
+
+ # Verificar se o servidor MCP está rodando
+import requests
+try:
+    response = requests.get("http://localhost:3001/health", timeout=5)
+    print(f"MCP Status: {response.status_code}")
+except:
+    print("❌ MCP não está acessível")
+
+
+Timeout de Conexão
+
+ # Aumentar timeout
+config = {
+    "url": "http://localhost:3001/sse",
+    "timeout": 60  # 60 segundos
+}
+
+
+Ferramentas Não Carregadas
+
+ # Debug de ferramentas
+with MCPServerAdapter(config) as tools:
+    if not tools:
+        print("❌ Nenhuma ferramenta encontrada")
+    else:
+        print(f"✅ {len(tools)} ferramentas carregadas")
+
+
+🚀 Próximos Passos
+Testar Configuração Básica: Execute o exemplo simples primeiro
+Adaptar URLs: Substitua as URLs pelos endereços reais dos seus MCPs
+Implementar Multi-Tenant: Use os exemplos multi-tenant se necessário
+Monitorar Performance: Implemente logs e métricas
+Escalar Gradualmente: Adicione mais MCPs conforme necessário
+📝 Checklist de Implementação
+[ ] Instalar crewai-tools[mcp]
+[ ] Verificar conexão com MCP Redis (SSE)
+[ ] Verificar conexão com MCP MongoDB
+[ ] Testar carregamento de ferramentas
+[ ] Implementar exemplo básico
+[ ] Adicionar tratamento de erros
+[ ] Implementar suporte multi-tenant
+[ ] Adicionar logs e monitoramento
+[ ] Testar em ambiente de produção
+
+Importante: Este guia assume que seus servidores MCP estão funcionando corretamente. Certifique-se de que eles estão acessíveis nas URLs especificadas antes de executar os exemplos.
+

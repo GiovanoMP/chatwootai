@@ -1,0 +1,97 @@
+{
+  "test_summary": {
+    "total_tests": 10,
+    "successful_tests": 9,
+    "failed_tests": 1,
+    "success_rate": 90.0,
+    "total_execution_time": 30.566
+  },
+  "test_results": [
+    {
+      "test_name": "Health Check",
+      "success": true,
+      "response_data": {
+        "crewai_available": true,
+        "mcp_health_ratio": "0/4",
+        "mcps": {
+          "mcp-chatwoot": {
+            "response_time": null,
+            "status": "unreachable"
+          },
+          "mcp-mongodb": {
+            "response_time": null,
+            "status": "unreachable"
+          },
+          "mcp-qdrant": {
+            "response_time": null,
+            "status": "unreachable"
+          },
+          "mcp-redis": {
+            "response_time": null,
+            "status": "unreachable"
+          }
+        },
+        "redis_available": true,
+        "status": "degraded",
+        "timestamp": 1749681363.651192
+      },
+      "execution_time": 0.009217977523803711
+    },
+    {
+      "test_name": "Tool Discovery",
+      "success": true,
+      "tools_found": 14,
+      "mcps_with_tools": 3,
+      "execution_time": 0.007481098175048828
+    },
+    {
+      "test_name": "Knowledge Storage",
+      "success": true,
+      "knowledge_id": "375bf823-0d19-4976-85c4-c818da0e297c",
+      "execution_time": 0.0030150413513183594
+    },
+    {
+      "test_name": "Knowledge Search",
+      "success": true,
+      "results_count": 0,
+      "execution_time": 0.50691819190979
+    },
+    {
+      "test_name": "Request Processing",
+      "success": false,
+      "error": "HTTPConnectionPool(host='localhost', port=5003): Read timed out. (read timeout=30)",
+      "execution_time": 30.025843858718872
+    },
+    {
+      "test_name": "Metrics",
+      "success": true,
+      "system_status": "operational",
+      "execution_time": 0.003496408462524414
+    },
+    {
+      "test_name": "Config Endpoints",
+      "success": true,
+      "mcps_configured": 4,
+      "execution_time": 0.0026488304138183594
+    },
+    {
+      "test_name": "Cache Invalidation",
+      "success": true,
+      "execution_time": 0.002810955047607422
+    },
+    {
+      "test_name": "Knowledge Events",
+      "success": true,
+      "events_count": 2,
+      "execution_time": 0.0023729801177978516
+    },
+    {
+      "test_name": "System Info",
+      "success": true,
+      "version": "2.0.0",
+      "execution_time": 0.0018360614776611328
+    }
+  ],
+  "timestamp": 1749681394.210031,
+  "system_version": "2.0.0"
+}

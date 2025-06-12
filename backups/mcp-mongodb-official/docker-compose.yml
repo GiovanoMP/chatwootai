@@ -1,0 +1,38 @@
+version: '3.8'
+
+services:
+  mcp-mongodb-official:
+    image: mongodb/mongodb-mcp-server:latest
+    container_name: mcp-mongodb-official
+    restart: unless-stopped
+    networks:
+      - ai-stack
+    ports:
+      - "8001:8000"
+    environment:
+      # Conexão com o MongoDB existente na rede ai-stack com credenciais
+      - MDB_MCP_CONNECTION_STRING=mongodb://config_user:config_password@ai-mongodb:27017/config_service
+      # Configurações adicionais
+      - MDB_MCP_PORT=8000
+      - MDB_MCP_LOG_LEVEL=debug
+      # Configurações de segurança
+      - MDB_MCP_ALLOWED_COLLECTIONS=company_services,tenants,configurations
+      - MDB_MCP_MAX_RESULTS=100
+    # Labels para monitoramento Kuma
+    labels:
+      - "kuma.enabled=true"
+      - "kuma.name=MCP-MongoDB-Official"
+      - "kuma.interval=30s"
+      - "kuma.path=/health"
+      - "kuma.type=http"
+      - "kuma.port=8000"
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+networks:
+  ai-stack:
+    external: true

@@ -11,20 +11,28 @@ from dataclasses import dataclass
 import json
 from concurrent.futures import ThreadPoolExecutor
 
+# Configurar logger
+logger = logging.getLogger(__name__)
+
 # Importações do CrewAI
 try:
     from crewai import Agent, Task, Crew
-    from crewai_tools import MCPServerAdapter
+    # Verificar se o módulo crewai_tools tem o adaptador MCP
+    try:
+        from crewai_tools import MCPServerAdapter
+    except ImportError:
+        # Se não tiver, usar nosso próprio adaptador
+        logger.warning("MCPServerAdapter não encontrado em crewai_tools. Usando adaptadores locais.")
+        MCPServerAdapter = None
     CREWAI_AVAILABLE = True
 except ImportError:
     CREWAI_AVAILABLE = False
     logger.warning("CrewAI não disponível. Usando simulação.")
+    MCPServerAdapter = None
 
-from src.config import Config, redis_manager, serialize_json, deserialize_json, get_cache_key
-from src.mcp_tool_discovery import tool_discovery, ToolMetadata
+from src.config.config import Config, redis_manager, serialize_json, deserialize_json, get_cache_key
+from src.core.mcp_tool_discovery import tool_discovery, ToolMetadata
 from src.core.knowledge_manager import knowledge_manager, KnowledgeItem, KnowledgeType
-
-logger = logging.getLogger(__name__)
 
 @dataclass
 class CrewExecutionResult:

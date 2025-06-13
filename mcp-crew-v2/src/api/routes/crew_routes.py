@@ -8,10 +8,10 @@ import logging
 from flask import Blueprint, request, jsonify
 from typing import Dict, Any
 
-from src.mcp_crew_core import mcp_crew_orchestrator
-from src.mcp_tool_discovery import tool_discovery
+from src.core.orchestrator import mcp_crew_orchestrator
+from src.core.mcp_tool_discovery import tool_discovery
 from src.core.knowledge_manager import knowledge_manager, KnowledgeItem, KnowledgeType
-from src.config import Config, validate_account_id
+from src.config.config import Config, validate_account_id
 
 logger = logging.getLogger(__name__)
 

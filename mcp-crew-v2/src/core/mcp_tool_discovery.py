@@ -10,9 +10,9 @@ import time
 import requests
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from src.config import Config, redis_manager, serialize_json, deserialize_json, get_tools_cache_key
-from src.mcp_connector_factory import MCPConnectorFactory
-from src.tool_metadata import ToolMetadata
+from src.config.config import Config, redis_manager, serialize_json, deserialize_json, get_tools_cache_key
+from src.core.mcp_connector_factory import MCPConnectorFactory
+from src.core.tool_metadata import ToolMetadata
 
 logger = logging.getLogger(__name__)
 
@@ -429,11 +429,25 @@ class MCPToolDiscovery:
         return None
     
     def _store_tools_in_cache(self, cache_key: str, tools: List[ToolMetadata], ttl: int):
-        """Armazena ferramentas no cache Redis"""
+        """Armazena ferramentas no cache Redis com TTL específico por MCP"""
         try:
+            # Extrair o nome do MCP do cache_key (formato: {account_id}:{data_type}:{mcp_name}:all)
+            parts = cache_key.split(':')
+            if len(parts) >= 3:
+                mcp_name = parts[2]  # O nome do MCP é o terceiro elemento
+                
+                # Usar TTL específico para o MCP se disponível
+                from src.redis_manager.redis_manager import TOOL_DISCOVERY_TTL
+                specific_ttl = TOOL_DISCOVERY_TTL.get(mcp_name, TOOL_DISCOVERY_TTL['default'])
+                
+                # Usar o TTL específico em vez do padrão
+                ttl = specific_ttl
+                logger.debug(f"Usando TTL específico para {mcp_name}: {ttl} segundos")
+            
             tools_data = [tool.to_dict() for tool in tools]
             serialized_data = serialize_json(tools_data)
             redis_manager.set(cache_key, serialized_data, ttl)
+            logger.info(f"Ferramentas armazenadas no cache com TTL de {ttl} segundos")
         except Exception as e:
             logger.error(f"Erro ao armazenar ferramentas no cache: {e}")
     
